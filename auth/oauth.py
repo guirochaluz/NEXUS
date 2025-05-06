@@ -54,25 +54,68 @@ def exchange_code(code):
     # Salva no banco
     print("💾 Salvando tokens no banco...")
     db = SessionLocal()
-    user = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
-    if user:
-        user.access_token = access_token
-        user.refresh_token = refresh_token
-        user.expires_at = expires_at
-        print("📝 Tokens atualizados para o usuário existente.")
-    else:
-        db.add(UserToken(
-            ml_user_id=ml_user_id,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_at=expires_at
-        ))
-        print("🆕 Tokens salvos para novo usuário.")
-    db.commit()
-    db.close()
+    try:
+        user = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
+        if user:
+            user.access_token = access_token
+            user.refresh_token = refresh_token
+            user.expires_at = expires_at
+            print("📝 Tokens atualizados para o usuário existente.")
+        else:
+            db.add(UserToken(
+                ml_user_id=ml_user_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=expires_at
+            ))
+            print("🆕 Tokens salvos para novo usuário.")
+        db.commit()
+    except Exception as e:
+        print(f"❌ Erro ao salvar token no banco: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
+    # Importa as vendas na primeira autenticação
     print("📦 Iniciando download de vendas...")
     get_sales(ml_user_id, access_token)
     print("✅ Processo completo com sucesso!")
 
     return True
+def renovar_access_token(ml_user_id: str) -> str:
+    print(f"🔄 Renovando token para o usuário {ml_user_id}...")
+
+    db = SessionLocal()
+    try:
+        user = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
+        if not user:
+            print("⚠️ Usuário não encontrado na base de tokens.")
+            return None
+
+        payload = {
+            "grant_type": "refresh_token",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "refresh_token": user.refresh_token
+        }
+
+        res = requests.post("https://api.mercadolivre.com/oauth/token", data=payload)
+        if res.status_code != 200:
+            print(f"❌ Erro ao renovar token: {res.text}")
+            return None
+
+        data = res.json()
+        user.access_token = data["access_token"]
+        user.refresh_token = data["refresh_token"]
+        user.expires_at = datetime.utcnow() + timedelta(seconds=data["expires_in"])
+
+        db.commit()
+        print("✅ Token renovado e salvo com sucesso.")
+        return user.access_token
+
+    except Exception as e:
+        print(f"❌ Erro no processo de renovação do token: {e}")
+        db.rollback()
+        return None
+    finally:
+        db.close()
