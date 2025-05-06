@@ -1,0 +1,23 @@
+# Arquivos sensíveis
+.env
+
+# Ambientes virtuais
+venv/
+.venv/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Arquivos de log e banco local
+*.log
+*.sqlite3
+
+# Bytecode ou arquivos temporários
+*.bak
+*.swp
+*.tmp
+
+# Cache do VS Code
+.vscode/
