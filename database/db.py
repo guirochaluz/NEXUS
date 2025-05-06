@@ -1,8 +1,24 @@
+import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-from database.models import Sale, UserToken
+from dotenv import load_dotenv
 from datetime import datetime
+from database.models import Base, Sale, UserToken
 
+# Carrega variáveis de ambiente do .env
+load_dotenv()
+DATABASE_URL = os.getenv("DB_URL")
+
+# Conexão com o banco
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+
+# Inicializa as tabelas (executado no main.py)
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+# Consulta o token de um user_id específico
 def obter_token_por_user_id(user_id: str) -> str:
     session = SessionLocal()
     try:
@@ -13,6 +29,7 @@ def obter_token_por_user_id(user_id: str) -> str:
     finally:
         session.close()
 
+# Salva uma nova venda no banco
 def salvar_nova_venda(order_data: dict):
     session: Session = SessionLocal()
     try:
@@ -76,6 +93,6 @@ def salvar_nova_venda(order_data: dict):
         session.add(venda)
         session.commit()
     except IntegrityError:
-        session.rollback()  # Evita duplicação se order_id já existir
+        session.rollback()  # Evita erro se venda já estiver salva
     finally:
         session.close()
