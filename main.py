@@ -33,10 +33,10 @@ async def webhook_payments(request: Request):
     if not access_token:
         return {"status": "erro", "message": "Não foi possível renovar o token"}
 
-    # Buscar dados do pagamento
+    # Buscar dados do pagamento (via /collections)
     r = requests.get(
-        f"https://api.mercadopago.com/v1/payments/{payment_id}",
-        headers={"Authorization": f"Bearer {access_token}"}
+        f"https://api.mercadolibre.com/collections/{payment_id}",
+        params={"access_token": access_token}
     )
     if r.status_code != 200:
         return {"status": "erro", "message": "Erro ao consultar payment", "details": r.json()}
