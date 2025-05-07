@@ -1,8 +1,19 @@
-from database.models import Base
-from database.db import engine
+# -*- coding: utf-8 -*-
 
-# Apaga a tabela existente (cuidado: isso remove os dados!)
-Base.metadata.drop_all(bind=engine)
+from database.db import SessionLocal
+from database.models import Sale
 
-# Cria as tabelas novamente com todos os campos atualizados
-Base.metadata.create_all(bind=engine)
+def reset_sales():
+    db = SessionLocal()
+    try:
+        deleted = db.query(Sale).delete()
+        db.commit()
+        print(f"{deleted} sales deleted successfully.")
+    except Exception as e:
+        db.rollback()
+        print("Error deleting sales:", e)
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    reset_sales()
