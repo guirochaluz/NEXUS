@@ -4,16 +4,18 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from database.db import init_db, salvar_nova_venda
 from auth.oauth import get_auth_url, exchange_code, renovar_access_token
 import requests
+from dotenv import load_dotenv
 
 # Carrega variáveis de ambiente
-env from dotenv import load_dotenv
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
 # URL do site para redirecionamento após cadastro (obrigatório no .env)
 SITE_URL = os.getenv("SITE_URL")
 if not SITE_URL:
     raise RuntimeError("Variável SITE_URL não definida. Defina-a no seu arquivo .env ou no ambiente.")
 
+# Inicializa FastAPI e banco
 app = FastAPI()
 init_db()
 
@@ -32,7 +34,6 @@ def callback(code: str):
 # ----------------- Registration Endpoints -----------------
 @app.get("/register", response_class=HTMLResponse)
 def show_register(redirect_url: str = SITE_URL):
-    # Formulário de cadastro simples
     html_content = f"""
     <html>
       <body>
@@ -52,11 +53,10 @@ def show_register(redirect_url: str = SITE_URL):
 async def do_register(
     email: str = Form(...),
     password: str = Form(...),
-    redirect_url: str = Form(SITE_URL)
+    redirect_url: str = Form(...)
 ):
-    # TODO: lógica de criação de usuário (ex: salvar no banco, validações)
-
-    # Após sucesso, redireciona
+    # Lógica de criação de usuário: salvar em banco, validações, envio de email, etc.
+    # Após sucesso, redireciona o usuário
     return RedirectResponse(url=redirect_url, status_code=302)
 
 # ----------------- Webhook de Pagamentos -----------------
@@ -71,12 +71,10 @@ async def webhook_payments(request: Request):
     if not payment_id or not ml_user_id:
         return {"status": "erro", "message": "Dados incompletos na notificação"}
 
-    # Renova token
     access_token = renovar_access_token(ml_user_id)
     if not access_token:
         return {"status": "erro", "message": "Não foi possível renovar o token"}
 
-    # Consulta pagamento
     r = requests.get(
         f"https://api.mercadolibre.com/collections/{payment_id}",
         params={"access_token": access_token}
@@ -89,7 +87,6 @@ async def webhook_payments(request: Request):
     if not external_reference:
         return {"status": "erro", "message": "external_reference ausente no payment"}
 
-    # Consulta ordem
     order = requests.get(
         f"https://api.mercadolibre.com/orders/{external_reference}",
         headers={"Authorization": f"Bearer {access_token}"}
