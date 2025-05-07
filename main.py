@@ -1,9 +1,18 @@
+import os
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from database.db import init_db, salvar_nova_venda
 from auth.oauth import get_auth_url, exchange_code, renovar_access_token
 import requests
-import os
+
+# Carrega variáveis de ambiente
+env from dotenv import load_dotenv
+load_dotenv()
+
+# URL do site para redirecionamento após cadastro (obrigatório no .env)
+SITE_URL = os.getenv("SITE_URL")
+if not SITE_URL:
+    raise RuntimeError("Variável SITE_URL não definida. Defina-a no seu arquivo .env ou no ambiente.")
 
 app = FastAPI()
 init_db()
@@ -11,8 +20,8 @@ init_db()
 # ----------------- Home / ML Login -----------------
 @app.get("/", response_class=HTMLResponse)
 def home():
-    url = get_auth_url()
-    return HTMLResponse(f'<a href="{url}">Login com Mercado Livre</a>')
+    auth_url = get_auth_url()
+    return HTMLResponse(f'<a href="{auth_url}">Login com Mercado Livre</a>')
 
 # ----------------- OAuth Callback -----------------
 @app.get("/callback")
@@ -22,8 +31,8 @@ def callback(code: str):
 
 # ----------------- Registration Endpoints -----------------
 @app.get("/register", response_class=HTMLResponse)
-def show_register(redirect_url: str = "https://contazoom.com"):
-    # Renderiza um formulário simples de cadastro
+def show_register(redirect_url: str = SITE_URL):
+    # Formulário de cadastro simples
     html_content = f"""
     <html>
       <body>
@@ -43,12 +52,11 @@ def show_register(redirect_url: str = "https://contazoom.com"):
 async def do_register(
     email: str = Form(...),
     password: str = Form(...),
-    redirect_url: str = Form("https://contazoom.com")
+    redirect_url: str = Form(SITE_URL)
 ):
-    # TODO: implemente sua lógica de criação de usuário aqui
-    # Exemplo: salvar no banco, validações, envio de email, etc.
+    # TODO: lógica de criação de usuário (ex: salvar no banco, validações)
 
-    # Após sucesso no cadastro, redireciona de volta
+    # Após sucesso, redireciona
     return RedirectResponse(url=redirect_url, status_code=302)
 
 # ----------------- Webhook de Pagamentos -----------------
@@ -63,10 +71,12 @@ async def webhook_payments(request: Request):
     if not payment_id or not ml_user_id:
         return {"status": "erro", "message": "Dados incompletos na notificação"}
 
+    # Renova token
     access_token = renovar_access_token(ml_user_id)
     if not access_token:
         return {"status": "erro", "message": "Não foi possível renovar o token"}
 
+    # Consulta pagamento
     r = requests.get(
         f"https://api.mercadolibre.com/collections/{payment_id}",
         params={"access_token": access_token}
@@ -79,6 +89,7 @@ async def webhook_payments(request: Request):
     if not external_reference:
         return {"status": "erro", "message": "external_reference ausente no payment"}
 
+    # Consulta ordem
     order = requests.get(
         f"https://api.mercadolibre.com/orders/{external_reference}",
         headers={"Authorization": f"Bearer {access_token}"}
