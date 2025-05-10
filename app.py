@@ -83,8 +83,8 @@ def render_sidebar():
 def login():
     st.markdown("<h2 style='text-align: center;'>🔐 Login - NEXUS</h2>", unsafe_allow_html=True)
     
-    conta = st.text_input("ID da Conta", "GRUPONEXUS")
-    senha = st.text_input("Senha", value="NEXU$2025", type="password")
+    conta = st.text_input("ID da Conta", "")
+    senha = st.text_input("Senha", type="password")
 
     if st.button("Entrar"):
         if not conta or not senha:
