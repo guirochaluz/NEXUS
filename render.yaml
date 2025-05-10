@@ -5,7 +5,7 @@ services:
     branch: main
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DB_URL
         value: "postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom"
@@ -14,11 +14,11 @@ services:
       - key: ML_CLIENT_SECRET
         value: "sZOG7DCPZzQhWbqSn4ii6UJx4upEzQMd"
       - key: BACKEND_URL
-        value: "https://contazoom-backend.onrender.com"
+        value: "https://nexus-backend-0dzu.onrender.com"
       - key: FRONTEND_URL
-        value: "https://contazoom-frontend.onrender.com"
+        value: "https://nexus-dashboard-13ej.onrender.com"
       - key: WEB_PASSWORD
-        value: "<WEB_PASSWORD>"
+        value: "Giguisa*"
 
   - type: web
     name: nexus-dashboard
@@ -26,13 +26,13 @@ services:
     branch: main
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.port $PORT --server.enableCORS false
+    startCommand: streamlit run main.py --server.port $PORT --server.enableCORS false
     envVars:
       - key: DB_URL
         value: "postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom"
       - key: BACKEND_URL
-        value: "https://contazoom-backend.onrender.com"
+        value: "https://nexus-backend-0dzu.onrender.com"
       - key: FRONTEND_URL
-        value: "https://contazoom-frontend.onrender.com"
+        value: "https://nexus-dashboard-13ej.onrender.com"
       - key: WEB_PASSWORD
-        value: "<WEB_PASSWORD>"
+        value: "Giguisa*"
