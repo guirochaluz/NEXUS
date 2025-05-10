@@ -1,103 +1,163 @@
 import os
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
-from database.db import init_db, salvar_nova_venda
-from auth.oauth import get_auth_url, exchange_code, renovar_access_token
-import requests
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+import locale
 
-# Carrega variáveis de ambiente
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path)
+# ----------------- Carrega variáveis de ambiente -----------------
+load_dotenv()
+BACKEND_URL  = os.getenv("BACKEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+DB_URL       = os.getenv("DB_URL")
 
-# URL do site para redirecionamento após cadastro (obrigatório no .env)
-SITE_URL = os.getenv("SITE_URL")
-if not SITE_URL:
-    raise RuntimeError("Variável SITE_URL não definida. Defina-a no seu arquivo .env ou no ambiente.")
+if not BACKEND_URL or not DB_URL:
+    st.error("❌ Configure BACKEND_URL e DB_URL no seu .env")
+    st.stop()
 
-# Inicializa FastAPI e banco
-app = FastAPI()
-init_db()
+# ----------------- Configuração da Página -----------------
+st.set_page_config(
+    page_title=f"Dashboard de Vendas - NEXUS",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ----------------- Home / ML Login -----------------
-@app.get("/", response_class=HTMLResponse)
-def home():
-    auth_url = get_auth_url()
-    return HTMLResponse(f'<a href="{auth_url}">Login com Mercado Livre</a>')
+# ----------------- Carrega CSS externo -----------------
+st.markdown('<link rel="stylesheet" href="styles.css">', unsafe_allow_html=True)
 
-# ----------------- OAuth Callback -----------------
-@app.get("/callback")
-def callback(code: str):
-    success = exchange_code(code)
-    return {"status": "ok" if success else "erro"}
+# ----------------- Conexão ao Banco -----------------
+engine = create_engine(
+    DB_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30
+)
 
-# ----------------- Registration Endpoints -----------------
-@app.get("/register", response_class=HTMLResponse)
-def show_register(redirect_url: str = SITE_URL):
-    html_content = f"""
-    <html>
-      <body>
-        <h2>Cadastro ContaZoom</h2>
-        <form action="/register" method="post">
-          <label>Email: <input type=\"email\" name=\"email\" required></label><br/>
-          <label>Senha: <input type=\"password\" name=\"password\" required></label><br/>
-          <input type=\"hidden\" name=\"redirect_url\" value=\"{redirect_url}\" />
-          <button type=\"submit\">Registrar</button>
-        </form>
-      </body>
-    </html>
-    """
-    return HTMLResponse(html_content)
+# ----------------- Locale para Moeda -----------------
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except locale.Error:
+    pass
 
-@app.post("/register")
-async def do_register(
-    email: str = Form(...),
-    password: str = Form(...),
-    redirect_url: str = Form(...)
-):
-    # Lógica de criação de usuário: salvar em banco, validações, envio de email, etc.
-    # Após sucesso, redireciona o usuário
-    return RedirectResponse(url=redirect_url, status_code=302)
+# ----------------- Função para carregar vendas -----------------
+@st.cache_data(ttl=300)
+def carregar_vendas(conta_id: str) -> pd.DataFrame:
+    sql = text("""
+        SELECT date_created, item_title, status, quantity, total_amount
+          FROM sales
+         WHERE ml_user_id = :uid
+    """)
+    return pd.read_sql(sql, engine, params={"uid": conta_id})
 
-# ----------------- Webhook de Pagamentos -----------------
-@app.post("/webhook/payments")
-async def webhook_payments(request: Request):
-    payload = await request.json()
-    print(f"📩 Webhook recebido: {payload}")
+# ----------------- Estado Inicial -----------------
+if "logado" not in st.session_state:
+    st.session_state["logado"] = False
+    st.session_state["conta"]  = ""
 
-    payment_id = payload.get("resource", "").split("/")[-1]
-    ml_user_id = str(payload.get("user_id"))
-
-    if not payment_id or not ml_user_id:
-        return {"status": "erro", "message": "Dados incompletos na notificação"}
-
-    access_token = renovar_access_token(ml_user_id)
-    if not access_token:
-        return {"status": "erro", "message": "Não foi possível renovar o token"}
-
-    r = requests.get(
-        f"https://api.mercadolibre.com/collections/{payment_id}",
-        params={"access_token": access_token}
+# ----------------- Login -----------------
+def login():
+    params     = st.experimental_get_query_params()
+    registered = params.get("registered", [""])[0]
+    if registered:
+        st.sidebar.success(f"✅ Cadastro concluído! Use o ID **{registered}**")
+    st.sidebar.title("🔐 Login NEXUS")
+    conta = st.sidebar.text_input("ID da conta", value=registered)
+    senha = st.sidebar.text_input("Senha", type="password")
+    if st.sidebar.button("Entrar"):
+        if not conta:
+            st.sidebar.warning("Preencha o ID.")
+        elif senha != "Giguisa*":
+            st.sidebar.error("Senha incorreta.")
+        else:
+            st.session_state["logado"] = True
+            st.session_state["conta"]  = conta
+            st.experimental_rerun()
+    st.sidebar.markdown(
+        f'<a href="{BACKEND_URL}/ml-login"><button>Cadastrar com Mercado Livre</button></a>',
+        unsafe_allow_html=True
     )
-    if r.status_code != 200:
-        return {"status": "erro", "message": "Erro ao consultar payment", "details": r.json()}
+    st.stop()
 
-    payment_data = r.json()
-    external_reference = payment_data.get("external_reference")
-    if not external_reference:
-        return {"status": "erro", "message": "external_reference ausente no payment"}
+# ----------------- Logout -----------------
+def logout():
+    st.session_state.clear()
+    st.experimental_rerun()
 
-    order = requests.get(
-        f"https://api.mercadolibre.com/orders/{external_reference}",
-        headers={"Authorization": f"Bearer {access_token}"}
-    )
-    if order.status_code != 200:
-        return {"status": "erro", "message": "Erro ao consultar order", "details": order.json()}
+# ----------------- Dashboard -----------------
+def mostrar_dashboard():
+    st.sidebar.title("📅 Filtros")
+    if st.sidebar.button("🔓 Logout"):
+        logout()
 
-    order_data = order.json()
+    conta = st.session_state["conta"]
     try:
-        salvar_nova_venda(order_data)
-        return {"status": "ok", "message": "Venda salva com sucesso"}
+        df = carregar_vendas(conta)
     except Exception as e:
-        print(f"❌ Erro ao salvar venda: {e}")
-        return {"status": "erro", "message": "Falha ao salvar venda"}
+        st.error(f"Erro ao conectar ao banco: {e}")
+        return
+
+    if df.empty:
+        st.warning("Nenhuma venda encontrada.")
+        return
+
+    # ---------- Pré-processamento e Filtros (igual ao app.py) ----------
+    df["date_created"] = pd.to_datetime(df["date_created"])
+    df["total_amount"] = pd.to_numeric(df["total_amount"], errors="coerce")
+    df["quantity"]     = pd.to_numeric(df["quantity"], errors="coerce")
+
+    data_ini, data_fim = (
+        st.sidebar.date_input("De", df["date_created"].min().date()),
+        st.sidebar.date_input("Até", df["date_created"].max().date())
+    )
+    status = st.sidebar.multiselect("Status", df["status"].unique(), df["status"].unique())
+    vmin, vmax = st.sidebar.slider(
+        "Valor Total",
+        float(df["total_amount"].min()),
+        float(df["total_amount"].max()),
+        (float(df["total_amount"].min()), float(df["total_amount"].max()))
+    )
+    qmin, qmax = st.sidebar.slider(
+        "Quantidade",
+        int(df["quantity"].min()),
+        int(df["quantity"].max()),
+        (int(df["quantity"].min()), int(df["quantity"].max()))
+    )
+    busca = st.sidebar.text_input("🔍 Buscar")
+
+    mask = (
+        (df["date_created"].dt.date >= data_ini) &
+        (df["date_created"].dt.date <= data_fim) &
+        (df["status"].isin(status)) &
+        (df["total_amount"].between(vmin, vmax)) &
+        (df["quantity"].between(qmin, qmax))
+    )
+    df_filtrado = df[mask]
+    if busca:
+        df_filtrado = df_filtrado[df_filtrado.apply(lambda r: busca.lower() in str(r).lower(), axis=1)]
+
+    if df_filtrado.empty:
+        st.warning("Nenhum resultado após filtros.")
+        return
+
+    # ---------- Exibição de KPIs e abas ----------
+    total_vendas = len(df_filtrado)
+    total_valor  = df_filtrado["total_amount"].sum()
+    total_itens  = df_filtrado["quantity"].sum()
+    ticket_medio = total_valor / total_vendas if total_vendas else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🧾 Vendas", total_vendas)
+    c2.metric("💰 Valor total", locale.currency(total_valor, grouping=True))
+    c3.metric("📦 Itens vendidos", int(total_itens))
+    c4.metric("🎯 Ticket médio", locale.currency(ticket_medio, grouping=True))
+
+    tabs = st.tabs(["📋 Tabela", "📈 Gráficos", "🔍 Insights", "📤 Exportar"])
+    # … copie as abas do app.py conforme necessário …
+
+# ----------------- Inicialização -----------------
+if not st.session_state["logado"]:
+    login()
+else:
+    mostrar_dashboard()
