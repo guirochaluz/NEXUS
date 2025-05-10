@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: nexus-backend
+    env: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DB_URL
+        value: "<POSTGRES_URL>"
+      - key: ML_CLIENT_ID
+        value: "<ML_CLIENT_ID>"
+      - key: ML_CLIENT_SECRET
+        value: "<ML_CLIENT_SECRET>"
+      - key: BACKEND_URL
+        value: "https://nexus-backend.onrender.com"
+      - key: FRONTEND_URL
+        value: "https://nexus-frontend.com"
+      - key: WEB_PASSWORD
+        value: "<WEB_PASSWORD>"
+
+  - type: web
+    name: nexus-dashboard
+    env: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.enableCORS false
+    envVars:
+      - key: DB_URL
+        value: "<POSTGRES_URL>"
+      - key: BACKEND_URL
+        value: "https://nexus-backend.onrender.com"
+      - key: FRONTEND_URL
+        value: "https://nexus-frontend.com"
+      - key: WEB_PASSWORD
+        value: "<WEB_PASSWORD>"
