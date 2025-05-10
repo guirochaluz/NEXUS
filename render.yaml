@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: contazoom-backend
+    env: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DB_URL
+        value: postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom
+      - key: ML_CLIENT_ID
+        value: "3597957782423859"
+      - key: ML_CLIENT_SECRET
+        value: "sZOG7DCPZzQhWbqSn4ii6UJx4upEzQMd"
+      - key: BACKEND_URL
+        value: https://contazoom-backend.onrender.com
+      - key: FRONTEND_URL
+        value: https://contazoom-frontend.onrender.com
+
+  - type: web
+    name: contazoom-dashboard
+    env: python
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.enableCORS false
+    envVars:
+      - key: DB_URL
+        value: postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom
+      - key: BACKEND_URL
+        value: https://contazoom-backend.onrender.com
