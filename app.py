@@ -74,8 +74,12 @@ except locale.Error:
 # ----------------- Sidebar Retrátil -----------------
 def render_sidebar():
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
-    pages = ["Dashboard", "Contas Cadastradas", "Relatórios"]
-    selected = st.sidebar.radio("Menu", pages)
+    pages = {
+        'Dashboard': '📊 Dashboard',
+        'Contas Cadastradas': '📑 Contas Cadastradas',
+        'Relatórios': '📋 Relatórios'
+    }
+    selected = st.sidebar.selectbox("Menu", options=list(pages.keys()), format_func=lambda x: pages[x])
 
     return selected
 
