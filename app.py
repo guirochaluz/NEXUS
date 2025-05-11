@@ -74,7 +74,7 @@ except locale.Error:
 
 # ----------------- Funções Auxiliares -----------------
 def ml_callback():
-    params = st.query_params()  # Troca experimental_get_query_params por query_params
+    params = st.query_params  # Troca experimental_get_query_params por query_params
     authorization_code = params.get('code', [None])[0]
 
     if not authorization_code:
