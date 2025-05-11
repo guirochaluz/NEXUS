@@ -74,8 +74,11 @@ except locale.Error:
 
 # ----------------- Funções Auxiliares -----------------
 def ml_callback():
-    params = st.query_params  # Troca experimental_get_query_params por query_params
-    authorization_code = params.get('code', [None])[0]
+    """
+    Processa o callback do Mercado Livre após login.
+    """
+    params = st.query_params  # 🚀 Atualização para a nova API
+    authorization_code = params.get('code')
 
     if not authorization_code:
         st.error("⚠️ Código de autorização não encontrado.")
@@ -89,9 +92,9 @@ def ml_callback():
 
     if response.status_code == 200:
         st.success("✅ Autenticação realizada com sucesso!")
-        st.session_state.clear()
-        st.experimental_set_query_params()
-        st.experimental_refresh()
+        # 🔄 Atualização: Novo método para limpar query params:
+        st.set_query_params()  # Isso limpa os parâmetros
+        st.experimental_rerun()
     else:
         st.error(f"❌ Erro ao autenticar: {response.text}")
 
