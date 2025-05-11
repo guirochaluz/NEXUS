@@ -176,6 +176,15 @@ def mostrar_contas_cadastradas():
         """,
         unsafe_allow_html=True
     )
+    st.markdown(
+        f"""
+        <a href='{ml_auth_url}' target='_blank'>
+        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
+        ➕ Adicionar Nova Conta Mercado Livre
+        </button></a>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Carregar contas do banco
     query = text("SELECT ml_user_id, access_token FROM user_tokens")
@@ -201,6 +210,15 @@ def mostrar_contas_cadastradas():
 
     # Botão para autenticação no Mercado Livre
     ml_auth_url = f"{BACKEND_URL}/ml-login"
+    st.markdown(
+        f"""
+        <a href='{ml_auth_url}' target='_blank'>
+        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
+        ➕ Adicionar Nova Conta Mercado Livre
+        </button></a>
+        """,
+        unsafe_allow_html=True
+    )
     st.markdown(
         f"<a href='{ml_auth_url}' target='_blank'>
         <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
