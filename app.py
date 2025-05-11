@@ -74,26 +74,29 @@ except locale.Error:
 
 # ----------------- Funções Auxiliares -----------------
 def ml_callback():
-    """
-    Processa o callback do Mercado Livre após login.
-    """
-    params = st.experimental_get_query_params()
-    code = params.get('code', [None])[0]
-    if not code:
+    params = st.query_params()  # Troca experimental_get_query_params por query_params
+    authorization_code = params.get('code', [None])[0]
+
+    if not authorization_code:
         st.error("⚠️ Código de autorização não encontrado.")
         return
+
     st.success("✅ Código de autorização recebido. Processando...")
-    resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
-    if resp.status_code == 200:
+
+    # Enviar o código para o backend
+    backend_url = f"{BACKEND_URL}/auth/callback"
+    response = requests.post(backend_url, json={"code": authorization_code})
+
+    if response.status_code == 200:
         st.success("✅ Autenticação realizada com sucesso!")
-        # limpa o parâmetro para evitar retrigger
+        st.session_state.clear()
         st.experimental_set_query_params()
-        st.experimental_rerun()
+        st.experimental_refresh()
     else:
-        st.error(f"❌ Erro ao autenticar: {resp.text}")
+        st.error(f"❌ Erro ao autenticar: {response.text}")
 
 def render_add_account_button():
-    ml_auth_url = f"{BACKEND_URL}/ml-login"
+    ml_auth_url = f"https://auth.mercadolivre.com.br/authorization?response_type=code&client_id={os.getenv('ML_CLIENT_ID')}&redirect_uri=https://nexus-dashboard-13ej.onrender.com/ml-callback"
     st.markdown(f"""
         <a href="{ml_auth_url}" target="_blank">
           <button style="
