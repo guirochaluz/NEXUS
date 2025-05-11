@@ -5,8 +5,8 @@ services:
   env: python
   branch: main
   plan: free
-  buildCommand: pip install -r requirements.txt
-  startCommand: uvicorn api\:app --host 0.0.0.0 --port \$PORT
+  buildCommand: "pip install -r requirements.txt"
+  startCommand: "uvicorn api\:app --host 0.0.0.0 --port \$PORT"
   envVars:
 
   * key: DB\_URL
@@ -18,7 +18,7 @@ services:
   * key: BACKEND\_URL
     value: "[https://nexus-backend-0dzu.onrender.com](https://nexus-backend-0dzu.onrender.com)"
   * key: FRONTEND\_URL
-    value: "[https://nexus-dashboard-13ej.onrender.com/ml-callback](https://nexus-dashboard-13ej.onrender.com/ml-callback)"
+    value: "[https://nexus-dashboard-13ej.onrender.com](https://nexus-dashboard-13ej.onrender.com)"
   * key: WEB\_PASSWORD
     value: "Giguisa\*"
 
@@ -27,8 +27,8 @@ services:
   env: python
   branch: main
   plan: free
-  buildCommand: pip install -r requirements.txt
-  startCommand: streamlit run app.py --server.port \$PORT --server.address 0.0.0.0 --server.enableCORS false
+  buildCommand: "pip install -r requirements.txt"
+  startCommand: "streamlit run app.py --server.port \$PORT --server.address 0.0.0.0 --server.enableCORS false"
   envVars:
 
   * key: DB\_URL
@@ -36,7 +36,7 @@ services:
   * key: BACKEND\_URL
     value: "[https://nexus-backend-0dzu.onrender.com](https://nexus-backend-0dzu.onrender.com)"
   * key: FRONTEND\_URL
-    value: "[https://nexus-dashboard-13ej.onrender.com/ml-callback](https://nexus-dashboard-13ej.onrender.com/ml-callback)"
+    value: "[https://nexus-dashboard-13ej.onrender.com](https://nexus-dashboard-13ej.onrender.com)"
   * key: WEB\_PASSWORD
     value: "Giguisa\*"
 
