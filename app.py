@@ -240,8 +240,9 @@ def mostrar_relatorios():
         st.dataframe(df_filtrado)
 
 # ----------------- Fluxo Principal -----------------
-# Processa callback do Mercado Livre se houver código na URL
-if st.experimental_get_query_params().get("code"):
+# 🚀 Substituição do método experimental pelo novo método
+params = st.query_params
+if "code" in params:
     ml_callback()
 
 if "logado" not in st.session_state or not st.session_state["logado"]:
