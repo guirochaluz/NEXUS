@@ -1,26 +1,40 @@
+# oauth.py
 import os
 import requests
-from ml.sales import get_sales
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
-from database.db import SessionLocal
-from database.models import UserToken
 
-load_dotenv()
+from db import SessionLocal
+from models import UserToken
+
+# Carregar variáveis de ambiente
+dotenv_loaded = load_dotenv()
 CLIENT_ID = os.getenv("ML_CLIENT_ID")
 CLIENT_SECRET = os.getenv("ML_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("REDIRECT_URI")
+# REDIRECT_URI deve ser a URL do seu front-end (onde o Streamlit captura ?code=)
+REDIRECT_URI = os.getenv("REDIRECT_URI") or os.getenv("FRONTEND_URL")
 
-def get_auth_url():
+# Endpoint de token do Mercado Livre
+TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
+
+
+def get_auth_url() -> str:
+    """
+    Gera a URL para redirecionar o usuário ao OAuth do Mercado Livre.
+    """
     return (
         f"https://auth.mercadolivre.com.br/authorization"
-        f"?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
+        f"?response_type=code"
+        f"&client_id={CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
     )
 
-def exchange_code(code):
-    print("🔐 Iniciando troca de authorization code por access_token...")
 
-    url = "https://api.mercadolibre.com/oauth/token"
+def exchange_code(code: str) -> None:
+    """
+    Troca o authorization_code por access_token e refresh_token,
+    e salva/atualiza no banco de dados.
+    """
     payload = {
         "grant_type": "authorization_code",
         "client_id": CLIENT_ID,
@@ -28,94 +42,68 @@ def exchange_code(code):
         "code": code,
         "redirect_uri": REDIRECT_URI,
     }
+    resp = requests.post(TOKEN_URL, data=payload)
+    data = resp.json()
+    if resp.status_code != 200:
+        raise Exception(f"Erro ao trocar code por token: {data}")
 
-    res = requests.post(url, data=payload)
-    if res.status_code != 200:
-        print(f"❌ Erro ao obter token: {res.text}")
-        return False
-
-    data = res.json()
-    access_token = data["access_token"]
-    refresh_token = data["refresh_token"]
-    expires_in = data["expires_in"]
-    print("✅ Token recebido com sucesso")
-
-    # Descobre o user_id
-    print("🔎 Buscando informações do usuário...")
-    user_info = requests.get(
-        "https://api.mercadolibre.com/users/me",
-        headers={"Authorization": f"Bearer {access_token}"}
-    ).json()
-
-    ml_user_id = str(user_info["id"])
-    print(f"👤 ml_user_id identificado: {ml_user_id}")
-    expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-
-    # Salva no banco
-    print("💾 Salvando tokens no banco...")
     db = SessionLocal()
     try:
-        user = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
-        if user:
-            user.access_token = access_token
-            user.refresh_token = refresh_token
-            user.expires_at = expires_at
-            print("📝 Tokens atualizados para o usuário existente.")
-        else:
-            db.add(UserToken(
-                ml_user_id=ml_user_id,
-                access_token=access_token,
-                refresh_token=refresh_token,
+        # Verifica se já existe registro para este usuário
+        token = db.query(UserToken).filter_by(ml_user_id=data["user_id"]).first()
+        expires_at = datetime.utcnow() + timedelta(seconds=data["expires_in"])
+        if token is None:
+            token = UserToken(
+                ml_user_id=data["user_id"],
+                access_token=data["access_token"],
+                refresh_token=data["refresh_token"],
                 expires_at=expires_at
-            ))
-            print("🆕 Tokens salvos para novo usuário.")
+            )
+            db.add(token)
+        else:
+            token.access_token = data["access_token"]
+            token.refresh_token = data["refresh_token"]
+            token.expires_at = expires_at
         db.commit()
-    except Exception as e:
-        print(f"❌ Erro ao salvar token no banco: {e}")
+    except Exception:
         db.rollback()
+        raise
     finally:
         db.close()
 
-    # Importa as vendas na primeira autenticação
-    print("📦 Iniciando download de vendas...")
-    get_sales(ml_user_id, access_token)
-    print("✅ Processo completo com sucesso!")
 
-    return True
 def renovar_access_token(ml_user_id: str) -> str:
-    print(f"🔄 Renovando token para o usuário {ml_user_id}...")
-
+    """
+    Usa o refresh_token salvo no banco para obter um novo access_token.
+    Retorna o novo access_token em caso de sucesso, ou None.
+    """
     db = SessionLocal()
     try:
-        user = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
-        if not user:
-            print("⚠️ Usuário não encontrado na base de tokens.")
+        token = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
+        if not token:
+            print(f"Usuário {ml_user_id} não encontrado no banco.")
             return None
 
         payload = {
             "grant_type": "refresh_token",
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
-            "refresh_token": user.refresh_token
+            "refresh_token": token.refresh_token,
         }
-
-        res = requests.post("https://api.mercadolivre.com/oauth/token", data=payload)
-        if res.status_code != 200:
-            print(f"❌ Erro ao renovar token: {res.text}")
+        resp = requests.post(TOKEN_URL, data=payload)
+        data = resp.json()
+        if resp.status_code != 200:
+            print(f"Erro ao renovar token: {data}")
             return None
 
-        data = res.json()
-        user.access_token = data["access_token"]
-        user.refresh_token = data["refresh_token"]
-        user.expires_at = datetime.utcnow() + timedelta(seconds=data["expires_in"])
-
+        token.access_token = data["access_token"]
+        token.refresh_token = data["refresh_token"]
+        token.expires_at = datetime.utcnow() + timedelta(seconds=data["expires_in"])
         db.commit()
-        print("✅ Token renovado e salvo com sucesso.")
-        return user.access_token
-
+        return token.access_token
     except Exception as e:
-        print(f"❌ Erro no processo de renovação do token: {e}")
         db.rollback()
+        print(f"❌ Erro no processo de renovação do token: {e}")
         return None
     finally:
         db.close()
