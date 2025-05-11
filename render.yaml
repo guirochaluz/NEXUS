@@ -9,17 +9,17 @@ services:
   startCommand: uvicorn api\:app --host 0.0.0.0 --port \$PORT
   envVars:
 
-  * key: DB\_URL
+  - key: DB\_URL
     value: "postgresql://admin\:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6\@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom"
-  * key: ML\_CLIENT\_ID
+  - key: ML\_CLIENT\_ID
     value: "3597957782423859"
-  * key: ML\_CLIENT\_SECRET
+  - key: ML\_CLIENT\_SECRET
     value: "sZOG7DCPZzQhWbqSn4ii6UJx4upEzQMd"
-  * key: BACKEND\_URL
+  - key: BACKEND\_URL
     value: "[https://nexus-backend-0dzu.onrender.com](https://nexus-backend-0dzu.onrender.com)"
-  * key: FRONTEND\_URL
+  - key: FRONTEND\_URL
     value: "[https://nexus-dashboard-13ej.onrender.com](https://nexus-dashboard-13ej.onrender.com)"
-  * key: WEB\_PASSWORD
+  - key: WEB\_PASSWORD
     value: "Giguisa\*"
 
 - type: web
@@ -31,11 +31,11 @@ services:
   startCommand: streamlit run app.py --server.port \$PORT --server.address 0.0.0.0 --server.enableCORS false
   envVars:
 
-  * key: DB\_URL
+  - key: DB\_URL
     value: "postgresql://admin\:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6\@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom"
-  * key: BACKEND\_URL
+  - key: BACKEND\_URL
     value: "[https://nexus-backend-0dzu.onrender.com](https://nexus-backend-0dzu.onrender.com)"
-  * key: FRONTEND\_URL
+  - key: FRONTEND\_URL
     value: "[https://nexus-dashboard-13ej.onrender.com](https://nexus-dashboard-13ej.onrender.com)"
-  * key: WEB\_PASSWORD
+  - key: WEB\_PASSWORD
     value: "Giguisa\*"
