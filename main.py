@@ -20,5 +20,5 @@ if not BACKEND_URL or not DB_URL:
     st.error("❌ Configure BACKEND_URL e DB_URL no seu .env")
     st.stop()
 
-# Carregar aplicação principal
-st.success("🎉 Sistema NEXUS iniciado com sucesso. Acesse o app.py para usar a interface.")
+# Inicia a interface principal
+st.write("🎉 Sistema NEXUS iniciado com sucesso. Acesse o app.py para usar a interface.")
