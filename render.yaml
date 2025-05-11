@@ -16,7 +16,7 @@ services:
       - key: BACKEND_URL
         value: "https://nexus-backend-0dzu.onrender.com"
       - key: FRONTEND_URL
-        value: "https://nexus-dashboard-13ej.onrender.com"
+        value: "https://nexus-dashboard-13ej.onrender.com/ml-callback"
       - key: WEB_PASSWORD
         value: "Giguisa*"
 
@@ -33,6 +33,6 @@ services:
       - key: BACKEND_URL
         value: "https://nexus-backend-0dzu.onrender.com"
       - key: FRONTEND_URL
-        value: "https://nexus-dashboard-13ej.onrender.com"
+        value: "https://nexus-dashboard-13ej.onrender.com/ml-callback"
       - key: WEB_PASSWORD
         value: "Giguisa*"
