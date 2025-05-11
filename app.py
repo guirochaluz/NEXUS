@@ -125,7 +125,15 @@ def salvar_tokens_no_banco(data):
         st.error(f"❌ Erro ao salvar tokens no banco: {str(e)}")
 
 def render_add_account_button():
-    ml_auth_url = f"https://auth.mercadolivre.com.br/authorization?response_type=code&client_id={os.getenv('ML_CLIENT_ID')}&redirect_uri=https://nexus-dashboard-13ej.onrender.com/ml-callback"
+    # pegue a URL do seu front-end do env, sem path extra
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://nexus-dashboard-13ej.onrender.com")
+
+    ml_auth_url = (
+        "https://auth.mercadolivre.com.br/authorization"
+        f"?response_type=code"
+        f"&client_id={os.getenv('ML_CLIENT_ID')}"
+        f"&redirect_uri={FRONTEND_URL}"
+    )
     st.markdown(f"""
         <a href="{ml_auth_url}" target="_blank">
           <button style="
@@ -151,7 +159,15 @@ def carregar_vendas(conta_id: str) -> pd.DataFrame:
     df = pd.read_sql(sql, engine, params={"uid": conta_id})
     df["date_created"] = pd.to_datetime(df["date_created"])
     return df
-
+    
+def renovar_access_token(ml_user_id: str) -> bool:
+    resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": ml_user_id})
+    if resp.ok:
+        data = resp.json()
+        salvar_tokens_no_banco(data)
+        return True
+    return False
+    
 # ----------------- Componentes da UI -----------------
 def render_sidebar():
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
