@@ -145,6 +145,40 @@ def mostrar_contas_cadastradas():
     # Botão para autenticação no Mercado Livre
     ml_auth_url = f"{BACKEND_URL}/ml-login"
     st.markdown(
+        f"""
+        <a href='{ml_auth_url}' target='_blank'>
+        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
+        ➕ Adicionar Nova Conta Mercado Livre
+        </button></a>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Carregar contas do banco
+    query = text("SELECT ml_user_id, access_token FROM user_tokens")
+    try:
+        df_contas = pd.read_sql(query, engine)
+    except Exception as e:
+        st.error(f"Erro ao carregar contas: {e}")
+        return
+
+    if df_contas.empty:
+        st.warning("Nenhuma conta cadastrada.")
+        return
+
+    for index, row in df_contas.iterrows():
+        with st.expander(f"🔗 Conta ML: {row['ml_user_id']}"):
+            st.write(f"**Access Token:** {row['access_token']}")
+            if st.button(f"🔄 Renovar Token - {row['ml_user_id']}"):
+                novo_token = renovar_access_token(row['ml_user_id'])
+                if novo_token:
+                    st.success("Token atualizado com sucesso!")
+                else:
+                    st.error("Erro ao atualizar o token.")
+
+    # Botão para autenticação no Mercado Livre
+    ml_auth_url = f"{BACKEND_URL}/ml-login"
+    st.markdown(
         f"<a href='{ml_auth_url}' target='_blank'>
         <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
         ➕ Adicionar Nova Conta Mercado Livre
