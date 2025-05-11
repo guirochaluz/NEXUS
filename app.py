@@ -77,8 +77,8 @@ def ml_callback():
     """
     Processa o callback do Mercado Livre após login.
     """
-    params = st.query_params  # 🚀 Atualização para a nova API
-    authorization_code = params.get('code')
+    params = st.query_params
+    authorization_code = params.get('code', [None])[0]  # 🔍 Captura segura do code
 
     if not authorization_code:
         st.error("⚠️ Código de autorização não encontrado.")
@@ -91,12 +91,38 @@ def ml_callback():
     response = requests.post(backend_url, json={"code": authorization_code})
 
     if response.status_code == 200:
+        response_data = response.json()
         st.success("✅ Autenticação realizada com sucesso!")
+        
+        # 🔄 Atualização: Salvando os tokens no banco
+        salvar_tokens_no_banco(response_data)
+        
         # 🔄 Atualização: Novo método para limpar query params:
         st.set_query_params()  # Isso limpa os parâmetros
         st.experimental_rerun()
     else:
         st.error(f"❌ Erro ao autenticar: {response.text}")
+
+def salvar_tokens_no_banco(data):
+    """
+    Salva os tokens no banco de dados após autenticação.
+    """
+    try:
+        with engine.connect() as connection:
+            query = text("""
+                INSERT INTO user_tokens (ml_user_id, access_token, refresh_token, expires_at)
+                VALUES (:ml_user_id, :access_token, :refresh_token, NOW() + interval '6 hours')
+                ON CONFLICT (ml_user_id) DO UPDATE
+                SET access_token = :access_token, refresh_token = :refresh_token, expires_at = NOW() + interval '6 hours'
+            """)
+            connection.execute(query, {
+                "ml_user_id": data.get("user_id"),
+                "access_token": data.get("access_token"),
+                "refresh_token": data.get("refresh_token"),
+            })
+        st.success("✅ Tokens salvos no banco com sucesso!")
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar tokens no banco: {str(e)}")
 
 def render_add_account_button():
     ml_auth_url = f"https://auth.mercadolivre.com.br/authorization?response_type=code&client_id={os.getenv('ML_CLIENT_ID')}&redirect_uri=https://nexus-dashboard-13ej.onrender.com/ml-callback"
