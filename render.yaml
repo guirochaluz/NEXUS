@@ -22,7 +22,7 @@ services:
   * key: WEB\_PASSWORD
     value: "Giguisa\*"
 
-* type: web
+- type: web
   name: nexus-dashboard
   env: python
   branch: main
