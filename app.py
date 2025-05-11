@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
@@ -71,7 +72,55 @@ try:
 except locale.Error:
     pass
 
-# ----------------- Sidebar Retrátil -----------------
+# ----------------- Funções Auxiliares -----------------
+def ml_callback():
+    """
+    Processa o callback do Mercado Livre após login.
+    """
+    params = st.experimental_get_query_params()
+    code = params.get('code', [None])[0]
+    if not code:
+        st.error("⚠️ Código de autorização não encontrado.")
+        return
+    st.success("✅ Código de autorização recebido. Processando...")
+    resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
+    if resp.status_code == 200:
+        st.success("✅ Autenticação realizada com sucesso!")
+        # limpa o parâmetro para evitar retrigger
+        st.experimental_set_query_params()
+        st.experimental_rerun()
+    else:
+        st.error(f"❌ Erro ao autenticar: {resp.text}")
+
+def render_add_account_button():
+    ml_auth_url = f"{BACKEND_URL}/ml-login"
+    st.markdown(f"""
+        <a href="{ml_auth_url}" target="_blank">
+          <button style="
+            background-color:#4CAF50;
+            color:white;
+            border:none;
+            padding:10px;
+            border-radius:5px;
+            margin-bottom:10px;
+          ">
+            ➕ Adicionar Nova Conta Mercado Livre
+          </button>
+        </a>
+    """, unsafe_allow_html=True)
+
+@st.cache_data(ttl=300)
+def carregar_vendas(conta_id: str) -> pd.DataFrame:
+    sql = text("""
+        SELECT date_created, item_title, status, quantity, total_amount
+          FROM sales
+         WHERE ml_user_id = :uid
+    """)
+    df = pd.read_sql(sql, engine, params={"uid": conta_id})
+    df["date_created"] = pd.to_datetime(df["date_created"])
+    return df
+
+# ----------------- Componentes da UI -----------------
 def render_sidebar():
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
     pages = {
@@ -79,61 +128,30 @@ def render_sidebar():
         'Contas Cadastradas': '📑 Contas Cadastradas',
         'Relatórios': '📋 Relatórios'
     }
-    selected = st.sidebar.selectbox("Menu", options=list(pages.keys()), format_func=lambda x: pages[x])
-
-    return selected
-
-# ----------------- Autenticação / Login -----------------
-def ml_callback():
-    """
-    Rota para capturar o callback do Mercado Livre.
-    """
-    params = st.experimental_get_query_params()
-    authorization_code = params.get('code', [None])[0]
-
-    if not authorization_code:
-        st.error("⚠️ Código de autorização não encontrado.")
-        return
-
-    st.success("✅ Código de autorização recebido. Processando...")
-
-    # Enviar o código para o backend
-    backend_url = f"{BACKEND_URL}/auth/callback"
-    response = requests.post(backend_url, json={"code": authorization_code})
-
-    if response.status_code == 200:
-        st.success("✅ Autenticação realizada com sucesso!")
-        st.experimental_rerun()
-    else:
-        st.error(f"❌ Erro ao autenticar: {response.text}")
+    return st.sidebar.selectbox("Menu", options=list(pages.keys()), format_func=lambda x: pages[x])
 
 def login():
     st.markdown("<h2 style='text-align: center;'>🔐 Login - NEXUS</h2>", unsafe_allow_html=True)
-    
     conta = st.text_input("ID da Conta", "")
     senha = st.text_input("Senha", type="password")
-
     if st.button("Entrar"):
         if not conta or not senha:
             st.error("Por favor, preencha todos os campos.")
-        elif senha != "NEXU$2025" or conta != "GRUPONEXUS":
+        elif conta != "GRUPONEXUS" or senha != "NEXU$2025":
             st.error("Usuário ou senha incorretos.")
         else:
             st.session_state["logado"] = True
             st.session_state["conta"] = conta
             st.experimental_rerun()
 
-# ----------------- Dashboard -----------------
 def mostrar_dashboard():
     st.title("📊 Dashboard de Vendas")
-    conta = st.session_state.get("conta")
-
+    conta = st.session_state["conta"]
     try:
         df = carregar_vendas(conta)
     except Exception as e:
         st.error(f"Erro ao conectar ao banco: {e}")
         return
-
     if df.empty:
         st.warning("Nenhuma venda encontrada para essa conta.")
         return
@@ -150,46 +168,23 @@ def mostrar_dashboard():
     c3.metric("📦 Itens vendidos", int(total_itens))
     c4.metric("🎯 Ticket médio", locale.currency(ticket_medio, grouping=True))
 
-    # Gráficos
+    # Gráfico de vendas por dia
     vendas_por_dia = (
         df.groupby(df["date_created"].dt.date)["total_amount"]
-        .sum()
-        .reset_index()
+          .sum()
+          .reset_index(name="total_amount")
     )
     st.plotly_chart(
         px.line(vendas_por_dia, x="date_created", y="total_amount", title="💵 Total Vendido por Dia"),
         use_container_width=True
     )
 
-# ----------------- Contas Cadastradas -----------------
 def mostrar_contas_cadastradas():
     st.title("📑 Contas Cadastradas")
+    render_add_account_button()
 
-    # Botão para autenticação no Mercado Livre
-    ml_auth_url = f"{BACKEND_URL}/ml-login"
-    st.markdown(
-        f"""
-        <a href='{ml_auth_url}' target='_blank'>
-        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
-        ➕ Adicionar Nova Conta Mercado Livre
-        </button></a>
-        """,
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        f"""
-        <a href='{ml_auth_url}' target='_blank'>
-        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
-        ➕ Adicionar Nova Conta Mercado Livre
-        </button></a>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # Carregar contas do banco
-    query = text("SELECT ml_user_id, access_token FROM user_tokens")
     try:
-        df_contas = pd.read_sql(query, engine)
+        df_contas = pd.read_sql(text("SELECT ml_user_id, access_token FROM user_tokens"), engine)
     except Exception as e:
         st.error(f"Erro ao carregar contas: {e}")
         return
@@ -198,115 +193,52 @@ def mostrar_contas_cadastradas():
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    for index, row in df_contas.iterrows():
-        with st.expander(f"🔗 Conta ML: {row['ml_user_id']}"):
-            st.write(f"**Access Token:** {row['access_token']}")
-            if st.button(f"🔄 Renovar Token - {row['ml_user_id']}"):
-                novo_token = renovar_access_token(row['ml_user_id'])
-                if novo_token:
+    for row in df_contas.itertuples(index=False):
+        with st.expander(f"🔗 Conta ML: {row.ml_user_id}"):
+            st.write(f"**Access Token:** {row.access_token}")
+            if st.button("🔄 Renovar Token", key=f"renew_{row.ml_user_id}"):
+                novo = renovar_access_token(row.ml_user_id)
+                if novo:
                     st.success("Token atualizado com sucesso!")
                 else:
                     st.error("Erro ao atualizar o token.")
 
-    # Botão para autenticação no Mercado Livre
-    ml_auth_url = f"{BACKEND_URL}/ml-login"
-    st.markdown(
-        f"""
-        <a href='{ml_auth_url}' target='_blank'>
-        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
-        ➕ Adicionar Nova Conta Mercado Livre
-        </button></a>
-        """,
-        unsafe_allow_html=True
-    )
-    st.markdown(
-        f"<a href='{ml_auth_url}' target='_blank'>
-        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
-        ➕ Adicionar Nova Conta Mercado Livre
-        </button></a>",
-        unsafe_allow_html=True
-    )
+    render_add_account_button()
 
-    # Carregar contas do banco
-    query = text("SELECT ml_user_id, access_token FROM user_tokens")
-    try:
-        df_contas = pd.read_sql(query, engine)
-    except Exception as e:
-        st.error(f"Erro ao carregar contas: {e}")
-        return
-
-    if df_contas.empty:
-        st.warning("Nenhuma conta cadastrada.")
-        return
-
-    for index, row in df_contas.iterrows():
-        with st.expander(f"🔗 Conta ML: {row['ml_user_id']}"):
-            st.write(f"**Access Token:** {row['access_token']}")
-            if st.button(f"🔄 Renovar Token - {row['ml_user_id']}"):
-                novo_token = renovar_access_token(row['ml_user_id'])
-                if novo_token:
-                    st.success("Token atualizado com sucesso!")
-                else:
-                    st.error("Erro ao atualizar o token.")
-    query = text("SELECT ml_user_id, access_token FROM user_tokens")
-    try:
-        df_contas = pd.read_sql(query, engine)
-    except Exception as e:
-        st.error(f"Erro ao carregar contas: {e}")
-        return
-
-    if df_contas.empty:
-        st.warning("Nenhuma conta cadastrada.")
-        return
-
-    for index, row in df_contas.iterrows():
-        with st.expander(f"🔗 Conta ML: {row['ml_user_id']}"):
-            st.write(f"**Access Token:** {row['access_token']}")
-
-# ----------------- Relatórios -----------------
 def mostrar_relatorios():
     st.title("📋 Relatórios de Vendas")
-    conta = st.session_state.get("conta")
+    conta = st.session_state["conta"]
     try:
         df = carregar_vendas(conta)
     except Exception as e:
         st.error(f"Erro ao conectar ao banco: {e}")
         return
-
     if df.empty:
         st.warning("Nenhuma venda encontrada para essa conta.")
         return
 
-    # Filtros de Data
     data_ini = st.date_input("De:", value=df["date_created"].min())
     data_fim = st.date_input("Até:", value=df["date_created"].max())
     status = st.multiselect("Status:", options=df["status"].unique(), default=df["status"].unique())
 
-    df_filtrado = df[(df["date_created"] >= pd.to_datetime(data_ini)) &
-                    (df["date_created"] <= pd.to_datetime(data_fim)) &
-                    (df["status"].isin(status))]
+    filt = (
+        (df["date_created"] >= pd.to_datetime(data_ini)) &
+        (df["date_created"] <= pd.to_datetime(data_fim)) &
+        (df["status"].isin(status))
+    )
+    df_filtrado = df.loc[filt]
 
     if df_filtrado.empty:
         st.warning("Nenhum dado encontrado para os filtros aplicados.")
-        return
+    else:
+        st.dataframe(df_filtrado)
 
-    st.dataframe(df_filtrado)
+# ----------------- Fluxo Principal -----------------
+# Processa callback do Mercado Livre se houver código na URL
+if st.experimental_get_query_params().get("code"):
+    ml_callback()
 
-# ----------------- Carregar Dados com SQL Parametrizado -----------------
-@st.cache_data(ttl=300)
-def carregar_vendas(conta_id: str) -> pd.DataFrame:
-    sql = text("""
-        SELECT date_created, item_title, status, quantity, total_amount
-          FROM sales
-         WHERE ml_user_id = :uid
-    """)
-    return pd.read_sql(sql, engine, params={"uid": conta_id})
-
-# ----------------- Inicialização -----------------
-if "logado" not in st.session_state:
-    st.session_state["logado"] = False
-
-if not st.session_state["logado"]:
+if "logado" not in st.session_state or not st.session_state["logado"]:
     login()
 else:
     page = render_sidebar()
