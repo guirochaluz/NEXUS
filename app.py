@@ -84,6 +84,29 @@ def render_sidebar():
     return selected
 
 # ----------------- Autenticação / Login -----------------
+def ml_callback():
+    """
+    Rota para capturar o callback do Mercado Livre.
+    """
+    params = st.experimental_get_query_params()
+    authorization_code = params.get('code', [None])[0]
+
+    if not authorization_code:
+        st.error("⚠️ Código de autorização não encontrado.")
+        return
+
+    st.success("✅ Código de autorização recebido. Processando...")
+
+    # Enviar o código para o backend
+    backend_url = f"{BACKEND_URL}/auth/callback"
+    response = requests.post(backend_url, json={"code": authorization_code})
+
+    if response.status_code == 200:
+        st.success("✅ Autenticação realizada com sucesso!")
+        st.experimental_rerun()
+    else:
+        st.error(f"❌ Erro ao autenticar: {response.text}")
+
 def login():
     st.markdown("<h2 style='text-align: center;'>🔐 Login - NEXUS</h2>", unsafe_allow_html=True)
     
@@ -176,6 +199,81 @@ def mostrar_contas_cadastradas():
                 else:
                     st.error("Erro ao atualizar o token.")
 
+    # Botão para autenticação no Mercado Livre
+    ml_auth_url = f"{BACKEND_URL}/ml-login"
+    st.markdown(
+        f"<a href='{ml_auth_url}' target='_blank'>
+        <button style='background-color:#4CAF50; color:white; border:none; padding:10px; border-radius:5px;'>
+        ➕ Adicionar Nova Conta Mercado Livre
+        </button></a>",
+        unsafe_allow_html=True
+    )
+
+    # Carregar contas do banco
+    query = text("SELECT ml_user_id, access_token FROM user_tokens")
+    try:
+        df_contas = pd.read_sql(query, engine)
+    except Exception as e:
+        st.error(f"Erro ao carregar contas: {e}")
+        return
+
+    if df_contas.empty:
+        st.warning("Nenhuma conta cadastrada.")
+        return
+
+    for index, row in df_contas.iterrows():
+        with st.expander(f"🔗 Conta ML: {row['ml_user_id']}"):
+            st.write(f"**Access Token:** {row['access_token']}")
+            if st.button(f"🔄 Renovar Token - {row['ml_user_id']}"):
+                novo_token = renovar_access_token(row['ml_user_id'])
+                if novo_token:
+                    st.success("Token atualizado com sucesso!")
+                else:
+                    st.error("Erro ao atualizar o token.")
+    query = text("SELECT ml_user_id, access_token FROM user_tokens")
+    try:
+        df_contas = pd.read_sql(query, engine)
+    except Exception as e:
+        st.error(f"Erro ao carregar contas: {e}")
+        return
+
+    if df_contas.empty:
+        st.warning("Nenhuma conta cadastrada.")
+        return
+
+    for index, row in df_contas.iterrows():
+        with st.expander(f"🔗 Conta ML: {row['ml_user_id']}"):
+            st.write(f"**Access Token:** {row['access_token']}")
+
+# ----------------- Relatórios -----------------
+def mostrar_relatorios():
+    st.title("📋 Relatórios de Vendas")
+    conta = st.session_state.get("conta")
+    try:
+        df = carregar_vendas(conta)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao banco: {e}")
+        return
+
+    if df.empty:
+        st.warning("Nenhuma venda encontrada para essa conta.")
+        return
+
+    # Filtros de Data
+    data_ini = st.date_input("De:", value=df["date_created"].min())
+    data_fim = st.date_input("Até:", value=df["date_created"].max())
+    status = st.multiselect("Status:", options=df["status"].unique(), default=df["status"].unique())
+
+    df_filtrado = df[(df["date_created"] >= pd.to_datetime(data_ini)) &
+                    (df["date_created"] <= pd.to_datetime(data_fim)) &
+                    (df["status"].isin(status))]
+
+    if df_filtrado.empty:
+        st.warning("Nenhum dado encontrado para os filtros aplicados.")
+        return
+
+    st.dataframe(df_filtrado)
+
 # ----------------- Carregar Dados com SQL Parametrizado -----------------
 @st.cache_data(ttl=300)
 def carregar_vendas(conta_id: str) -> pd.DataFrame:
@@ -198,3 +296,5 @@ else:
         mostrar_dashboard()
     elif page == "Contas Cadastradas":
         mostrar_contas_cadastradas()
+    elif page == "Relatórios":
+        mostrar_relatorios()
