@@ -1,6 +1,6 @@
 services:
 
-* type: web
+- type: web
   name: nexus-backend
   env: python
   branch: main
