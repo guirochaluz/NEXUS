@@ -1,18 +1,22 @@
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os
 import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
-from datetime import datetime
 
 # ----------------- Carregamento de variáveis -----------------
 load_dotenv()
-BACKEND_URL = os.getenv("BACKEND_URL", "https://nexus-backend.onrender.com")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://nexus-frontend.com")
-DB_URL = os.getenv("DB_URL", "")
+BACKEND_URL = os.getenv("BACKEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+DB_URL       = os.getenv("DB_URL")
+ML_CLIENT_ID     = os.getenv("ML_CLIENT_ID")
+
+if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
+    st.error("❌ Defina BACKEND_URL, FRONTEND_URL, DB_URL e ML_CLIENT_ID em seu .env")
+    st.stop()
 
 # ----------------- Configuração da Página -----------------
 st.set_page_config(
@@ -22,7 +26,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ----------------- Estilo Customizado -----------------
+# ----------------- CSS Customizado -----------------
 st.markdown("""
 <style>
   html, body, [data-testid="stAppViewContainer"] {
@@ -72,70 +76,69 @@ try:
 except locale.Error:
     pass
 
-# ----------------- Funções Auxiliares -----------------
-def ml_callback():
-    """
-    Processa o callback do Mercado Livre após login.
-    """
-    params = st.query_params
-    authorization_code = params.get('code', [None])[0]  # 🔍 Captura segura do code
-
-    if not authorization_code:
-        st.error("⚠️ Código de autorização não encontrado.")
-        return
-
-    st.success("✅ Código de autorização recebido. Processando...")
-
-    # Enviar o código para o backend
-    backend_url = f"{BACKEND_URL}/auth/callback"
-    response = requests.post(backend_url, json={"code": authorization_code})
-
-    if response.status_code == 200:
-        response_data = response.json()
-        st.success("✅ Autenticação realizada com sucesso!")
-        
-        # 🔄 Atualização: Salvando os tokens no banco
-        salvar_tokens_no_banco(response_data)
-        
-        # 🔄 Atualização: Novo método para limpar query params:
-        st.set_query_params()  # Isso limpa os parâmetros
-        st.experimental_rerun()
-    else:
-        st.error(f"❌ Erro ao autenticar: {response.text}")
-
-def salvar_tokens_no_banco(data):
-    """
-    Salva os tokens no banco de dados após autenticação.
-    """
-    try:
-        with engine.connect() as connection:
-            query = text("""
-                INSERT INTO user_tokens (ml_user_id, access_token, refresh_token, expires_at)
-                VALUES (:ml_user_id, :access_token, :refresh_token, NOW() + interval '6 hours')
-                ON CONFLICT (ml_user_id) DO UPDATE
-                SET access_token = :access_token, refresh_token = :refresh_token, expires_at = NOW() + interval '6 hours'
-            """)
-            connection.execute(query, {
-                "ml_user_id": data.get("user_id"),
-                "access_token": data.get("access_token"),
-                "refresh_token": data.get("refresh_token"),
-            })
-        st.success("✅ Tokens salvos no banco com sucesso!")
-    except Exception as e:
-        st.error(f"❌ Erro ao salvar tokens no banco: {str(e)}")
-
-def render_add_account_button():
-    # pegue a URL do seu front-end do env, sem path extra
-    FRONTEND_URL = os.getenv("FRONTEND_URL", "https://nexus-dashboard-13ej.onrender.com")
-
-    ml_auth_url = (
+# ----------------- Helpers de OAuth -----------------
+def get_auth_url() -> str:
+    """Monta a URL de autorização do Mercado Livre."""
+    return (
         "https://auth.mercadolivre.com.br/authorization"
         f"?response_type=code"
-        f"&client_id={os.getenv('ML_CLIENT_ID')}"
+        f"&client_id={ML_CLIENT_ID}"
         f"&redirect_uri={FRONTEND_URL}"
     )
+
+def ml_callback():
+    """Trata o callback OAuth—envia o code ao backend e limpa params."""
+    code = st.query_params.get("code", [None])[0]
+    if not code:
+        st.error("⚠️ Código de autorização não encontrado.")
+        return
+    st.success("✅ Código recebido. Processando autenticação...")
+    resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
+    if resp.ok:
+        st.success("✅ Conta ML autenticada com sucesso!")
+        st.set_query_params()  # limpa ?code=
+        st.experimental_rerun()
+    else:
+        st.error(f"❌ Falha na autenticação: {resp.text}")
+
+# ----------------- Persistência de Tokens -----------------
+def salvar_tokens_no_banco(data: dict):
+    """Upsert de user_tokens no Postgres."""
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                INSERT INTO user_tokens (ml_user_id, access_token, refresh_token, expires_at)
+                VALUES (:user_id, :access_token, :refresh_token, NOW() + interval '6 hours')
+                ON CONFLICT (ml_user_id) DO UPDATE
+                  SET access_token = EXCLUDED.access_token,
+                      refresh_token = EXCLUDED.refresh_token,
+                      expires_at   = NOW() + interval '6 hours';
+            """)
+            conn.execute(query, {
+                "user_id":       data["user_id"],
+                "access_token":  data["access_token"],
+                "refresh_token": data["refresh_token"],
+            })
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar tokens no banco: {e}")
+
+# ----------------- Carregamento de Vendas -----------------
+@st.cache_data(ttl=300)
+def carregar_vendas(conta_id: str) -> pd.DataFrame:
+    sql = text("""
+        SELECT date_created, item_title, status, quantity, total_amount
+          FROM sales
+         WHERE ml_user_id = :uid
+    """)
+    df = pd.read_sql(sql, engine, params={"uid": conta_id})
+    df["date_created"] = pd.to_datetime(df["date_created"])
+    return df
+
+# ----------------- Componentes de Interface -----------------
+def render_add_account_button():
+    url = get_auth_url()
     st.markdown(f"""
-        <a href="{ml_auth_url}" target="_blank">
+        <a href="{url}" target="_blank">
           <button style="
             background-color:#4CAF50;
             color:white;
@@ -149,65 +152,36 @@ def render_add_account_button():
         </a>
     """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=300)
-def carregar_vendas(conta_id: str) -> pd.DataFrame:
-    sql = text("""
-        SELECT date_created, item_title, status, quantity, total_amount
-          FROM sales
-         WHERE ml_user_id = :uid
-    """)
-    df = pd.read_sql(sql, engine, params={"uid": conta_id})
-    df["date_created"] = pd.to_datetime(df["date_created"])
-    return df
-    
-def renovar_access_token(ml_user_id: str) -> bool:
-    resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": ml_user_id})
-    if resp.ok:
-        data = resp.json()
-        salvar_tokens_no_banco(data)
-        return True
-    return False
-    
-# ----------------- Componentes da UI -----------------
 def render_sidebar():
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
-    pages = {
-        'Dashboard': '📊 Dashboard',
-        'Contas Cadastradas': '📑 Contas Cadastradas',
-        'Relatórios': '📋 Relatórios'
-    }
-    return st.sidebar.selectbox("Menu", options=list(pages.keys()), format_func=lambda x: pages[x])
+    pages = ["Dashboard", "Contas Cadastradas", "Relatórios"]
+    escolha = st.sidebar.selectbox("Menu", pages)
+    return escolha
 
+# ----------------- Telas -----------------
 def login():
-    st.markdown("<h2 style='text-align: center;'>🔐 Login - NEXUS</h2>", unsafe_allow_html=True)
-    conta = st.text_input("ID da Conta", "")
+    st.markdown("<h2 style='text-align:center;'>🔐 Login - NEXUS</h2>", unsafe_allow_html=True)
+    conta = st.text_input("ID da Conta")
     senha = st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        if not conta or not senha:
-            st.error("Por favor, preencha todos os campos.")
-        elif conta != "GRUPONEXUS" or senha != "NEXU$2025":
-            st.error("Usuário ou senha incorretos.")
-        else:
+        if conta == "GRUPONEXUS" and senha == "NEXU$2025":
             st.session_state["logado"] = True
-            st.session_state["conta"] = conta
+            st.session_state["conta"]  = conta
             st.experimental_rerun()
+        else:
+            st.error("Usuário ou senha incorretos.")
 
 def mostrar_dashboard():
     st.title("📊 Dashboard de Vendas")
     conta = st.session_state["conta"]
-    try:
-        df = carregar_vendas(conta)
-    except Exception as e:
-        st.error(f"Erro ao conectar ao banco: {e}")
-        return
+    df = carregar_vendas(conta)
     if df.empty:
         st.warning("Nenhuma venda encontrada para essa conta.")
         return
 
-    # KPIs
     total_vendas = len(df)
-    total_valor = df["total_amount"].sum()
-    total_itens = df["quantity"].sum()
+    total_valor  = df["total_amount"].sum()
+    total_itens  = df["quantity"].sum()
     ticket_medio = total_valor / total_vendas if total_vendas else 0
 
     c1, c2, c3, c4 = st.columns(4)
@@ -216,7 +190,6 @@ def mostrar_dashboard():
     c3.metric("📦 Itens vendidos", int(total_itens))
     c4.metric("🎯 Ticket médio", locale.currency(ticket_medio, grouping=True))
 
-    # Gráfico de vendas por dia
     vendas_por_dia = (
         df.groupby(df["date_created"].dt.date)["total_amount"]
           .sum()
@@ -230,70 +203,62 @@ def mostrar_dashboard():
 def mostrar_contas_cadastradas():
     st.title("📑 Contas Cadastradas")
     render_add_account_button()
-
-    try:
-        df_contas = pd.read_sql(text("SELECT ml_user_id, access_token FROM user_tokens"), engine)
-    except Exception as e:
-        st.error(f"Erro ao carregar contas: {e}")
-        return
-
-    if df_contas.empty:
+    df = pd.read_sql(text("SELECT ml_user_id, access_token FROM user_tokens"), engine)
+    if df.empty:
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    for row in df_contas.itertuples(index=False):
+    for row in df.itertuples(index=False):
         with st.expander(f"🔗 Conta ML: {row.ml_user_id}"):
             st.write(f"**Access Token:** {row.access_token}")
             if st.button("🔄 Renovar Token", key=f"renew_{row.ml_user_id}"):
-                novo = renovar_access_token(row.ml_user_id)
-                if novo:
+                resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": row.ml_user_id})
+                if resp.ok:
+                    data = resp.json()
+                    salvar_tokens_no_banco(data)
                     st.success("Token atualizado com sucesso!")
                 else:
                     st.error("Erro ao atualizar o token.")
 
-    render_add_account_button()
-
 def mostrar_relatorios():
     st.title("📋 Relatórios de Vendas")
     conta = st.session_state["conta"]
-    try:
-        df = carregar_vendas(conta)
-    except Exception as e:
-        st.error(f"Erro ao conectar ao banco: {e}")
-        return
+    df = carregar_vendas(conta)
     if df.empty:
-        st.warning("Nenhuma venda encontrada para essa conta.")
+        st.warning("Nenhum dado para exibir.")
         return
 
-    data_ini = st.date_input("De:", value=df["date_created"].min())
+    data_ini = st.date_input("De:",  value=df["date_created"].min())
     data_fim = st.date_input("Até:", value=df["date_created"].max())
-    status = st.multiselect("Status:", options=df["status"].unique(), default=df["status"].unique())
+    status  = st.multiselect("Status:", options=df["status"].unique(), default=df["status"].unique())
 
-    filt = (
-        (df["date_created"] >= pd.to_datetime(data_ini)) &
-        (df["date_created"] <= pd.to_datetime(data_fim)) &
+    df_filt = df.loc[
+        (df["date_created"].dt.date >= data_ini) &
+        (df["date_created"].dt.date <= data_fim) &
         (df["status"].isin(status))
-    )
-    df_filtrado = df.loc[filt]
-
-    if df_filtrado.empty:
-        st.warning("Nenhum dado encontrado para os filtros aplicados.")
+    ]
+    if df_filt.empty:
+        st.warning("Sem registros para os filtros escolhidos.")
     else:
-        st.dataframe(df_filtrado)
+        st.dataframe(df_filt)
 
 # ----------------- Fluxo Principal -----------------
-# 🚀 Substituição do método experimental pelo novo método
 params = st.query_params
+
+# 1) Callback OAuth ML?
 if "code" in params:
     ml_callback()
 
-if "logado" not in st.session_state or not st.session_state["logado"]:
+# 2) Login do usuário NEXUS
+elif not st.session_state.get("logado", False):
     login()
+
+# 3) Dashboard
 else:
-    page = render_sidebar()
-    if page == "Dashboard":
+    pagina = render_sidebar()
+    if pagina == "Dashboard":
         mostrar_dashboard()
-    elif page == "Contas Cadastradas":
+    elif pagina == "Contas Cadastradas":
         mostrar_contas_cadastradas()
-    elif page == "Relatórios":
+    elif pagina == "Relatórios":
         mostrar_relatorios()
