@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from auth.oauth import get_auth_url, exchange_code, renovar_access_token
-from sales import fetch_and_persist_sales
+from services.sales import fetch_and_persist_sales
 
 # Carrega variáveis de ambiente
 load_dotenv()
