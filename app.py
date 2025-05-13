@@ -15,10 +15,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ----------------- Bloco de Autenticação -----------------
+# ----------------- Estado Inicial -----------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
+if "page" not in st.session_state:
+    st.session_state["page"] = "Dashboard"
 
+# ----------------- Bloco de Autenticação -----------------
 # Lê query params
 params = st.query_params
 
@@ -29,6 +32,8 @@ if params.get("nexus_auth", [None])[0] == "success":
     st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
+    # Título na tela de login
+    st.title("Sistema de Gestão - Grupo Nexus")
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
     if st.button("Entrar"):
@@ -39,7 +44,7 @@ if not st.session_state["authenticated"]:
             st.error("Credenciais inválidas")
     st.stop()
 
-# ----------------- Título -----------------
+# ----------------- Título Principal -----------------
 st.title("Nexus Dashboard")
 
 # ----------------- Carregamento de variáveis -----------------
@@ -76,15 +81,19 @@ st.markdown("""
     color: #ffffff;
     margin-bottom: 10px;
   }
-  .menu-item {
+  .menu-button {
+    width: 100%;
     padding: 10px;
-    color: #ffffff;
-    border-radius: 5px;
     margin-bottom: 5px;
+    background-color: #1d2b36;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    text-align: left;
     cursor: pointer;
   }
-  .menu-item:hover {
-    background-color: #1d2b36;
+  .menu-button:hover {
+    background-color: #273947;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -131,7 +140,7 @@ def salvar_tokens_no_banco(data: dict):
                   SET access_token = EXCLUDED.access_token,
                       refresh_token = EXCLUDED.refresh_token,
                       expires_at   = NOW() + interval '6 hours';
-            """)
+            """")
             conn.execute(query, {
                 "user_id":       data["user_id"],
                 "access_token":  data["access_token"],
@@ -147,7 +156,7 @@ def carregar_vendas(conta_id: str) -> pd.DataFrame:
         SELECT date_created, item_title, status, quantity, total_amount
           FROM sales
          WHERE ml_user_id = :uid
-    """)
+    """")
     df = pd.read_sql(sql, engine, params={"uid": conta_id})
     df["date_created"] = pd.to_datetime(df["date_created"])
     return df
@@ -170,11 +179,19 @@ def render_add_account_button():
       </a>
     """, unsafe_allow_html=True)
 
-def render_sidebar():
+# ----------------- Sidebar de Navegação -----------------
+def render_sidebar() -> str:
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
-    pages = ["Dashboard", "Contas Cadastradas", "Relatórios"]
-    escolha = st.sidebar.selectbox("Menu", pages)
-    return escolha
+    # Botões fixos em vez de dropdown
+    if st.sidebar.button("Dashboard", key="btn_dashboard"):
+        st.session_state["page"] = "Dashboard"
+    if st.sidebar.button("Contas Cadastradas", key="btn_contas"):
+        st.session_state["page"] = "Contas Cadastradas"
+    if st.sidebar.button("Relatórios", key="btn_relatorios"):
+        st.session_state["page"] = "Relatórios"
+    if st.sidebar.button("Expedição e Logística", key="btn_expedicao"):
+        st.session_state["page"] = "Expedição e Logística"
+    return st.session_state["page"]
 
 # ----------------- Telas -----------------
 def mostrar_dashboard():
@@ -248,16 +265,24 @@ def mostrar_relatorios():
     else:
         st.dataframe(df_filt)
 
+def mostrar_expedicao_logistica():
+    st.title("🚚 Expedição e Logística")
+    st.write("" )  # Página vazia por enquanto
+
 # ----------------- Fluxo Principal -----------------
 # 1) Callback OAuth ML?
 if "code" in st.query_params:
     ml_callback()
 
-# 2) Navegação após login
+# 2) Renderiza sidebar e pega página selecionada
 pagina = render_sidebar()
+
+# 3) Navega entre páginas
 if pagina == "Dashboard":
     mostrar_dashboard()
 elif pagina == "Contas Cadastradas":
     mostrar_contas_cadastradas()
 elif pagina == "Relatórios":
     mostrar_relatorios()
+elif pagina == "Expedição e Logística":
+    mostrar_expedicao_logistica()
