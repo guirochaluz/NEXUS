@@ -1,6 +1,7 @@
 import sys
 import requests
 from dateutil import parser
+from sqlalchemy import cast, String
 from database.db import SessionLocal
 from database.models import Sale, UserToken
 
@@ -39,10 +40,11 @@ def get_sales(ml_user_id: int):
                 break
 
             for order in orders:
-                order_id = str(order.get("id"))  # converte para string
+                order_id = str(order.get("id"))
 
-                # Evita duplicação pelo order_id (string)
-                if db.query(Sale).filter_by(order_id=order_id).first():
+                # Evita duplicação usando cast para texto
+                exists = db.query(Sale).filter(cast(Sale.order_id, String) == order_id).first()
+                if exists:
                     continue
 
                 # Comprador
