@@ -136,20 +136,20 @@ def carregar_vendas(conta_id: str) -> pd.DataFrame:
 
 # ----------------- Componentes de Interface -----------------
 def render_add_account_button():
-    url = get_auth_url()
+    backend_login = f"{BACKEND_URL}/ml-login"
     st.markdown(f"""
-        <a href="{url}" target="_blank">
-          <button style="
-            background-color:#4CAF50;
-            color:white;
-            border:none;
-            padding:10px;
-            border-radius:5px;
-            margin-bottom:10px;
-          ">
-            ➕ Adicionar Nova Conta Mercado Livre
-          </button>
-        </a>
+      <a href="{backend_login}" target="_blank">
+        <button style="
+          background-color:#4CAF50;
+          color:white;
+          border:none;
+          padding:10px;
+          border-radius:5px;
+          margin-bottom:10px;
+        ">
+          ➕ Adicionar Conta Mercado Livre
+        </button>
+      </a>
     """, unsafe_allow_html=True)
 
 def render_sidebar():
