@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-from models import Base
+from database.models import Base, Sale, UserToken
 
 # Carregar variáveis de ambiente
 dotenv_loaded = load_dotenv()
