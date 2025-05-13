@@ -39,9 +39,9 @@ def get_sales(ml_user_id: int):
                 break
 
             for order in orders:
-                order_id = order.get("id")
+                order_id = str(order.get("id"))  # converte para string
 
-                # Evita duplicação pelo order_id
+                # Evita duplicação pelo order_id (string)
                 if db.query(Sale).filter_by(order_id=order_id).first():
                     continue
 
@@ -131,4 +131,3 @@ if __name__ == "__main__":
         sys.exit(1)
 
     get_sales(user_id)
-
