@@ -7,18 +7,27 @@ from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
 
-# ↓ Bloco de autenticação ↓
-# Inicializa o estado de autenticação
+# ----------------- Configuração da Página (MUST be first!) -----------------
+st.set_page_config(
+    page_title="Dashboard de Vendas - NEXUS",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ----------------- Bloco de Autenticação -----------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-# Captura query params para login automático
-params_auth = st.query_params
-if params_auth.get("nexus_auth", [None])[0] == "success":
-    st.session_state["authenticated"] = True
-    st.query_params
+# Lê query params
+params = st.query_params
 
-# Se não estiver autenticado, exibe formulário e interrompe execução
+# Login automático via ?nexus_auth=success
+if params.get("nexus_auth", [None])[0] == "success":
+    st.session_state["authenticated"] = True
+    # Limpa o param para não ficar preso nisso
+    st.experimental_set_query_params()
+
 if not st.session_state["authenticated"]:
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
@@ -29,9 +38,8 @@ if not st.session_state["authenticated"]:
         else:
             st.error("Credenciais inválidas")
     st.stop()
-# ↑ Fim do bloco de autenticação ↑
 
-# Título da aplicação (já garantido como autenticado)
+# ----------------- Título -----------------
 st.title("Nexus Dashboard")
 
 # ----------------- Carregamento de variáveis -----------------
@@ -44,14 +52,6 @@ ML_CLIENT_ID = os.getenv("ML_CLIENT_ID")
 if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
     st.error("❌ Defina BACKEND_URL, FRONTEND_URL, DB_URL e ML_CLIENT_ID em seu .env")
     st.stop()
-
-# ----------------- Configuração da Página -----------------
-st.set_page_config(
-    page_title="Dashboard de Vendas - NEXUS",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
 
 # ----------------- CSS Customizado -----------------
 st.markdown("""
@@ -104,15 +104,6 @@ except locale.Error:
     pass
 
 # ----------------- Helpers de OAuth -----------------
-def get_auth_url() -> str:
-    """Monta a URL de autorização do Mercado Livre."""
-    return (
-        "https://auth.mercadolivre.com.br/authorization"
-        f"?response_type=code"
-        f"&client_id={ML_CLIENT_ID}"
-        f"&redirect_uri={FRONTEND_URL}"
-    )
-
 def ml_callback():
     """Trata o callback OAuth—envia o code ao backend e limpa params."""
     code = st.query_params.get("code", [None])[0]
@@ -123,14 +114,14 @@ def ml_callback():
     resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
     if resp.ok:
         st.success("✅ Conta ML autenticada com sucesso!")
-        st.set_query_params()  # limpa ?code=
+        # Limpa o código da URL
+        st.experimental_set_query_params()
         st.experimental_rerun()
     else:
         st.error(f"❌ Falha na autenticação: {resp.text}")
 
 # ----------------- Persistência de Tokens -----------------
 def salvar_tokens_no_banco(data: dict):
-    """Upsert de user_tokens no Postgres."""
     try:
         with engine.connect() as conn:
             query = text("""
@@ -235,7 +226,6 @@ def mostrar_contas_cadastradas():
                 else:
                     st.error("Erro ao atualizar o token.")
 
-
 def mostrar_relatorios():
     st.title("📋 Relatórios de Vendas")
     conta = st.session_state.get("conta")
@@ -259,10 +249,8 @@ def mostrar_relatorios():
         st.dataframe(df_filt)
 
 # ----------------- Fluxo Principal -----------------
-params = st.query_params
-
 # 1) Callback OAuth ML?
-if "code" in params:
+if "code" in st.query_params:
     ml_callback()
 
 # 2) Navegação após login
