@@ -3,8 +3,9 @@
 import sys
 import requests
 from dateutil import parser
-from db import SessionLocal
-from models import Sale, UserToken
+from database.db import SessionLocal
+from database.models import Sale, UserToken
+
 
 def get_sales(ml_user_id: int):
     """
