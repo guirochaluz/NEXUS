@@ -38,13 +38,26 @@ def mercado_livre_login():
     return RedirectResponse(get_auth_url())
 
 # POST para Streamlit
-@app.post("/auth/callback")
-def auth_callback_post(payload: dict = Body(...)):
-    code = payload.get("code")
+from fastapi import Query
+
+@app.get("/auth/callback")
+def auth_callback(code: str = Query(None)):
+    # 1️⃣ valida o code
     if not code:
-        raise HTTPException(400, "Authorization code not provided")
-    data = exchange_code(code)
-    return data
+        raise HTTPException(status_code=400, detail="Authorization code não fornecido")
+
+    # 2️⃣ troca o code pelo token e persiste no banco
+    try:
+        token_payload = exchange_code(code)
+    except Exception as e:
+        # se falhar, explode um 500 com a mensagem de erro do ML
+        raise HTTPException(status_code=500, detail=f"Erro ao trocar code: {e}")
+
+    # opcional: você pode logar token_payload para debug
+    # print("tokens gerados:", token_payload)
+
+    # 3️⃣ redireciona de volta pro dashboard já autenticado
+    return RedirectResponse(f"{FRONTEND_URL}/?nexus_auth=success")
 
 # GET para navegador/redirect
 @app.get("/auth/callback")
