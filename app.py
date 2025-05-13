@@ -6,15 +6,20 @@ import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
-# app.py
 
-import streamlit as st
-# ↓ bloco de autenticação ↓
-params = st.experimental_get_query_params()
-if params.get("nexus_auth", [None])[0] == "success":
+# ↓ Bloco de autenticação ↓
+# Inicializa o estado de autenticação
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+# Captura query params para login automático
+params_auth = st.experimental_get_query_params()
+if params_auth.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
     st.experimental_set_query_params()
-if not st.session_state.get("authenticated", False):
+
+# Se não estiver autenticado, exibe formulário e interrompe execução
+if not st.session_state["authenticated"]:
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
     if st.button("Entrar"):
@@ -24,18 +29,17 @@ if not st.session_state.get("authenticated", False):
         else:
             st.error("Credenciais inválidas")
     st.stop()
-# ↑ fim do bloco de autenticação ↑
+# ↑ Fim do bloco de autenticação ↑
 
-# aqui começam as suas outras imports e lógica do dashboard
+# Título da aplicação (já garantido como autenticado)
 st.title("Nexus Dashboard")
-# … resto do código …
 
 # ----------------- Carregamento de variáveis -----------------
 load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 DB_URL       = os.getenv("DB_URL")
-ML_CLIENT_ID     = os.getenv("ML_CLIENT_ID")
+ML_CLIENT_ID = os.getenv("ML_CLIENT_ID")
 
 if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
     st.error("❌ Defina BACKEND_URL, FRONTEND_URL, DB_URL e ML_CLIENT_ID em seu .env")
@@ -182,21 +186,9 @@ def render_sidebar():
     return escolha
 
 # ----------------- Telas -----------------
-def login():
-    st.markdown("<h2 style='text-align:center;'>🔐 Login - NEXUS</h2>", unsafe_allow_html=True)
-    conta = st.text_input("ID da Conta")
-    senha = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
-        if conta == "GRUPONEXUS" and senha == "NEXU$2025":
-            st.session_state["logado"] = True
-            st.session_state["conta"]  = conta
-            st.experimental_rerun()
-        else:
-            st.error("Usuário ou senha incorretos.")
-
 def mostrar_dashboard():
     st.title("📊 Dashboard de Vendas")
-    conta = st.session_state["conta"]
+    conta = st.experimental_get_query_params().get("account", [None])[0] or st.session_state.get("conta")
     df = carregar_vendas(conta)
     if df.empty:
         st.warning("Nenhuma venda encontrada para essa conta.")
@@ -243,9 +235,10 @@ def mostrar_contas_cadastradas():
                 else:
                     st.error("Erro ao atualizar o token.")
 
+
 def mostrar_relatorios():
     st.title("📋 Relatórios de Vendas")
-    conta = st.session_state["conta"]
+    conta = st.session_state.get("conta")
     df = carregar_vendas(conta)
     if df.empty:
         st.warning("Nenhum dado para exibir.")
@@ -266,22 +259,17 @@ def mostrar_relatorios():
         st.dataframe(df_filt)
 
 # ----------------- Fluxo Principal -----------------
-params = st.query_params
+params = st.experimental_get_query_params()
 
 # 1) Callback OAuth ML?
 if "code" in params:
     ml_callback()
 
-# 2) Login do usuário NEXUS
-elif not st.session_state.get("logado", False):
-    login()
-
-# 3) Dashboard
-else:
-    pagina = render_sidebar()
-    if pagina == "Dashboard":
-        mostrar_dashboard()
-    elif pagina == "Contas Cadastradas":
-        mostrar_contas_cadastradas()
-    elif pagina == "Relatórios":
-        mostrar_relatorios()
+# 2) Navegação após login
+pagina = render_sidebar()
+if pagina == "Dashboard":
+    mostrar_dashboard()
+elif pagina == "Contas Cadastradas":
+    mostrar_contas_cadastradas()
+elif pagina == "Relatórios":
+    mostrar_relatorios()
