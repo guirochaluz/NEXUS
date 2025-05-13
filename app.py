@@ -13,10 +13,10 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 # Captura query params para login automático
-params_auth = st.experimental_get_query_params()
+params_auth = st.query_params
 if params_auth.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
-    st.experimental_set_query_params()
+    st.query_params
 
 # Se não estiver autenticado, exibe formulário e interrompe execução
 if not st.session_state["authenticated"]:
@@ -188,7 +188,7 @@ def render_sidebar():
 # ----------------- Telas -----------------
 def mostrar_dashboard():
     st.title("📊 Dashboard de Vendas")
-    conta = st.experimental_get_query_params().get("account", [None])[0] or st.session_state.get("conta")
+    conta = st.query_params.get("account", [None])[0] or st.session_state.get("conta")
     df = carregar_vendas(conta)
     if df.empty:
         st.warning("Nenhuma venda encontrada para essa conta.")
@@ -259,7 +259,7 @@ def mostrar_relatorios():
         st.dataframe(df_filt)
 
 # ----------------- Fluxo Principal -----------------
-params = st.experimental_get_query_params()
+params = st.query_params
 
 # 1) Callback OAuth ML?
 if "code" in params:
