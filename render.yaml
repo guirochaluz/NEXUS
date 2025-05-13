@@ -17,8 +17,6 @@ services:
         value: "https://nexus-backend-0dzu.onrender.com"
       - key: FRONTEND_URL
         value: "https://nexus-dashboard-13ej.onrender.com"
-      - key: WEB_PASSWORD
-        value: "Giguisa*"
 
   - type: web
     name: nexus-dashboard
