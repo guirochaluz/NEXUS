@@ -6,15 +6,17 @@ import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
-# app.py
 
-import streamlit as st
 # ↓ bloco de autenticação ↓
+# Inicializa o estado, caso ainda não exista
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
 params = st.experimental_get_query_params()
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
     st.experimental_set_query_params()
-if not st.session_state.get("authenticated", False):
+if not st.session_state["authenticated"]:
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
     if st.button("Entrar"):
@@ -26,7 +28,7 @@ if not st.session_state.get("authenticated", False):
     st.stop()
 # ↑ fim do bloco de autenticação ↑
 
-# aqui começam as suas outras imports e lógica do dashboard
+# A partir daqui, você já está garantido como “logado”
 st.title("Nexus Dashboard")
 # … resto do código …
 
