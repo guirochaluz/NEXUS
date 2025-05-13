@@ -15,24 +15,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ----------------- Estado Inicial -----------------
+# ----------------- Bloco de Autenticação -----------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
-if "page" not in st.session_state:
-    st.session_state["page"] = "Dashboard"
 
-# ----------------- Bloco de Autenticação -----------------
-# Lê query params
+# lê query params
 params = st.query_params
 
-# Login automático via ?nexus_auth=success
+# login automático via ?nexus_auth=success
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
-    # Limpa o param para não ficar preso nisso
+    # limpa o param para não ficar preso nisso (set não gera warning)
     st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
-    # Título na tela de login
+    # título customizado na tela de login
     st.title("Sistema de Gestão - Grupo Nexus")
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
@@ -44,7 +41,7 @@ if not st.session_state["authenticated"]:
             st.error("Credenciais inválidas")
     st.stop()
 
-# ----------------- Título Principal -----------------
+# ----------------- Título do App -----------------
 st.title("Nexus Dashboard")
 
 # ----------------- Carregamento de variáveis -----------------
@@ -83,7 +80,7 @@ st.markdown("""
   }
   .menu-button {
     width: 100%;
-    padding: 10px;
+    padding: 8px;
     margin-bottom: 5px;
     background-color: #1d2b36;
     color: #fff;
@@ -93,7 +90,7 @@ st.markdown("""
     cursor: pointer;
   }
   .menu-button:hover {
-    background-color: #273947;
+    background-color: #263445;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -123,7 +120,7 @@ def ml_callback():
     resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
     if resp.ok:
         st.success("✅ Conta ML autenticada com sucesso!")
-        # Limpa o código da URL
+        # limpa o código da URL
         st.experimental_set_query_params()
         st.experimental_rerun()
     else:
@@ -140,7 +137,7 @@ def salvar_tokens_no_banco(data: dict):
                   SET access_token = EXCLUDED.access_token,
                       refresh_token = EXCLUDED.refresh_token,
                       expires_at   = NOW() + interval '6 hours';
-            """")
+            """)
             conn.execute(query, {
                 "user_id":       data["user_id"],
                 "access_token":  data["access_token"],
@@ -156,7 +153,7 @@ def carregar_vendas(conta_id: str) -> pd.DataFrame:
         SELECT date_created, item_title, status, quantity, total_amount
           FROM sales
          WHERE ml_user_id = :uid
-    """")
+    """)
     df = pd.read_sql(sql, engine, params={"uid": conta_id})
     df["date_created"] = pd.to_datetime(df["date_created"])
     return df
@@ -179,23 +176,22 @@ def render_add_account_button():
       </a>
     """, unsafe_allow_html=True)
 
-# ----------------- Sidebar de Navegação -----------------
-def render_sidebar() -> str:
+def render_sidebar():
+    # define páginas e estado inicial
+    pages = ["Dashboard", "Contas Cadastradas", "Relatórios", "Expedição e Logística"]
+    if "page" not in st.session_state:
+        st.session_state["page"] = pages[0]
+
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
-    # Botões fixos em vez de dropdown
-    if st.sidebar.button("Dashboard", key="btn_dashboard"):
-        st.session_state["page"] = "Dashboard"
-    if st.sidebar.button("Contas Cadastradas", key="btn_contas"):
-        st.session_state["page"] = "Contas Cadastradas"
-    if st.sidebar.button("Relatórios", key="btn_relatorios"):
-        st.session_state["page"] = "Relatórios"
-    if st.sidebar.button("Expedição e Logística", key="btn_expedicao"):
-        st.session_state["page"] = "Expedição e Logística"
+    for pg in pages:
+        if st.sidebar.button(pg, key=pg, help=f"Ir para {pg}"):
+            st.session_state["page"] = pg
+
     return st.session_state["page"]
 
 # ----------------- Telas -----------------
 def mostrar_dashboard():
-    st.title("📊 Dashboard de Vendas")
+    st.header("📊 Dashboard de Vendas")
     conta = st.query_params.get("account", [None])[0] or st.session_state.get("conta")
     df = carregar_vendas(conta)
     if df.empty:
@@ -224,7 +220,7 @@ def mostrar_dashboard():
     )
 
 def mostrar_contas_cadastradas():
-    st.title("📑 Contas Cadastradas")
+    st.header("📑 Contas Cadastradas")
     render_add_account_button()
     df = pd.read_sql(text("SELECT ml_user_id, access_token FROM user_tokens"), engine)
     if df.empty:
@@ -244,7 +240,7 @@ def mostrar_contas_cadastradas():
                     st.error("Erro ao atualizar o token.")
 
 def mostrar_relatorios():
-    st.title("📋 Relatórios de Vendas")
+    st.header("📋 Relatórios de Vendas")
     conta = st.session_state.get("conta")
     df = carregar_vendas(conta)
     if df.empty:
@@ -266,18 +262,16 @@ def mostrar_relatorios():
         st.dataframe(df_filt)
 
 def mostrar_expedicao_logistica():
-    st.title("🚚 Expedição e Logística")
-    st.write("" )  # Página vazia por enquanto
+    st.header("🚚 Expedição e Logística")
+    st.info("Em breve...")
 
 # ----------------- Fluxo Principal -----------------
 # 1) Callback OAuth ML?
 if "code" in st.query_params:
     ml_callback()
 
-# 2) Renderiza sidebar e pega página selecionada
+# 2) Navegação após login via botões
 pagina = render_sidebar()
-
-# 3) Navega entre páginas
 if pagina == "Dashboard":
     mostrar_dashboard()
 elif pagina == "Contas Cadastradas":
