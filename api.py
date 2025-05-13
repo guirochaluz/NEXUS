@@ -1,11 +1,11 @@
 import os
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from auth.oauth import get_auth_url, exchange_code, renovar_access_token
-from services.sales import fetch_and_persist_sales
+from ml.sales import fetch_and_persist_sales  # sales.py está em ml/
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -35,43 +35,33 @@ def health_check():
 
 @app.get("/ml-login")
 def mercado_livre_login():
-    """Redireciona o usuário para a URL de autorização do ML"""
     return RedirectResponse(get_auth_url())
 
 @app.get("/auth/callback")
 def auth_callback(code: str = Query(None)):
-    """
-    Handler de callback OAuth:
-     1. Valida código
-     2. Troca código por tokens e persiste em user_tokens
-     3. Busca histórico de vendas e persiste em sales
-     4. Redireciona de volta ao front-end com flag de sucesso
-    """
-    # 1️⃣ Valida o code
+    # 1️⃣ valida o code
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code não fornecido")
 
-    # 2️⃣ Troca o code pelo token e persiste no banco de tokens
+    # 2️⃣ troca o code pelo token e persiste no banco de tokens
     try:
         token_payload = exchange_code(code)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao trocar code: {e}")
 
-    # 3️⃣ Busca todo o histórico de vendas e persiste na tabela `sales`
+    # 3️⃣ busca todo o histórico de vendas e persiste na tabela `sales`
     try:
         ml_user_id   = token_payload.get("user_id")
         access_token = token_payload.get("access_token")
         fetch_and_persist_sales(ml_user_id, access_token)
     except Exception as e:
-        # se falhar aqui, ainda podemos redirecionar, mas logamos o erro
-        print(f"⚠️ Erro ao buscar/vender vendas históricas: {e}")
+        print(f"⚠️ Erro ao buscar e persistir vendas históricas: {e}")
 
-    # 4️⃣ Redireciona de volta ao dashboard autenticado
+    # 4️⃣ redireciona de volta ao dashboard autenticado
     return RedirectResponse(f"{FRONTEND_URL}/?nexus_auth=success")
 
 @app.post("/auth/refresh")
 def auth_refresh(payload: dict = Body(...)):
-    """Renova o token usando o refresh_token e retorna novo access_token"""
     ml_user_id = payload.get("user_id")
     if not ml_user_id:
         raise HTTPException(status_code=400, detail="user_id não fornecido")
