@@ -60,7 +60,7 @@ def auth_callback(code: str = None):
         data = exchange_code(code)
 
         # 2) Redireciona ao front-end e seta cookie de sessão
-        redirect_to = FRONTEND_URL
+        redirect_to = f"{FRONTEND_URL}?nexus_auth=true"
         response = RedirectResponse(url=redirect_to)
         # Cookie de exemplo; você pode ajustar nome/valor/tempo conforme necessidade
         response.set_cookie(
