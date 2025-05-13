@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 import os
 
-from oauth import get_auth_url, exchange_code, renovar_access_token
+from auth.oauth import get_auth_url, exchange_code, renovar_access_token
 
 # Carregar variáveis de ambiente
 dotenv_loaded = load_dotenv()
