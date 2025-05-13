@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from auth.oauth import get_auth_url, exchange_code, renovar_access_token
-from ml.sales import fetch_and_persist_sales  # sales.py está em ml/
+from ml.sales import get_sales  # sales.py em ml/ define get_sales
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -49,11 +49,10 @@ def auth_callback(code: str = Query(None)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao trocar code: {e}")
 
-    # 3️⃣ busca todo o histórico de vendas e persiste na tabela `sales`
+    # 3️⃣ busca e persiste todo o histórico de vendas via get_sales
     try:
-        ml_user_id   = token_payload.get("user_id")
-        access_token = token_payload.get("access_token")
-        fetch_and_persist_sales(ml_user_id, access_token)
+        ml_user_id = token_payload.get("user_id")
+        get_sales(ml_user_id)
     except Exception as e:
         print(f"⚠️ Erro ao buscar e persistir vendas históricas: {e}")
 
