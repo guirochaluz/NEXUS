@@ -7,7 +7,7 @@ class UserToken(Base):
     __tablename__ = "user_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    ml_user_id = Column(String, unique=True, index=True, nullable=False)
+    ml_user_id = Column(Integer, unique=True, index=True, nullable=False)
     access_token = Column(Text, nullable=False)
     refresh_token = Column(Text, nullable=False)
     expires_at = Column(DateTime, nullable=False)
@@ -16,7 +16,7 @@ class Sale(Base):
     __tablename__ = "sales"
 
     id = Column(Integer, primary_key=True, index=True)
-    ml_user_id = Column(String, index=True, nullable=False)
+    ml_user_id = Column(Integer, index=True, nullable=False)
     date_created = Column(DateTime, nullable=False)
     status = Column(String, nullable=False)
     item_id = Column(String, nullable=True)
