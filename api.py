@@ -1,74 +1,40 @@
-# api.py
-
-import os
-from fastapi import FastAPI, HTTPException, Body
-from fastapi.responses import RedirectResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse, HTMLResponse
 from dotenv import load_dotenv
+import os
 
-from auth.oauth import get_auth_url, exchange_code, renovar_access_token
+from auth.oauth import get_auth_url, exchange_code, salvar_tokens_no_banco  # mova a função de gravação pro oauth.py ou db.py
 
-# Carrega variáveis de ambiente
 load_dotenv()
-FRONTEND_URL = os.getenv("FRONTEND_URL")
-if not FRONTEND_URL:
-    raise RuntimeError("❌ FRONTEND_URL deve estar definido no .env")
+BACKEND_URL   = os.getenv("BACKEND_URL")
+FRONTEND_URL  = os.getenv("FRONTEND_URL")  # onde quiser redirecionar ao final (ex: a raiz do Streamlit)
 
 app = FastAPI()
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/")
-def home():
-    return {"message": "Nexus API rodando perfeitamente!"}
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
-
 @app.get("/ml-login")
-def mercado_livre_login():
+def ml_login():
+    # dispara o OAuth pro ML, com redirect_uri = BACKEND_URL/auth/callback
     return RedirectResponse(get_auth_url())
 
-# POST para Streamlit
-@app.post("/auth/callback")
-def auth_callback_post(payload: dict = Body(...)):
-    code = payload.get("code")
-    if not code:
-        raise HTTPException(400, "Authorization code not provided")
-    data = exchange_code(code)
-    return data
-
-# GET para navegador/redirect
 @app.get("/auth/callback")
-def auth_callback_get(code: str = None):
+def auth_callback(code: str = None):
     if not code:
-        raise HTTPException(400, "Authorization code not provided")
-    data = exchange_code(code)
-    response = RedirectResponse(f"{FRONTEND_URL}?nexus_auth=true")
-    response.set_cookie(
-        key="nexus_auth",
-        value="true",
-        httponly=True,
-        max_age=3600,
-        secure=True,
-        samesite="lax",
-    )
-    return response
+        raise HTTPException(400, "Código de autorização não recebido")
+    try:
+        # troca code por tokens e grava no banco de dados
+        data = exchange_code(code)  # já retorna {user_id, access_token, refresh_token}
+        salvar_tokens_no_banco(data)  # faz o INSERT / UPDATE no seu user_tokens
+    except Exception as e:
+        raise HTTPException(500, f"Erro durante autenticação: {e}")
 
-@app.post("/auth/refresh")
-def auth_refresh(payload: dict = Body(...)):
-    ml_user_id = payload.get("user_id")
-    if not ml_user_id:
-        raise HTTPException(400, "user_id not provided")
-    token = renovar_access_token(int(ml_user_id))
-    if not token:
-        raise HTTPException(404, "Token renewal failed")
-    return {"access_token": token}
+    # tudo ok, devolve um HTML simples ou redireciona pro front
+    html = """
+    <html>
+      <body style="font-family:sans-serif; text-align:center; margin-top:3rem;">
+        <h2>✅ Conta adicionada com sucesso!</h2>
+        <p>Você pode voltar para a sua dashboard.</p>
+        <a href="{frontend}">↩ Voltar</a>
+      </body>
+    </html>
+    """.format(frontend=FRONTEND_URL)
+    return HTMLResponse(html)
