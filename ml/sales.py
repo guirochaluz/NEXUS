@@ -1,5 +1,3 @@
-# sales.py
-
 import sys
 import requests
 from dateutil import parser
@@ -10,7 +8,7 @@ from database.models import Sale, UserToken
 def get_sales(ml_user_id: int):
     """
     Coleta vendas paginadas do Mercado Livre e salva no banco,
-    evitando duplicação pelo campo ml_order_id.
+    evitando duplicação pelo campo order_id.
     """
     db = SessionLocal()
     token_obj = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
@@ -41,46 +39,71 @@ def get_sales(ml_user_id: int):
                 break
 
             for order in orders:
-                ml_order_id = order.get("id")
-                # Evita duplicação
-                if db.query(Sale).filter_by(ml_order_id=ml_order_id).first():
+                order_id = order.get("id")
+
+                # Evita duplicação pelo order_id
+                if db.query(Sale).filter_by(order_id=order_id).first():
                     continue
 
+                # Comprador
+                buyer = order.get("buyer", {})
+                buyer_id          = buyer.get("id")
+                buyer_nickname    = buyer.get("nickname")
+                buyer_email       = buyer.get("email")
+                buyer_first_name  = buyer.get("first_name")
+                buyer_last_name   = buyer.get("last_name")
+
+                # Item
+                item = order.get("order_items", [{}])[0]
+                item_info = item.get("item", {})
+                item_id    = item_info.get("id")
+                item_title = item_info.get("title")
+                quantity   = item.get("quantity")
+                unit_price = item.get("unit_price")
+
+                # Valores e status
+                total_amount  = order.get("total_amount")
+                status        = order.get("status")
+                status_detail = order.get("status_detail")
+
+                # Dados de envio
+                shipping = order.get("shipping", {})
+                shipping_id     = shipping.get("id")
+                shipping_status = shipping.get("status")
+                addr = shipping.get("receiver_address", {})
+                city          = addr.get("city", {}).get("name")
+                state         = addr.get("state", {}).get("name")
+                country       = addr.get("country", {}).get("id")
+                zip_code      = addr.get("zip_code")
+                street_name   = addr.get("street_name")
+                street_number = addr.get("street_number")
+
                 sale = Sale(
-                    ml_order_id   = ml_order_id,
-                    ml_user_id    = ml_user_id,
-                    date_created  = parser.isoparse(order["date_created"]),
-                    status        = order.get("status"),
-                    item_id       = (order["order_items"][0]["item"]["id"]
-                                     if order.get("order_items") else None),
-                    item_title    = (order["order_items"][0]["item"]["title"]
-                                     if order.get("order_items") else None),
-                    quantity      = (order["order_items"][0]["quantity"]
-                                     if order.get("order_items") else None),
-                    unit_price    = (order["order_items"][0]["unit_price"]
-                                     if order.get("order_items") else None),
-                    total_amount  = order.get("total_amount"),
-                    shipping_id      = order.get("shipping", {}).get("id"),
-                    shipping_status  = order.get("shipping", {}).get("status"),
-                    city             = order.get("shipping", {}) \
-                                          .get("receiver_address", {}) \
-                                          .get("city"),
-                    state            = order.get("shipping", {}) \
-                                          .get("receiver_address", {}) \
-                                          .get("state"),
-                    country          = order.get("shipping", {}) \
-                                          .get("receiver_address", {}) \
-                                          .get("country"),
-                    zip_code         = order.get("shipping", {}) \
-                                          .get("receiver_address", {}) \
-                                          .get("zip_code"),
-                    street_name      = order.get("shipping", {}) \
-                                          .get("receiver_address", {}) \
-                                          .get("street_name"),
-                    street_number    = order.get("shipping", {}) \
-                                          .get("receiver_address", {}) \
-                                          .get("street_number"),
+                    order_id         = order_id,
+                    ml_user_id       = ml_user_id,
+                    buyer_id         = buyer_id,
+                    buyer_nickname   = buyer_nickname,
+                    buyer_email      = buyer_email,
+                    buyer_first_name = buyer_first_name,
+                    buyer_last_name  = buyer_last_name,
+                    total_amount     = total_amount,
+                    status           = status,
+                    status_detail    = status_detail,
+                    date_created     = parser.isoparse(order["date_created"]),
+                    item_id          = item_id,
+                    item_title       = item_title,
+                    quantity         = quantity,
+                    unit_price       = unit_price,
+                    shipping_id      = shipping_id,
+                    shipping_status  = shipping_status,
+                    city             = city,
+                    state            = state,
+                    country          = country,
+                    zip_code         = zip_code,
+                    street_name      = street_name,
+                    street_number    = street_number,
                 )
+
                 db.add(sale)
                 total_saved += 1
 
@@ -108,3 +131,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     get_sales(user_id)
+
