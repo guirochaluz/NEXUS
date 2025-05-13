@@ -9,13 +9,13 @@ import locale
 
 # ----------------- Configuração da Página (MUST be first!) -----------------
 st.set_page_config(
-    page_title="Sistema de Gestão - Grupo Nexus",
+    page_title="Dashboard de Vendas - NEXUS",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ----------------- Autenticação -----------------
+# ----------------- Bloco de Autenticação -----------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
@@ -25,31 +25,12 @@ params = st.query_params
 # login automático via ?nexus_auth=success
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
-    st.experimental_set_query_params()  # limpa nexus_auth
-
-# callback OAuth Mercado Livre
-def ml_callback():
-    code = st.query_params.get("code", [None])[0]
-    if not code:
-        st.error("⚠️ Código de autorização não encontrado.")
-        return
-    st.success("✅ Código recebido. Processando autenticação...")
-    resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
-    if resp.ok:
-        st.success("✅ Conta ML autenticada com sucesso!")
-        st.experimental_set_query_params()  # limpa code
-        st.experimental_rerun()
-    else:
-        st.error(f"❌ Falha na autenticação: {resp.text}")
-
-if "code" in st.query_params:
-    # BACKEND_URL precisa estar definido antes de chamar ml_callback()
-    load_dotenv()
-    BACKEND_URL = os.getenv("BACKEND_URL")
-    ml_callback()
+    # limpa o param para não ficar preso nisso (set não gera warning)
+    st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
-    st.title("🔐 Sistema de Gestão - Grupo Nexus", anchor=None)
+    # título customizado na tela de login
+    st.title("Sistema de Gestão - Grupo Nexus")
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
     if st.button("Entrar"):
@@ -60,12 +41,15 @@ if not st.session_state["authenticated"]:
             st.error("Credenciais inválidas")
     st.stop()
 
+# ----------------- Título do App -----------------
+st.title("Nexus Dashboard")
+
 # ----------------- Carregamento de variáveis -----------------
 load_dotenv()
-BACKEND_URL   = os.getenv("BACKEND_URL")
-FRONTEND_URL  = os.getenv("FRONTEND_URL")
-DB_URL        = os.getenv("DB_URL")
-ML_CLIENT_ID  = os.getenv("ML_CLIENT_ID")
+BACKEND_URL = os.getenv("BACKEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+DB_URL       = os.getenv("DB_URL")
+ML_CLIENT_ID = os.getenv("ML_CLIENT_ID")
 
 if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
     st.error("❌ Defina BACKEND_URL, FRONTEND_URL, DB_URL e ML_CLIENT_ID em seu .env")
@@ -74,40 +58,39 @@ if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
 # ----------------- CSS Customizado -----------------
 st.markdown("""
 <style>
-  /* Sidebar */
+  html, body, [data-testid="stAppViewContainer"] {
+    overflow: hidden !important;
+    height: 100vh !important;
+  }
+  ::-webkit-scrollbar { display: none; }
   [data-testid="stSidebar"] {
-    background-color: #111b21;
-    padding: 1rem;
+    background-color: #161b22;
+    overflow: hidden !important;
+    height: 100vh !important;
   }
-  [data-testid="stSidebar"] .menu-item {
-    display: block;
-    padding: 12px 16px;
-    margin: 4px 0;
-    color: #c8c8c8;
-    text-decoration: none;
-    border-left: 4px solid transparent;
-    border-radius: 0 4px 4px 0;
-    font-weight: 500;
-  }
-  [data-testid="stSidebar"] .menu-item:hover {
-    background-color: #1f2a33;
-    color: #ffffff;
-  }
-  [data-testid="stSidebar"] .menu-item.active {
-    background-color: #16212b;
-    color: #1abc9c;
-    border-left-color: #1abc9c;
-  }
-
-  /* Main area */
   [data-testid="stAppViewContainer"] {
     background-color: #0e1117;
     color: #fff;
-    padding: 1.5rem;
   }
-  /* Headings */
-  h1, h2, h3, h4, h5, h6 {
+  .sidebar-title {
+    font-size: 18px;
+    font-weight: bold;
     color: #ffffff;
+    margin-bottom: 10px;
+  }
+  .menu-button {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 5px;
+    background-color: #1d2b36;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-button:hover {
+    background-color: #263445;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -127,24 +110,43 @@ except locale.Error:
     pass
 
 # ----------------- Helpers de OAuth -----------------
-def render_add_account_button():
-    backend_login = f"{BACKEND_URL}/ml-login"
-    st.markdown(f"""
-      <a href="{backend_login}" target="_blank">
-        <button style="
-          background-color:#1abc9c;
-          color:white;
-          border:none;
-          padding:8px 16px;
-          border-radius:4px;
-          margin-bottom:10px;
-          font-weight:500;
-        ">
-          ➕ Adicionar Conta Mercado Livre
-        </button>
-      </a>
-    """, unsafe_allow_html=True)
+def ml_callback():
+    """Trata o callback OAuth—envia o code ao backend e limpa params."""
+    code = st.query_params.get("code", [None])[0]
+    if not code:
+        st.error("⚠️ Código de autorização não encontrado.")
+        return
+    st.success("✅ Código recebido. Processando autenticação...")
+    resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
+    if resp.ok:
+        st.success("✅ Conta ML autenticada com sucesso!")
+        # limpa o código da URL
+        st.experimental_set_query_params()
+        st.experimental_rerun()
+    else:
+        st.error(f"❌ Falha na autenticação: {resp.text}")
 
+# ----------------- Persistência de Tokens -----------------
+def salvar_tokens_no_banco(data: dict):
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                INSERT INTO user_tokens (ml_user_id, access_token, refresh_token, expires_at)
+                VALUES (:user_id, :access_token, :refresh_token, NOW() + interval '6 hours')
+                ON CONFLICT (ml_user_id) DO UPDATE
+                  SET access_token = EXCLUDED.access_token,
+                      refresh_token = EXCLUDED.refresh_token,
+                      expires_at   = NOW() + interval '6 hours';
+            """)
+            conn.execute(query, {
+                "user_id":       data["user_id"],
+                "access_token":  data["access_token"],
+                "refresh_token": data["refresh_token"],
+            })
+    except Exception as e:
+        st.error(f"❌ Erro ao salvar tokens no banco: {e}")
+
+# ----------------- Carregamento de Vendas -----------------
 @st.cache_data(ttl=300)
 def carregar_vendas(conta_id: str) -> pd.DataFrame:
     sql = text("""
@@ -156,10 +158,41 @@ def carregar_vendas(conta_id: str) -> pd.DataFrame:
     df["date_created"] = pd.to_datetime(df["date_created"])
     return df
 
+# ----------------- Componentes de Interface -----------------
+def render_add_account_button():
+    backend_login = f"{BACKEND_URL}/ml-login"
+    st.markdown(f"""
+      <a href="{backend_login}" target="_blank">
+        <button style="
+          background-color:#4CAF50;
+          color:white;
+          border:none;
+          padding:10px;
+          border-radius:5px;
+          margin-bottom:10px;
+        ">
+          ➕ Adicionar Conta Mercado Livre
+        </button>
+      </a>
+    """, unsafe_allow_html=True)
+
+def render_sidebar():
+    # define páginas e estado inicial
+    pages = ["Dashboard", "Contas Cadastradas", "Relatórios", "Expedição e Logística"]
+    if "page" not in st.session_state:
+        st.session_state["page"] = pages[0]
+
+    st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
+    for pg in pages:
+        if st.sidebar.button(pg, key=pg, help=f"Ir para {pg}"):
+            st.session_state["page"] = pg
+
+    return st.session_state["page"]
+
 # ----------------- Telas -----------------
 def mostrar_dashboard():
     st.header("📊 Dashboard de Vendas")
-    conta = st.query_params.get("page_account", [None])[0] or st.session_state.get("conta")
+    conta = st.query_params.get("account", [None])[0] or st.session_state.get("conta")
     df = carregar_vendas(conta)
     if df.empty:
         st.warning("Nenhuma venda encontrada para essa conta.")
@@ -201,18 +234,7 @@ def mostrar_contas_cadastradas():
                 resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": row.ml_user_id})
                 if resp.ok:
                     data = resp.json()
-                    with engine.begin() as conn:
-                        conn.execute(text("""
-                            UPDATE user_tokens
-                               SET access_token = :access_token,
-                                   refresh_token = :refresh_token,
-                                   expires_at   = NOW() + interval '6 hours'
-                             WHERE ml_user_id = :user_id
-                        """), {
-                            "user_id":       data["user_id"],
-                            "access_token":  data["access_token"],
-                            "refresh_token": data["refresh_token"],
-                        })
+                    salvar_tokens_no_banco(data)
                     st.success("Token atualizado com sucesso!")
                 else:
                     st.error("Erro ao atualizar o token.")
@@ -237,30 +259,24 @@ def mostrar_relatorios():
     if df_filt.empty:
         st.warning("Sem registros para os filtros escolhidos.")
     else:
-        st.dataframe(df_filt, use_container_width=True)
+        st.dataframe(df_filt)
 
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
     st.info("Em breve...")
 
-# ----------------- Navegação via Sidebar HTML -----------------
-pages = ["Dashboard", "Contas Cadastradas", "Relatórios", "Expedição e Logística"]
-current = st.query_params.get("page", [pages[0]])[0]
-if current not in pages:
-    current = pages[0]
+# ----------------- Fluxo Principal -----------------
+# 1) Callback OAuth ML?
+if "code" in st.query_params:
+    ml_callback()
 
-for pg in pages:
-    if pg == current:
-        st.sidebar.markdown(f'<div class="menu-item active">{pg}</div>', unsafe_allow_html=True)
-    else:
-        st.sidebar.markdown(f'<a href="?page={pg}" class="menu-item">{pg}</a>', unsafe_allow_html=True)
-
-# ----------------- Renderiza a página selecionada -----------------
-if current == "Dashboard":
+# 2) Navegação após login via botões
+pagina = render_sidebar()
+if pagina == "Dashboard":
     mostrar_dashboard()
-elif current == "Contas Cadastradas":
+elif pagina == "Contas Cadastradas":
     mostrar_contas_cadastradas()
-elif current == "Relatórios":
+elif pagina == "Relatórios":
     mostrar_relatorios()
-elif current == "Expedição e Logística":
+elif pagina == "Expedição e Logística":
     mostrar_expedicao_logistica()
