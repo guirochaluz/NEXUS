@@ -5,7 +5,7 @@ services:
     branch: main
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn api:app --host 0.0.0.0 --port $PORT"
+    startCommand: "uvicorn --app-dir . api:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: DB_URL
         value: "postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5rLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom"
