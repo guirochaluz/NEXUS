@@ -51,9 +51,11 @@ def auth_callback(code: str = Query(None)):
 
     # 3️⃣ busca e persiste todo o histórico de vendas via get_sales
     try:
-        ml_user_id = token_payload.get("user_id")
-        get_sales(ml_user_id)
+        ml_user_id    = str(token_payload["user_id"])
+        access_token  = token_payload["access_token"]
+        get_sales(ml_user_id, access_token)
     except Exception as e:
+        # Loga o erro mas não impede o redirect
         print(f"⚠️ Erro ao buscar e persistir vendas históricas: {e}")
 
     # 4️⃣ redireciona de volta ao dashboard autenticado
