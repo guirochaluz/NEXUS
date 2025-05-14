@@ -24,7 +24,7 @@ services:
     branch: main
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.enableCORS false"
+    startCommand: "streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.enableXsrfProtection false"
     envVars:
       - key: DB_URL
         value: "postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5rLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom"
