@@ -36,7 +36,7 @@ if not st.session_state["authenticated"]:
     if st.button("Entrar"):
         if username == "GRUPONEXUS" and password == "NEXU$2025":
             st.session_state["authenticated"] = True
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Credenciais inválidas")
     st.stop()
@@ -122,7 +122,7 @@ def ml_callback():
         st.success("✅ Conta ML autenticada com sucesso!")
         # limpa o código da URL
         st.experimental_set_query_params()
-        st.experimental_rerun()
+        st.rerun()
     else:
         st.error(f"❌ Falha na autenticação: {resp.text}")
 
