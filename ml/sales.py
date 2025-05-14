@@ -1,7 +1,6 @@
 import sys
 import requests
 from dateutil import parser
-from sqlalchemy import cast, String
 from database.db import SessionLocal
 from database.models import Sale, UserToken
 
@@ -9,7 +8,7 @@ from database.models import Sale, UserToken
 def get_sales(ml_user_id: int):
     """
     Coleta vendas paginadas do Mercado Livre e salva no banco,
-    evitando duplicação pelo campo order_id.
+    evitando duplicação pelo campo order_id (agora texto no DB).
     """
     db = SessionLocal()
     token_obj = db.query(UserToken).filter_by(ml_user_id=ml_user_id).first()
@@ -40,11 +39,10 @@ def get_sales(ml_user_id: int):
                 break
 
             for order in orders:
-                order_id = str(order.get("id"))
+                order_id = str(order.get("id"))  # ID como texto
 
-                # Evita duplicação usando cast para texto
-                exists = db.query(Sale).filter(cast(Sale.order_id, String) == order_id).first()
-                if exists:
+                # Evita duplicação simples agora que coluna é VARCHAR
+                if db.query(Sale).filter_by(order_id=order_id).first():
                     continue
 
                 # Comprador
