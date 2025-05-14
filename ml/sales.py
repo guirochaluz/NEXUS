@@ -2,8 +2,8 @@
 
 import requests
 from dateutil import parser
-from db import SessionLocal
-from models import Sale
+from database.db import SessionLocal
+from database.dbmodels import Sale
 from typing import Optional
 
 def get_sales(ml_user_id: str, access_token: str):
