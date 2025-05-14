@@ -6,8 +6,6 @@ import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
-import streamlit as st
-st.set_option('server.enableXsrfProtection', False)
 
 
 # ----------------- Configuração da Página (MUST be first!) -----------------
