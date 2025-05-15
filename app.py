@@ -405,7 +405,27 @@ def mostrar_dashboard():
     )
     st.plotly_chart(fig_hora, use_container_width=True)
 
-    # 11) Download do Excel Filtrado
+    # 11) Gráfico de Barras - Top 10 Títulos de Anúncio
+    top10_titulos = (
+        df.groupby("item_title")["total_amount"]
+        .sum()
+        .reset_index()
+        .sort_values(by="total_amount", ascending=False)
+        .head(10)
+    )
+
+    fig_top10 = px.bar(
+        top10_titulos,
+        x="total_amount",
+        y="item_title",
+        title="🏷️ Top 10 Títulos de Anúncio",
+        text_auto=True,
+        orientation='h',
+        color_discrete_sequence=["#32CD32"]
+    )
+    st.plotly_chart(fig_top10, use_container_width=True)
+
+    # 12) Download do Excel Filtrado
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Vendas")
