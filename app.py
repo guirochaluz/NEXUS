@@ -226,16 +226,15 @@ def mostrar_dashboard():
         return
 
     # ——————————————————————————————————————————
-    # 1) Layout dos filtros em linha
+    # 1) Layout dos filtros em linha (removido filtro de Status)
     # ——————————————————————————————————————————
-    # Colunas: [Conta (maior), De, Até, Status (maior)]
-    col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
+    col1, col2, col3 = st.columns([3, 1, 1])
 
     # 1.1) Filtro de Conta
-    contas_df   = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
-    contas_lst  = contas_df["ml_user_id"].astype(str).tolist()
-    escolha     = col1.selectbox("🔹 Conta", ["Todas as contas"] + contas_lst)
-    conta_id    = None if escolha == "Todas as contas" else escolha
+    contas_df  = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
+    contas_lst = contas_df["ml_user_id"].astype(str).tolist()
+    escolha    = col1.selectbox("🔹 Conta", ["Todas as contas"] + contas_lst)
+    conta_id   = None if escolha == "Todas as contas" else escolha
 
     # 1.2) Filtro de Data De / Até
     data_min = df_full["date_created"].dt.date.min()
@@ -243,25 +242,18 @@ def mostrar_dashboard():
     de  = col2.date_input("🔹 De",  value=data_min, min_value=data_min, max_value=data_max)
     ate = col3.date_input("🔹 Até", value=data_max, min_value=data_min, max_value=data_max)
 
-    # 1.3) Filtro de Status
-    status_opts = df_full["status"].unique().tolist()
-    status_sel  = col4.multiselect("🔹 Status", options=status_opts, default=status_opts)
-
-    # 1.4) Busca Livre (fora das colunas, ocupa a largura total)
+    # 1.3) Busca Livre (abaixo dos filtros)
     busca = st.text_input("🔹 Busca livre", placeholder="Título do anúncio, MLB, etc…")
 
     # ——————————————————————————————————————————
-    # 2) Aplica filtros ao DataFrame carregado por conta
+    # 2) Aplica filtros ao DataFrame
     # ——————————————————————————————————————————
     df = carregar_vendas(conta_id)
-    # período
-    df = df.loc[
+    df = df[
         (df["date_created"].dt.date >= de) &
         (df["date_created"].dt.date <= ate)
     ]
-    # status
-    df = df[df["status"].isin(status_sel)]
-    # busca livre
+
     if busca:
         df = df[df["item_title"].str.contains(busca, case=False, na=False)]
 
@@ -270,7 +262,7 @@ def mostrar_dashboard():
         return
 
     # ——————————————————————————————————————————
-    # 3) Cálculo de Métricas
+    # 3) Métricas
     # ——————————————————————————————————————————
     total_vendas = len(df)
     total_valor  = df["total_amount"].sum()
@@ -284,7 +276,7 @@ def mostrar_dashboard():
     c4.metric("🎯 Ticket médio", format_currency(ticket_medio))
 
     # ——————————————————————————————————————————
-    # 4) Gráfico de Linha: Total Vendido por Dia
+    # 4) Gráfico de Linha
     # ——————————————————————————————————————————
     vendas_por_dia = (
         df
@@ -308,18 +300,8 @@ def mostrar_dashboard():
         label="📥 Baixar CSV das vendas",
         data=csv_bytes,
         file_name="vendas_filtradas.csv",
-        mime="text/csv"
-    )
-
-    # ——————————————————————————————————————————
-    # 8) Botão de Download do CSV Filtrado
-    # ——————————————————————————————————————————
-    csv_bytes = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Baixar CSV das vendas",
-        data=csv_bytes,
-        file_name="vendas_filtradas.csv",
-        mime="text/csv"
+        mime="text/csv",
+        key="download_csv_vendas"
     )
 
 def mostrar_contas_cadastradas():
