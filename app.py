@@ -412,21 +412,23 @@ def mostrar_dashboard():
     )
     st.plotly_chart(fig_hora, use_container_width=True)
 
-    # Gráfico de Linha - Vendas por Dia da Semana
+# Gráfico de Histograma - Vendas por Dia da Semana
     st.markdown("### 📅 Vendas por Dia da Semana")
     df["dia_semana"] = df["date_created"].dt.day_name()
     vendas_por_dia_semana = (
         df.groupby("dia_semana")["total_amount"]
         .sum()
+        .reindex(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
         .reset_index(name="Valor Total")
     )
 
-    fig_dia_semana = px.line(
+    fig_dia_semana = px.bar(
         vendas_por_dia_semana,
         x="dia_semana",
         y="Valor Total",
         title="📅 Total Vendido por Dia da Semana",
         labels={"dia_semana": "Dia da Semana", "Valor Total": "Valor Total"},
+        text_auto='.2s',
         color_discrete_sequence=["#32CD32"]
     )
     st.plotly_chart(fig_dia_semana, use_container_width=True)
