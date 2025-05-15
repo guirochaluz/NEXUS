@@ -218,17 +218,73 @@ def render_sidebar():
 # ----------------- Telas -----------------
 def mostrar_dashboard():
     st.header("📊 Dashboard de Vendas")
-    # filtro de conta
+
+    # ——————————————————————————————————————————
+    # 1) Filtro de Conta
+    # ——————————————————————————————————————————
     contas_df = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
     contas = contas_df["ml_user_id"].astype(str).tolist()
-    escolha = st.selectbox("Conta:", ["Todas as contas"] + contas)
-    conta_id = None if escolha == "Todas as contas" else escolha
+    escolha_conta = st.selectbox("🔹 Conta:", ["Todas as contas"] + contas)
+    conta_id = None if escolha_conta == "Todas as contas" else escolha_conta
 
+    # ——————————————————————————————————————————
+    # 2) Carrega dados e aplica filtro de conta
+    # ——————————————————————————————————————————
     df = carregar_vendas(conta_id)
+
+    # se quiser buscar por ml_user_id no próprio DataFrame:
+    # if conta_id:
+    #     df = df[df["ml_user_id"] == conta_id]
+
     if df.empty:
-        st.warning("Nenhuma venda encontrada.")
+        st.warning("Nenhuma venda cadastrada.")
         return
 
+    # ——————————————————————————————————————————
+    # 3) Filtro de Período
+    # ——————————————————————————————————————————
+    data_min = df["date_created"].dt.date.min()
+    data_max = df["date_created"].dt.date.max()
+    data_inicio, data_fim = st.date_input(
+        "🔹 Período",
+        value=(data_min, data_max),
+        min_value=data_min,
+        max_value=data_max
+    )
+    df = df.loc[
+        (df["date_created"].dt.date >= data_inicio) &
+        (df["date_created"].dt.date <= data_fim)
+    ]
+
+    # ——————————————————————————————————————————
+    # 4) Filtro de Status
+    # ——————————————————————————————————————————
+    status_opts = df["status"].unique().tolist()
+    status_sel = st.multiselect(
+        "🔹 Status:",
+        options=status_opts,
+        default=status_opts
+    )
+    df = df[df["status"].isin(status_sel)]
+
+    # ——————————————————————————————————————————
+    # 5) Busca Livre (título de anúncio, etc.)
+    # ——————————————————————————————————————————
+    busca = st.text_input(
+        "🔹 Busca livre:",
+        placeholder="Digite parte do título do anúncio..."
+    )
+    if busca:
+        df = df[df["item_title"].str.contains(busca, case=False, na=False)]
+
+    # Se após todos os filtros não houver dados:
+    if df.empty:
+        st.warning("Nenhuma venda encontrada para os filtros selecionados.")
+        return
+
+    # ——————————————————————————————————————————
+    # 6) Cálculo de Métricas
+    # ——————————————————————————————————————————
     total_vendas = len(df)
     total_valor  = df["total_amount"].sum()
     total_itens  = df["quantity"].sum()
@@ -240,14 +296,34 @@ def mostrar_dashboard():
     c3.metric("📦 Itens vendidos", int(total_itens))
     c4.metric("🎯 Ticket médio", format_currency(ticket_medio))
 
+    # ——————————————————————————————————————————
+    # 7) Gráfico de Série Temporal
+    # ——————————————————————————————————————————
     vendas_por_dia = (
-        df.groupby(df["date_created"].dt.date)["total_amount"]
-          .sum()
-          .reset_index(name="total_amount")
+        df
+        .groupby(df["date_created"].dt.date)["total_amount"]
+        .sum()
+        .reset_index(name="total_amount")
     )
     st.plotly_chart(
-        px.line(vendas_por_dia, x="date_created", y="total_amount", title="💵 Total Vendido por Dia"),
+        px.line(
+            vendas_por_dia,
+            x="date_created",
+            y="total_amount",
+            title="💵 Total Vendido por Dia"
+        ),
         use_container_width=True
+    )
+
+    # ——————————————————————————————————————————
+    # 8) Botão de Download do CSV Filtrado
+    # ——————————————————————————————————————————
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="📥 Baixar CSV das vendas",
+        data=csv_bytes,
+        file_name="vendas_filtradas.csv",
+        mime="text/csv"
     )
 
 def mostrar_contas_cadastradas():
