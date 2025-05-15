@@ -288,7 +288,7 @@ def mostrar_dashboard():
 
     # 5) Download do Excel Filtrado
     buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Vendas")
     buffer.seek(0)
 
