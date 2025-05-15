@@ -8,6 +8,29 @@ from dotenv import load_dotenv
 import locale
 from typing import Optional
 
+# Tenta configurar locale pt_BR; guarda se deu certo
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+    LOCALE_OK = True
+except locale.Error:
+    LOCALE_OK = False
+
+def format_currency(valor: float) -> str:
+    """
+    Formata um float como BRL:
+    - Usa locale se LOCALE_OK for True;
+    - Senão, faz um fallback manual 'R$ 1.234,56'.
+    """
+    if LOCALE_OK:
+        try:
+            return locale.currency(valor, grouping=True)
+        except Exception:
+            pass
+    # Fallback manual:
+    inteiro, frac = f"{valor:,.2f}".split('.')
+    inteiro = inteiro.replace(',', '.')
+    return f"R$ {inteiro},{frac}"
+
 # ----------------- Configuração da Página -----------------
 st.set_page_config(
     page_title="Dashboard de Vendas - NEXUS",
@@ -99,12 +122,6 @@ engine = create_engine(
     max_overflow=10,
     pool_timeout=30
 )
-
-# ----------------- Locale para Moeda -----------------
-try:
-    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
-except locale.Error:
-    pass
 
 # ----------------- OAuth Callback -----------------
 def ml_callback():
@@ -219,9 +236,9 @@ def mostrar_dashboard():
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🧾 Vendas", total_vendas)
-    c2.metric("💰 Receita total", locale.currency(total_valor, grouping=True))
+    c2.metric("💰 Receita total", format_currency(total_valor))
     c3.metric("📦 Itens vendidos", int(total_itens))
-    c4.metric("🎯 Ticket médio", locale.currency(ticket_medio, grouping=True))
+    c4.metric("🎯 Ticket médio", format_currency(ticket_medio))
 
     vendas_por_dia = (
         df.groupby(df["date_created"].dt.date)["total_amount"]
