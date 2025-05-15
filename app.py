@@ -6,7 +6,7 @@ import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
-
+from typing import Optional
 
 # ----------------- Configuração da Página (MUST be first!) -----------------
 st.set_page_config(
@@ -20,17 +20,13 @@ st.set_page_config(
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
-# lê query params
 params = st.query_params
 
-# login automático via ?nexus_auth=success
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
-    # limpa o param para não ficar preso nisso (set não gera warning)
     st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
-    # título customizado na tela de login
     st.title("Sistema de Gestão - Grupo Nexus")
     username = st.text_input("Usuário")
     password = st.text_input("Senha", type="password")
@@ -47,7 +43,7 @@ st.title("Nexus Dashboard")
 
 # ----------------- Carregamento de variáveis -----------------
 load_dotenv()
-BACKEND_URL = os.getenv("BACKEND_URL")
+BACKEND_URL  = os.getenv("BACKEND_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 DB_URL       = os.getenv("DB_URL")
 ML_CLIENT_ID = os.getenv("ML_CLIENT_ID")
@@ -120,9 +116,14 @@ def ml_callback():
     st.success("✅ Código recebido. Processando autenticação...")
     resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
     if resp.ok:
+        data = resp.json()
+        salvar_tokens_no_banco(data)
+        # Força recarregar das vendas frescas
+        carregar_vendas.clear()
+        # Define conta ativa no front
+        st.experimental_set_query_params(account=data["user_id"])
+        st.session_state["conta"] = data["user_id"]
         st.success("✅ Conta ML autenticada com sucesso!")
-        # limpa o código da URL
-        st.experimental_set_query_params()
         st.rerun()
     else:
         st.error(f"❌ Falha na autenticação: {resp.text}")
@@ -149,13 +150,20 @@ def salvar_tokens_no_banco(data: dict):
 
 # ----------------- Carregamento de Vendas -----------------
 @st.cache_data(ttl=300)
-def carregar_vendas(conta_id: str) -> pd.DataFrame:
-    sql = text("""
-        SELECT date_created, item_title, status, quantity, total_amount
-          FROM sales
-         WHERE ml_user_id = :uid
-    """)
-    df = pd.read_sql(sql, engine, params={"uid": conta_id})
+def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
+    if conta_id:
+        sql = text("""
+            SELECT date_created, item_title, status, quantity, total_amount
+              FROM sales
+             WHERE ml_user_id = :uid
+        """)
+        df = pd.read_sql(sql, engine, params={"uid": conta_id})
+    else:
+        sql = text("""
+            SELECT date_created, item_title, status, quantity, total_amount
+              FROM sales
+        """)
+        df = pd.read_sql(sql, engine)
     df["date_created"] = pd.to_datetime(df["date_created"])
     return df
 
@@ -178,25 +186,27 @@ def render_add_account_button():
     """, unsafe_allow_html=True)
 
 def render_sidebar():
-    # define páginas e estado inicial
     pages = ["Dashboard", "Contas Cadastradas", "Relatórios", "Expedição e Logística"]
     if "page" not in st.session_state:
         st.session_state["page"] = pages[0]
-
     st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
     for pg in pages:
-        if st.sidebar.button(pg, key=pg, help=f"Ir para {pg}"):
+        if st.sidebar.button(pg, key=pg):
             st.session_state["page"] = pg
-
     return st.session_state["page"]
 
 # ----------------- Telas -----------------
 def mostrar_dashboard():
     st.header("📊 Dashboard de Vendas")
-    conta = st.query_params.get("account", [None])[0] or st.session_state.get("conta")
-    df = carregar_vendas(conta)
+    # Filtro de conta
+    contas_df = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
+    contas = contas_df["ml_user_id"].astype(str).tolist()
+    escolha = st.selectbox("Conta:", ["Todas as contas"] + contas)
+    conta_id = None if escolha == "Todas as contas" else escolha
+
+    df = carregar_vendas(conta_id)
     if df.empty:
-        st.warning("Nenhuma venda encontrada para essa conta.")
+        st.warning("Nenhuma venda encontrada.")
         return
 
     total_vendas = len(df)
@@ -206,7 +216,7 @@ def mostrar_dashboard():
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🧾 Vendas", total_vendas)
-    c2.metric("💰 Valor total", locale.currency(total_valor, grouping=True))
+    c2.metric("💰 Receita total", locale.currency(total_valor, grouping=True))
     c3.metric("📦 Itens vendidos", int(total_itens))
     c4.metric("🎯 Ticket médio", locale.currency(ticket_medio, grouping=True))
 
@@ -227,7 +237,6 @@ def mostrar_contas_cadastradas():
     if df.empty:
         st.warning("Nenhuma conta cadastrada.")
         return
-
     for row in df.itertuples(index=False):
         with st.expander(f"🔗 Conta ML: {row.ml_user_id}"):
             st.write(f"**Access Token:** {row.access_token}")
@@ -242,16 +251,13 @@ def mostrar_contas_cadastradas():
 
 def mostrar_relatorios():
     st.header("📋 Relatórios de Vendas")
-    conta = st.session_state.get("conta")
-    df = carregar_vendas(conta)
+    df = carregar_vendas()  # geral
     if df.empty:
         st.warning("Nenhum dado para exibir.")
         return
-
     data_ini = st.date_input("De:",  value=df["date_created"].min())
     data_fim = st.date_input("Até:", value=df["date_created"].max())
     status  = st.multiselect("Status:", options=df["status"].unique(), default=df["status"].unique())
-
     df_filt = df.loc[
         (df["date_created"].dt.date >= data_ini) &
         (df["date_created"].dt.date <= data_fim) &
@@ -267,11 +273,9 @@ def mostrar_expedicao_logistica():
     st.info("Em breve...")
 
 # ----------------- Fluxo Principal -----------------
-# 1) Callback OAuth ML?
 if "code" in st.query_params:
     ml_callback()
 
-# 2) Navegação após login via botões
 pagina = render_sidebar()
 if pagina == "Dashboard":
     mostrar_dashboard()
