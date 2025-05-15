@@ -9,6 +9,14 @@ import locale
 from streamlit_option_menu import option_menu
 from typing import Optional
 
+from fastapi import FastAPI
+from services.ml_webhook import router as webhook_router
+
+app = FastAPI()
+
+# Adicionar o webhook à aplicação
+app.include_router(webhook_router)
+
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
