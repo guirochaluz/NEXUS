@@ -289,20 +289,38 @@ def mostrar_dashboard():
         return
 
     # 1) Layout dos filtros
-    col1, col2, col3 = st.columns([3, 1, 1])
+    col1, col2, col3, col4 = st.columns([3, 1, 1, 2])
     contas_df  = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
     contas_lst = contas_df["ml_user_id"].astype(str).tolist()
     escolha    = col1.selectbox("🔹 Conta", ["Todas as contas"] + contas_lst)
     conta_id   = None if escolha == "Todas as contas" else escolha
 
+    # 2) Filtros rápidos de data
+    filtro_rapido = col4.selectbox(
+        "🔹 Filtro Rápido",
+        ["Período Personalizado", "Hoje", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias"]
+    )
+
+    # 3) Definição do período com base na seleção
     data_min = df_full["date_created"].dt.date.min()
     data_max = df_full["date_created"].dt.date.max()
-    de  = col2.date_input("🔹 De",  value=data_min, min_value=data_min, max_value=data_max)
-    ate = col3.date_input("🔹 Até", value=data_max, min_value=data_min, max_value=data_max)
+    hoje = pd.Timestamp.now().date()
+    
+    if filtro_rapido == "Hoje":
+        de, ate = hoje, hoje
+    elif filtro_rapido == "Últimos 7 Dias":
+        de, ate = hoje - pd.Timedelta(days=7), hoje
+    elif filtro_rapido == "Este Mês":
+        de, ate = hoje.replace(day=1), hoje
+    elif filtro_rapido == "Últimos 30 Dias":
+        de, ate = hoje - pd.Timedelta(days=30), hoje
+    else:
+        de = col2.date_input("🔹 De",  value=data_min, min_value=data_min, max_value=data_max)
+        ate = col3.date_input("🔹 Até", value=data_max, min_value=data_min, max_value=data_max)
 
     busca = st.text_input("🔹 Busca livre", placeholder="Título, MLB, Order ID…")
 
-    # 2) Aplica filtros
+    # 4) Aplica filtros
     df = carregar_vendas(conta_id)
     df = df[(df["date_created"].dt.date >= de) & (df["date_created"].dt.date <= ate)]
     if busca:
@@ -312,7 +330,7 @@ def mostrar_dashboard():
         st.warning("Nenhuma venda encontrada para os filtros selecionados.")
         return
 
-    # 3) Métricas
+    # 5) Métricas
     total_vendas = len(df)
     total_valor  = df["total_amount"].sum()
     total_itens  = df["quantity"].sum()
@@ -324,17 +342,25 @@ def mostrar_dashboard():
     c3.metric("📦 Itens vendidos", int(total_itens))
     c4.metric("🎯 Ticket médio", format_currency(ticket_medio))
 
-    # 4) Gráfico de Linha
-    vendas_por_dia = (
-        df
-        .groupby(df["date_created"].dt.date)["total_amount"]
-        .sum()
-        .reset_index(name="total_amount")
-    )
-    fig = px.line(vendas_por_dia, x="date_created", y="total_amount", title="💵 Total Vendido por Dia")
-    st.plotly_chart(fig, use_container_width=True)
+    # 6) Gráfico de Linha
+vendas_por_dia = (
+    df
+    .groupby(df["date_created"].dt.date)["total_amount"]
+    .sum()
+    .reset_index(name="total_amount")
+)
 
-    # 5) Download do Excel Filtrado
+fig = px.line(
+    vendas_por_dia, 
+    x="date_created", 
+    y="total_amount", 
+    title="💵 Total Vendido por Dia",
+    color_discrete_sequence=["#32CD32"]  # Cor verde (LimeGreen)
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+    # 7) Download do Excel Filtrado
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Vendas")
