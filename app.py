@@ -279,7 +279,24 @@ def render_sidebar():
 # ----------------- Telas -----------------
 import io  # no topo do seu script
 
+def format_currency(value):
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 def mostrar_dashboard():
+    st.markdown(
+        '''
+        <style>
+        .stSelectbox label div[data-testid="stMarkdownContainer"] > div > span {
+            color: #32CD32 !important;
+        }
+        .stDateInput label div[data-testid="stMarkdownContainer"] > div > span {
+            color: #32CD32 !important;
+        }
+        </style>
+        ''',
+        unsafe_allow_html=True
+    )
+    
     st.header("📊 Dashboard de Vendas")
 
     # 0) Carrega dados brutos
@@ -289,19 +306,21 @@ def mostrar_dashboard():
         return
 
     # 1) Layout dos filtros
-    col1, col2, col3, col4 = st.columns([3, 1, 1, 2])
+    col1, col2, col3 = st.columns([2, 2, 2])
+    
+    # Selectbox de Conta
     contas_df  = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
     contas_lst = contas_df["ml_user_id"].astype(str).tolist()
     escolha    = col1.selectbox("🔹 Conta", ["Todas as contas"] + contas_lst)
     conta_id   = None if escolha == "Todas as contas" else escolha
 
-    # 2) Filtros rápidos de data
-    filtro_rapido = col4.selectbox(
+    # Selectbox de Filtro Rápido
+    filtro_rapido = col2.selectbox(
         "🔹 Filtro Rápido",
         ["Período Personalizado", "Hoje", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias"]
     )
 
-    # 3) Definição do período com base na seleção
+    # 2) Ajuste Dinâmico dos Campos de Data
     data_min = df_full["date_created"].dt.date.min()
     data_max = df_full["date_created"].dt.date.max()
     hoje = pd.Timestamp.now().date()
@@ -315,64 +334,79 @@ def mostrar_dashboard():
     elif filtro_rapido == "Últimos 30 Dias":
         de, ate = hoje - pd.Timedelta(days=30), hoje
     else:
+        col2, col3 = st.columns([1, 1])
         de = col2.date_input("🔹 De",  value=data_min, min_value=data_min, max_value=data_max)
         ate = col3.date_input("🔹 Até", value=data_max, min_value=data_min, max_value=data_max)
 
-    busca = st.text_input("🔹 Busca livre", placeholder="Título, MLB, Order ID…")
-
-    # 4) Aplica filtros
+    # 3) Aplica filtros
     df = carregar_vendas(conta_id)
     df = df[(df["date_created"].dt.date >= de) & (df["date_created"].dt.date <= ate)]
-    if busca:
-        df = df[df["item_title"].str.contains(busca, case=False, na=False) |
-                df["order_id"].astype(str).str.contains(busca, case=False, na=False)]
+
     if df.empty:
         st.warning("Nenhuma venda encontrada para os filtros selecionados.")
         return
 
-    # 5) Métricas
+    # 4) Métricas
     total_vendas = len(df)
     total_valor  = df["total_amount"].sum()
     total_itens  = df["quantity"].sum()
     ticket_medio = total_valor / total_vendas if total_vendas else 0
 
+    # Exibição das métricas
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🧾 Vendas Realizadas", total_vendas)
     c2.metric("💰 Receita Total", format_currency(total_valor))
     c3.metric("📦 Itens Vendidos", int(total_itens))
     c4.metric("🎯 Ticket Médio", format_currency(ticket_medio))
+    
+    # Seletor de visualização diária ou mensal
+    tipo_visualizacao = st.radio("Visualização do Gráfico", ["Diária", "Mensal"], horizontal=True)
 
-    # 6) Gráfico de Linha - Total Vendido por Dia
-    vendas_por_dia = (
-        df
-        .groupby(df["date_created"].dt.date)["total_amount"]
-        .sum()
-        .reset_index(name="total_amount")
-    )
+    if tipo_visualizacao == "Diária":
+        vendas_por_data = (
+            df
+            .groupby(df["date_created"].dt.date)["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        eixo_x = "date_created"
+        titulo_grafico = "💵 Total Vendido por Dia"
+    else:
+        vendas_por_data = (
+            df
+            .groupby(df["date_created"].dt.to_period("M"))["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        vendas_por_data["date_created"] = vendas_por_data["date_created"].astype(str)
+        eixo_x = "date_created"
+        titulo_grafico = "💵 Total Vendido por Mês"
 
     fig = px.line(
-        vendas_por_dia, 
-        x="date_created", 
-        y="total_amount", 
-        title="💵 Total Vendido por Dia",
+        vendas_por_data, 
+        x=eixo_x, 
+        y="Valor Total", 
+        title=titulo_grafico,
+        labels={"Valor Total": "Valor Total", "date_created": "Data"},
         color_discrete_sequence=["#32CD32"]
     )
     fig.update_traces(texttemplate='%{y:,.2f}', textposition='top center')
     st.plotly_chart(fig, use_container_width=True)
 
-    # 7) Gráfico de Barras - Total por Categoria
+    # Gráfico de Barras - Vendas por Categoria
     if "category_name" in df.columns and not df["category_name"].empty:
         fig_bar = px.bar(
             df.groupby("category_name")["total_amount"].sum().reset_index(),
             x="category_name",
             y="total_amount",
             title="💰 Total Vendido por Categoria",
+            labels={"category_name": "Categoria", "total_amount": "Valor Total"},
             text_auto='.2s',
             color_discrete_sequence=["#32CD32"]
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # 8) Gráfico de Pizza - Proporção por Status
+    # Gráfico de Pizza - Proporção de Status
     if "order_status" in df.columns and not df["order_status"].empty:
         status_counts = df["order_status"].value_counts().reset_index()
         status_counts.columns = ["Status", "Quantidade"]
@@ -386,21 +420,7 @@ def mostrar_dashboard():
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # 9) Gráficos lado a lado: Vendas por Dia da Semana e Top 10 Anúncios
-    col5, col6 = st.columns(2)
-
-    # Vendas por Dia da Semana
-    df["dia_semana"] = df["date_created"].dt.day_name()
-    fig_hist = px.histogram(
-        df,
-        x="dia_semana",
-        title="📅 Vendas por Dia da Semana",
-        color_discrete_sequence=["#32CD32"],
-        category_orders={"dia_semana": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}
-    )
-    col5.plotly_chart(fig_hist, use_container_width=True)
-
-    # Top 10 Títulos de Anúncio
+    # Gráfico de Barras - Top 10 Títulos de Anúncios
     top10_titulos = (
         df.groupby("item_title")["total_amount"]
         .sum()
@@ -414,24 +434,13 @@ def mostrar_dashboard():
         x="total_amount",
         y="item_title",
         title="🏷️ Top 10 Anúncios por Receita",
+        labels={"item_title": "Título do Anúncio", "total_amount": "Valor Total"},
         text_auto='.2s',
         orientation='h',
         color_discrete_sequence=["#32CD32"]
     )
     fig_top10.update_layout(yaxis={'categoryorder': 'total ascending'})
-    col6.plotly_chart(fig_top10, use_container_width=True)
-
-    # 10) Gráfico de Linha - Vendas por Hora do Dia
-    df["hora_dia"] = df["date_created"].dt.hour
-    vendas_por_hora = df.groupby("hora_dia")["total_amount"].sum().reset_index()
-    fig_hora = px.line(
-        vendas_por_hora,
-        x="hora_dia",
-        y="total_amount",
-        title="🕒 Total Vendido por Hora do Dia",
-        color_discrete_sequence=["#32CD32"]
-    )
-    st.plotly_chart(fig_hora, use_container_width=True)
+    st.plotly_chart(fig_top10, use_container_width=True)
     
 def mostrar_contas_cadastradas():
     st.header("📑 Contas Cadastradas")
