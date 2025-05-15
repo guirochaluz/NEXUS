@@ -342,23 +342,22 @@ def mostrar_dashboard():
     c3.metric("📦 Itens vendidos", int(total_itens))
     c4.metric("🎯 Ticket médio", format_currency(ticket_medio))
 
-    # 6) Gráfico de Linha
-vendas_por_dia = (
-    df
-    .groupby(df["date_created"].dt.date)["total_amount"]
-    .sum()
-    .reset_index(name="total_amount")
-)
+    # 6) Gráfico de Linha com linha verde
+    vendas_por_dia = (
+        df
+        .groupby(df["date_created"].dt.date)["total_amount"]
+        .sum()
+        .reset_index(name="total_amount")
+    )
 
-fig = px.line(
-    vendas_por_dia, 
-    x="date_created", 
-    y="total_amount", 
-    title="💵 Total Vendido por Dia",
-    color_discrete_sequence=["#32CD32"]  # Cor verde (LimeGreen)
-)
-
-st.plotly_chart(fig, use_container_width=True)
+    fig = px.line(
+        vendas_por_dia, 
+        x="date_created", 
+        y="total_amount", 
+        title="💵 Total Vendido por Dia",
+        color_discrete_sequence=["#32CD32"]  # Cor verde (LimeGreen)
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
     # 7) Download do Excel Filtrado
     buffer = io.BytesIO()
