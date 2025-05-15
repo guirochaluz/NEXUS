@@ -166,9 +166,6 @@ def salvar_tokens_no_banco(data: dict):
 # ----------------- Carregamento de Vendas -----------------
 @st.cache_data(ttl=300)
 def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
-    """
-    Agora inclui order_id na seleção.
-    """
     if conta_id:
         sql = text("""
             SELECT order_id,
@@ -192,7 +189,13 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
               FROM sales
         """)
         df = pd.read_sql(sql, engine)
-    df["date_created"] = pd.to_datetime(df["date_created"])
+
+    # converte de UTC para Horário de Brasília e descarta info de tz
+    df["date_created"] = (
+        pd.to_datetime(df["date_created"], utc=True)
+          .dt.tz_convert("America/Sao_Paulo")
+          .dt.tz_localize(None)
+    )
     return df
 
 # ----------------- Componentes de Interface -----------------
