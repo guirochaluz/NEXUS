@@ -227,4 +227,3 @@ elif page == "Relatórios":
     relatorios_screen()
 else:
     logistica_screen()
-```
