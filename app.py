@@ -359,7 +359,37 @@ def mostrar_dashboard():
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # 7) Download do Excel Filtrado
+    # 7) Gráfico de Barras - Total por Categoria
+    if "category_name" in df.columns:
+        fig_bar = px.bar(
+            df.groupby("category_name")["total_amount"].sum().reset_index(),
+            x="category_name",
+            y="total_amount",
+            title="💰 Total Vendido por Categoria",
+            text_auto=True
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # 8) Gráfico de Pizza - Proporção por Status
+    if "order_status" in df.columns:
+        fig_pie = px.pie(
+            df["order_status"].value_counts().reset_index(),
+            names="index",
+            values="order_status",
+            title="📊 Proporção de Vendas por Status"
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # 9) Histograma - Distribuição de Valores
+    fig_hist = px.histogram(
+        df,
+        x="total_amount",
+        nbins=20,
+        title="📈 Distribuição dos Valores dos Pedidos"
+    )
+    st.plotly_chart(fig_hist, use_container_width=True)
+
+    # 10) Download do Excel Filtrado
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Vendas")
