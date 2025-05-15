@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import locale
 from typing import Optional
 
-# ----------------- Configuração da Página (MUST be first!) -----------------
+# ----------------- Configuração da Página -----------------
 st.set_page_config(
     page_title="Dashboard de Vendas - NEXUS",
     page_icon="📊",
@@ -16,12 +16,12 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ----------------- Bloco de Autenticação -----------------
+# ----------------- Autenticação -----------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 params = st.query_params
-
+# login automático via ?nexus_auth=success
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
     st.experimental_set_query_params()
@@ -38,10 +38,10 @@ if not st.session_state["authenticated"]:
             st.error("Credenciais inválidas")
     st.stop()
 
-# ----------------- Título do App -----------------
+# ----------------- Título -----------------
 st.title("Nexus Dashboard")
 
-# ----------------- Carregamento de variáveis -----------------
+# ----------------- Variáveis de Ambiente -----------------
 load_dotenv()
 BACKEND_URL  = os.getenv("BACKEND_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
@@ -92,7 +92,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- Conexão ao Banco -----------------
+# ----------------- Banco de Dados -----------------
 engine = create_engine(
     DB_URL,
     pool_size=5,
@@ -106,9 +106,9 @@ try:
 except locale.Error:
     pass
 
-# ----------------- Helpers de OAuth -----------------
+# ----------------- OAuth Callback -----------------
 def ml_callback():
-    """Trata o callback OAuth—envia o code ao backend e limpa params."""
+    """Trata o callback OAuth — envia o code ao backend, salva tokens e redireciona."""
     code = st.query_params.get("code", [None])[0]
     if not code:
         st.error("⚠️ Código de autorização não encontrado.")
@@ -116,11 +116,9 @@ def ml_callback():
     st.success("✅ Código recebido. Processando autenticação...")
     resp = requests.post(f"{BACKEND_URL}/auth/callback", json={"code": code})
     if resp.ok:
-        data = resp.json()
+        data = resp.json()                   # {"user_id": "...", ...}
         salvar_tokens_no_banco(data)
-        # Força recarregar das vendas frescas
-        carregar_vendas.clear()
-        # Define conta ativa no front
+        carregar_vendas.clear()             # limpa cache para puxar vendas novas
         st.experimental_set_query_params(account=data["user_id"])
         st.session_state["conta"] = data["user_id"]
         st.success("✅ Conta ML autenticada com sucesso!")
@@ -128,7 +126,7 @@ def ml_callback():
     else:
         st.error(f"❌ Falha na autenticação: {resp.text}")
 
-# ----------------- Persistência de Tokens -----------------
+# ----------------- Salvando Tokens -----------------
 def salvar_tokens_no_banco(data: dict):
     try:
         with engine.connect() as conn:
@@ -169,9 +167,14 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
 
 # ----------------- Componentes de Interface -----------------
 def render_add_account_button():
-    backend_login = f"{BACKEND_URL}/ml-login"
+    # agora com ML_CLIENT_ID e redirect_uri completos
+    login_url = (
+      f"{BACKEND_URL}/ml-login"
+      f"?client_id={ML_CLIENT_ID}"
+      f"&redirect_uri={FRONTEND_URL}/?nexus_auth=success"
+    )
     st.markdown(f"""
-      <a href="{backend_login}" target="_blank">
+      <a href="{login_url}" target="_blank">
         <button style="
           background-color:#4CAF50;
           color:white;
@@ -198,7 +201,7 @@ def render_sidebar():
 # ----------------- Telas -----------------
 def mostrar_dashboard():
     st.header("📊 Dashboard de Vendas")
-    # Filtro de conta
+    # filtro de conta
     contas_df = pd.read_sql(text("SELECT ml_user_id FROM user_tokens ORDER BY ml_user_id"), engine)
     contas = contas_df["ml_user_id"].astype(str).tolist()
     escolha = st.selectbox("Conta:", ["Todas as contas"] + contas)
@@ -251,7 +254,7 @@ def mostrar_contas_cadastradas():
 
 def mostrar_relatorios():
     st.header("📋 Relatórios de Vendas")
-    df = carregar_vendas()  # geral
+    df = carregar_vendas()
     if df.empty:
         st.warning("Nenhum dado para exibir.")
         return
