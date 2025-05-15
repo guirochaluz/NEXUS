@@ -222,44 +222,60 @@ def render_add_account_button():
       </a>
     """, unsafe_allow_html=True)
 
+from streamlit_option_menu import option_menu
+
 def render_sidebar():
-    # lista de páginas + ícones (use os ícones do Bootstrap Icons)
-    pages = [
-        ("Dashboard", "house"),
-        ("Contas Cadastradas", "collection"),
-        ("Relatórios", "file-earmark-text"),
-        ("Expedição e Logística", "truck")
-    ]
+    with st.sidebar:
+        # Título
+        st.markdown("## Navegação")
+        st.markdown("---")
 
-    # Cria o menu na sidebar
-    selected = option_menu(
-        menu_title="Navegação",         # título do menu
-        options=[p[0] for p in pages],
-        icons=[p[1] for p in pages],
-        menu_icon="list",               # ícone do título
-        default_index=[
-            p[0] for p in pages
-        ].index(st.session_state.get("page", pages[0][0])),
-        orientation="vertical",
-        styles={
-            "container": {"padding": "0px"},
-            "icon": {"color": "#FFFFFF", "font-size": "18px"},
-            "nav-link": {
-                "font-size": "16px",
-                "text-align": "left",
-                "margin":"4px 0px",
-                "--hover-color": "#444"
+        selected = option_menu(
+            menu_title=None,
+            options=[
+                "Dashboard",
+                "Contas Cadastradas",
+                "Relatórios",
+                "Expedição e Logística"
+            ],
+            icons=["house", "collection", "file-earmark-text", "truck"],
+            menu_icon="list",
+            default_index=[
+                "Dashboard",
+                "Contas Cadastradas",
+                "Relatórios",
+                "Expedição e Logística"
+            ].index(st.session_state.get("page", "Dashboard")),
+            orientation="vertical",
+            styles={
+                "container": {
+                    "padding": "0",
+                    "background-color": "#161b22"
+                },
+                "icon": {
+                    "color": "#2ecc71",      # ícones em verde
+                    "font-size": "18px"
+                },
+                "nav-link": {
+                    "font-size": "16px",
+                    "text-align": "left",
+                    "margin": "4px 0",
+                    "color": "#fff",          # texto branco
+                    "background-color": "transparent"
+                },
+                "nav-link:hover": {
+                    "background-color": "#27ae60"  # hover verde escuro
+                },
+                "nav-link-selected": {
+                    "background-color": "#2ecc71", # seleção em verde claro
+                    "color": "white"
+                },
             },
-            "nav-link-selected": {
-                "background-color": "#6c5ce7",
-                "color": "white"
-            },
-        },
-    )
+        )
 
-    # Atualiza o estado e retorna
     st.session_state["page"] = selected
     return selected
+
 # ----------------- Telas -----------------
 import io  # no topo do seu script
 
