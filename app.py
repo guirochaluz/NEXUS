@@ -355,7 +355,7 @@ def mostrar_dashboard():
         x="date_created", 
         y="total_amount", 
         title="💵 Total Vendido por Dia",
-        color_discrete_sequence=["#32CD32"]  # Cor verde (LimeGreen)
+        color_discrete_sequence=["#32CD32"]  # Verde
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -366,7 +366,8 @@ def mostrar_dashboard():
             x="category_name",
             y="total_amount",
             title="💰 Total Vendido por Categoria",
-            text_auto=True
+            text_auto=True,
+            color_discrete_sequence=["#32CD32"]
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -376,20 +377,35 @@ def mostrar_dashboard():
             df["order_status"].value_counts().reset_index(),
             names="index",
             values="order_status",
-            title="📊 Proporção de Vendas por Status"
+            title="📊 Proporção de Vendas por Status",
+            color_discrete_sequence=px.colors.sequential.Agsunset
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # 9) Histograma - Distribuição de Valores
+    # 9) Histograma - Vendas por Dia da Semana
+    df["dia_semana"] = df["date_created"].dt.day_name()
     fig_hist = px.histogram(
         df,
-        x="total_amount",
-        nbins=20,
-        title="📈 Distribuição dos Valores dos Pedidos"
+        x="dia_semana",
+        title="📅 Vendas por Dia da Semana",
+        color_discrete_sequence=["#32CD32"],
+        category_orders={"dia_semana": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}
     )
     st.plotly_chart(fig_hist, use_container_width=True)
 
-    # 10) Download do Excel Filtrado
+    # 10) Gráfico de Linha - Vendas por Hora do Dia
+    df["hora_dia"] = df["date_created"].dt.hour
+    vendas_por_hora = df.groupby("hora_dia")["total_amount"].sum().reset_index()
+    fig_hora = px.line(
+        vendas_por_hora,
+        x="hora_dia",
+        y="total_amount",
+        title="🕒 Total Vendido por Hora do Dia",
+        color_discrete_sequence=["#32CD32"]
+    )
+    st.plotly_chart(fig_hora, use_container_width=True)
+
+    # 11) Download do Excel Filtrado
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Vendas")
