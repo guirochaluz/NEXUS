@@ -223,13 +223,24 @@ def render_add_account_button():
 
 def render_sidebar():
     pages = ["Dashboard", "Contas Cadastradas", "Relatórios", "Expedição e Logística"]
-    if "page" not in st.session_state:
-        st.session_state["page"] = pages[0]
-    st.sidebar.markdown("<div class='sidebar-title'>Navegação</div>", unsafe_allow_html=True)
-    for pg in pages:
-        if st.sidebar.button(pg, key=pg):
-            st.session_state["page"] = pg
-    return st.session_state["page"]
+
+    # Título
+    st.sidebar.markdown(
+        "<div class='sidebar-title'>Navegação</div>",
+        unsafe_allow_html=True
+    )
+
+    # Radio menu
+    selected = st.sidebar.radio(
+        label="",         # sem label extra
+        options=pages,
+        index=pages.index(st.session_state.get("page", pages[0])),
+    )
+
+    # Atualiza session_state
+    st.session_state["page"] = selected
+
+    return selected
 
 # ----------------- Telas -----------------
 import io  # no topo do seu script
