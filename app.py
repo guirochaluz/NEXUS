@@ -361,7 +361,7 @@ def mostrar_dashboard():
     st.plotly_chart(fig, use_container_width=True)
 
     # 7) Gráfico de Barras - Total por Categoria
-    if "category_name" in df.columns:
+    if "category_name" in df.columns and not df["category_name"].empty:
         fig_bar = px.bar(
             df.groupby("category_name")["total_amount"].sum().reset_index(),
             x="category_name",
@@ -373,17 +373,20 @@ def mostrar_dashboard():
         st.plotly_chart(fig_bar, use_container_width=True)
 
     # 8) Gráfico de Pizza - Proporção por Status
-    if "order_status" in df.columns:
+    if "order_status" in df.columns and not df["order_status"].empty:
+        status_counts = df["order_status"].value_counts().reset_index()
+        status_counts.columns = ["Status", "Quantidade"]
+
         fig_pie = px.pie(
-            df["order_status"].value_counts().reset_index(),
-            names="index",
-            values="order_status",
+            status_counts,
+            names="Status",
+            values="Quantidade",
             title="📊 Proporção de Vendas por Status",
             color_discrete_sequence=px.colors.sequential.Agsunset
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # 9) Gráfico lado a lado: Vendas por Dia da Semana e Top 10 Anúncios
+    # 9) Gráficos lado a lado: Vendas por Dia da Semana e Top 10 Anúncios
     col5, col6 = st.columns(2)
 
     # Vendas por Dia da Semana
@@ -418,19 +421,17 @@ def mostrar_dashboard():
     fig_top10.update_layout(yaxis={'categoryorder': 'total ascending'})
     col6.plotly_chart(fig_top10, use_container_width=True)
 
-    # 10) Download do Excel Filtrado
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Vendas")
-    buffer.seek(0)
-
-    st.download_button(
-        label="📥 Baixar Excel das vendas",
-        data=buffer,
-        file_name="vendas_filtradas.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="download_excel_vendas"
+    # 10) Gráfico de Linha - Vendas por Hora do Dia
+    df["hora_dia"] = df["date_created"].dt.hour
+    vendas_por_hora = df.groupby("hora_dia")["total_amount"].sum().reset_index()
+    fig_hora = px.line(
+        vendas_por_hora,
+        x="hora_dia",
+        y="total_amount",
+        title="🕒 Total Vendido por Hora do Dia",
+        color_discrete_sequence=["#32CD32"]
     )
+    st.plotly_chart(fig_hora, use_container_width=True)
     
 def mostrar_contas_cadastradas():
     st.header("📑 Contas Cadastradas")
