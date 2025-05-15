@@ -6,6 +6,7 @@ import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 import locale
+from streamlit_option_menu import option_menu
 from typing import Optional
 
 # Tenta configurar locale pt_BR; guarda se deu certo
@@ -222,26 +223,43 @@ def render_add_account_button():
     """, unsafe_allow_html=True)
 
 def render_sidebar():
-    pages = ["Dashboard", "Contas Cadastradas", "Relatórios", "Expedição e Logística"]
+    # lista de páginas + ícones (use os ícones do Bootstrap Icons)
+    pages = [
+        ("Dashboard", "house"),
+        ("Contas Cadastradas", "collection"),
+        ("Relatórios", "file-earmark-text"),
+        ("Expedição e Logística", "truck")
+    ]
 
-    # Título
-    st.sidebar.markdown(
-        "<div class='sidebar-title'>Navegação</div>",
-        unsafe_allow_html=True
+    # Cria o menu na sidebar
+    selected = option_menu(
+        menu_title="Navegação",         # título do menu
+        options=[p[0] for p in pages],
+        icons=[p[1] for p in pages],
+        menu_icon="list",               # ícone do título
+        default_index=[
+            p[0] for p in pages
+        ].index(st.session_state.get("page", pages[0][0])),
+        orientation="vertical",
+        styles={
+            "container": {"padding": "0px"},
+            "icon": {"color": "#FFFFFF", "font-size": "18px"},
+            "nav-link": {
+                "font-size": "16px",
+                "text-align": "left",
+                "margin":"4px 0px",
+                "--hover-color": "#444"
+            },
+            "nav-link-selected": {
+                "background-color": "#6c5ce7",
+                "color": "white"
+            },
+        },
     )
 
-    # Radio menu
-    selected = st.sidebar.radio(
-        label="",         # sem label extra
-        options=pages,
-        index=pages.index(st.session_state.get("page", pages[0])),
-    )
-
-    # Atualiza session_state
+    # Atualiza o estado e retorna
     st.session_state["page"] = selected
-
     return selected
-
 # ----------------- Telas -----------------
 import io  # no topo do seu script
 
