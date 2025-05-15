@@ -337,12 +337,12 @@ def mostrar_dashboard():
     ticket_medio = total_valor / total_vendas if total_vendas else 0
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🧾 Vendas", total_vendas)
-    c2.metric("💰 Receita total", format_currency(total_valor))
-    c3.metric("📦 Itens vendidos", int(total_itens))
-    c4.metric("🎯 Ticket médio", format_currency(ticket_medio))
+    c1.metric("🧾 Vendas Realizadas", total_vendas)
+    c2.metric("💰 Receita Total", format_currency(total_valor))
+    c3.metric("📦 Itens Vendidos", int(total_itens))
+    c4.metric("🎯 Ticket Médio", format_currency(ticket_medio))
 
-    # 6) Gráfico de Linha com linha verde
+    # 6) Gráfico de Linha - Total Vendido por Dia
     vendas_por_dia = (
         df
         .groupby(df["date_created"].dt.date)["total_amount"]
@@ -355,8 +355,9 @@ def mostrar_dashboard():
         x="date_created", 
         y="total_amount", 
         title="💵 Total Vendido por Dia",
-        color_discrete_sequence=["#32CD32"]  # Verde
+        color_discrete_sequence=["#32CD32"]
     )
+    fig.update_traces(texttemplate='%{y:,.2f}', textposition='top center')
     st.plotly_chart(fig, use_container_width=True)
 
     # 7) Gráfico de Barras - Total por Categoria
@@ -366,7 +367,7 @@ def mostrar_dashboard():
             x="category_name",
             y="total_amount",
             title="💰 Total Vendido por Categoria",
-            text_auto=True,
+            text_auto='.2s',
             color_discrete_sequence=["#32CD32"]
         )
         st.plotly_chart(fig_bar, use_container_width=True)
@@ -382,7 +383,10 @@ def mostrar_dashboard():
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # 9) Histograma - Vendas por Dia da Semana
+    # 9) Gráfico lado a lado: Vendas por Dia da Semana e Top 10 Anúncios
+    col5, col6 = st.columns(2)
+
+    # Vendas por Dia da Semana
     df["dia_semana"] = df["date_created"].dt.day_name()
     fig_hist = px.histogram(
         df,
@@ -391,21 +395,9 @@ def mostrar_dashboard():
         color_discrete_sequence=["#32CD32"],
         category_orders={"dia_semana": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}
     )
-    st.plotly_chart(fig_hist, use_container_width=True)
+    col5.plotly_chart(fig_hist, use_container_width=True)
 
-    # 10) Gráfico de Linha - Vendas por Hora do Dia
-    df["hora_dia"] = df["date_created"].dt.hour
-    vendas_por_hora = df.groupby("hora_dia")["total_amount"].sum().reset_index()
-    fig_hora = px.line(
-        vendas_por_hora,
-        x="hora_dia",
-        y="total_amount",
-        title="🕒 Total Vendido por Hora do Dia",
-        color_discrete_sequence=["#32CD32"]
-    )
-    st.plotly_chart(fig_hora, use_container_width=True)
-
-    # 11) Gráfico de Barras - Top 10 Títulos de Anúncio
+    # Top 10 Títulos de Anúncio
     top10_titulos = (
         df.groupby("item_title")["total_amount"]
         .sum()
@@ -418,14 +410,15 @@ def mostrar_dashboard():
         top10_titulos,
         x="total_amount",
         y="item_title",
-        title="🏷️ Top 10 Títulos de Anúncio",
-        text_auto=True,
+        title="🏷️ Top 10 Anúncios por Receita",
+        text_auto='.2s',
         orientation='h',
         color_discrete_sequence=["#32CD32"]
     )
-    st.plotly_chart(fig_top10, use_container_width=True)
+    fig_top10.update_layout(yaxis={'categoryorder': 'total ascending'})
+    col6.plotly_chart(fig_top10, use_container_width=True)
 
-    # 12) Download do Excel Filtrado
+    # 10) Download do Excel Filtrado
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Vendas")
