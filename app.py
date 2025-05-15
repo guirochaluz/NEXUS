@@ -166,16 +166,29 @@ def salvar_tokens_no_banco(data: dict):
 # ----------------- Carregamento de Vendas -----------------
 @st.cache_data(ttl=300)
 def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
+    """
+    Agora inclui order_id na seleção.
+    """
     if conta_id:
         sql = text("""
-            SELECT date_created, item_title, status, quantity, total_amount
+            SELECT order_id,
+                   date_created,
+                   item_title,
+                   status,
+                   quantity,
+                   total_amount
               FROM sales
              WHERE ml_user_id = :uid
         """)
         df = pd.read_sql(sql, engine, params={"uid": conta_id})
     else:
         sql = text("""
-            SELECT date_created, item_title, status, quantity, total_amount
+            SELECT order_id,
+                   date_created,
+                   item_title,
+                   status,
+                   quantity,
+                   total_amount
               FROM sales
         """)
         df = pd.read_sql(sql, engine)
@@ -292,17 +305,25 @@ def mostrar_dashboard():
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # ——————————————————————————————————————————
-    # 5) Download do CSV Filtrado
-    # ——————————————————————————————————————————
-    csv_bytes = df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Baixar CSV das vendas",
-        data=csv_bytes,
-        file_name="vendas_filtradas.csv",
-        mime="text/csv",
-        key="download_csv_vendas"
-    )
+import io
+
+# ——————————————————————————————————————————
+# 5) Download do Excel Filtrado
+# ——————————————————————————————————————————
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+    df.to_excel(writer, index=False, sheet_name="Vendas")
+    writer.save()
+
+buffer.seek(0)
+st.download_button(
+    label="📥 Baixar Excel das vendas",
+    data=buffer,
+    file_name="vendas_filtradas.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    key="download_excel_vendas"
+)
+
 
 def mostrar_contas_cadastradas():
     st.header("📑 Contas Cadastradas")
