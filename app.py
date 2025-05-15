@@ -393,54 +393,43 @@ def mostrar_dashboard():
     fig.update_traces(texttemplate='%{y:,.2f}', textposition='top center')
     st.plotly_chart(fig, use_container_width=True)
 
-    # Gráfico de Barras - Vendas por Categoria
-    if "category_name" in df.columns and not df["category_name"].empty:
-        fig_bar = px.bar(
-            df.groupby("category_name")["total_amount"].sum().reset_index(),
-            x="category_name",
-            y="total_amount",
-            title="💰 Total Vendido por Categoria",
-            labels={"category_name": "Categoria", "total_amount": "Valor Total"},
-            text_auto='.2s',
-            color_discrete_sequence=["#32CD32"]
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    # Gráfico de Pizza - Proporção de Status
-    if "order_status" in df.columns and not df["order_status"].empty:
-        status_counts = df["order_status"].value_counts().reset_index()
-        status_counts.columns = ["Status", "Quantidade"]
-
-        fig_pie = px.pie(
-            status_counts,
-            names="Status",
-            values="Quantidade",
-            title="📊 Proporção de Vendas por Status",
-            color_discrete_sequence=px.colors.sequential.Agsunset
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    # Gráfico de Barras - Top 10 Títulos de Anúncios
-    top10_titulos = (
-        df.groupby("item_title")["total_amount"]
+    # Gráfico de Linha - Vendas por Hora do Dia
+    st.markdown("### 🕒 Vendas por Hora do Dia")
+    df["hora_dia"] = df["date_created"].dt.hour
+    vendas_por_hora = (
+        df.groupby("hora_dia")["total_amount"]
         .sum()
-        .reset_index()
-        .sort_values(by="total_amount", ascending=False)
-        .head(10)
+        .reset_index(name="Valor Total")
     )
 
-    fig_top10 = px.bar(
-        top10_titulos,
-        x="total_amount",
-        y="item_title",
-        title="🏷️ Top 10 Anúncios por Receita",
-        labels={"item_title": "Título do Anúncio", "total_amount": "Valor Total"},
-        text_auto='.2s',
-        orientation='h',
+    fig_hora = px.line(
+        vendas_por_hora,
+        x="hora_dia",
+        y="Valor Total",
+        title="🕒 Total Vendido por Hora do Dia",
+        labels={"hora_dia": "Hora do Dia", "Valor Total": "Valor Total"},
         color_discrete_sequence=["#32CD32"]
     )
-    fig_top10.update_layout(yaxis={'categoryorder': 'total ascending'})
-    st.plotly_chart(fig_top10, use_container_width=True)
+    st.plotly_chart(fig_hora, use_container_width=True)
+
+    # Gráfico de Linha - Vendas por Dia da Semana
+    st.markdown("### 📅 Vendas por Dia da Semana")
+    df["dia_semana"] = df["date_created"].dt.day_name()
+    vendas_por_dia_semana = (
+        df.groupby("dia_semana")["total_amount"]
+        .sum()
+        .reset_index(name="Valor Total")
+    )
+
+    fig_dia_semana = px.line(
+        vendas_por_dia_semana,
+        x="dia_semana",
+        y="Valor Total",
+        title="📅 Total Vendido por Dia da Semana",
+        labels={"dia_semana": "Dia da Semana", "Valor Total": "Valor Total"},
+        color_discrete_sequence=["#32CD32"]
+    )
+    st.plotly_chart(fig_dia_semana, use_container_width=True)
     
 def mostrar_contas_cadastradas():
     st.header("📑 Contas Cadastradas")
