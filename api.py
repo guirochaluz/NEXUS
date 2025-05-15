@@ -35,10 +35,17 @@ def health_check():
 
 @app.get("/ml-login")
 def mercado_livre_login():
+    """
+    Redireciona o usuário para a página de login do Mercado Livre.
+    """
     return RedirectResponse(get_auth_url())
 
 @app.get("/auth/callback")
 def auth_callback(code: str = Query(None)):
+    """
+    Recebe o callback de autorização do Mercado Livre, realiza a troca do code pelo access token
+    e persiste as vendas no banco de dados.
+    """
     # 1️⃣ valida o code
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code não fornecido")
@@ -53,7 +60,12 @@ def auth_callback(code: str = Query(None)):
     try:
         ml_user_id    = str(token_payload["user_id"])
         access_token  = token_payload["access_token"]
-        get_sales(ml_user_id, access_token)
+
+        # 🔄 Aqui chamamos a versão paginada que criamos
+        vendas_coletadas = get_sales(ml_user_id, access_token)
+
+        # 🔍 Log para saber quantas foram coletadas
+        print(f"✅ Vendas salvas com sucesso: {vendas_coletadas}")
     except Exception as e:
         # Loga o erro mas não impede o redirect
         print(f"⚠️ Erro ao buscar e persistir vendas históricas: {e}")
@@ -63,6 +75,9 @@ def auth_callback(code: str = Query(None)):
 
 @app.post("/auth/refresh")
 def auth_refresh(payload: dict = Body(...)):
+    """
+    Recebe uma requisição para renovação do access token.
+    """
     ml_user_id = payload.get("user_id")
     if not ml_user_id:
         raise HTTPException(status_code=400, detail="user_id não fornecido")
