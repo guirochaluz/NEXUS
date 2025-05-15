@@ -1,4 +1,3 @@
-```python
 import os
 import io
 from datetime import date, timedelta
