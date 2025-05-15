@@ -34,7 +34,7 @@ def format_currency(valor: float) -> str:
 
 # ----------------- Configuração da Página -----------------
 st.set_page_config(
-    page_title="Dashboard de Vendas - NEXUS",
+    page_title="Sistema de Gestão - NEXUS",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
