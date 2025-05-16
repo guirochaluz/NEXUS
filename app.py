@@ -475,23 +475,37 @@ def mostrar_dashboard():
     st.plotly_chart(fig_dia_semana, use_container_width=True)
 
 def mostrar_contas_cadastradas():
-    st.header("📑 Contas Cadastradas")
+    st.header("🏷️ Contas Cadastradas")
+    
+    # Botão para Adicionar Nova Conta
     render_add_account_button()
-    df = pd.read_sql(text("SELECT ml_user_id, access_token FROM user_tokens"), engine)
+
+    # Carregar as contas cadastradas
+    df = pd.read_sql(text("SELECT ml_user_id, nickname, access_token, refresh_token FROM user_tokens ORDER BY nickname"), engine)
+    
     if df.empty:
         st.warning("Nenhuma conta cadastrada.")
         return
+
+    # Loop para criar expansores para cada conta
     for row in df.itertuples(index=False):
-        with st.expander(f"🔗 Conta ML: {row.ml_user_id}"):
-            st.write(f"**Access Token:** {row.access_token}")
+        with st.expander(f"🔗 Conta ML: {row.nickname}"):
+            st.write(f"**User ID:** {row.ml_user_id}")
+            st.write(f"**Access Token:** `{row.access_token}`")
+            st.write(f"**Refresh Token:** `{row.refresh_token}`")
+            
+            # Botão para renovar o token
             if st.button("🔄 Renovar Token", key=f"renew_{row.ml_user_id}"):
-                resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": row.ml_user_id})
-                if resp.ok:
-                    data = resp.json()
-                    salvar_tokens_no_banco(data)
-                    st.success("Token atualizado com sucesso!")
-                else:
-                    st.error("Erro ao atualizar o token.")
+                try:
+                    resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": row.ml_user_id})
+                    if resp.ok:
+                        data = resp.json()
+                        salvar_tokens_no_banco(data)
+                        st.success("✅ Token atualizado com sucesso!")
+                    else:
+                        st.error(f"❌ Erro ao atualizar o token: {resp.text}")
+                except Exception as e:
+                    st.error(f"❌ Erro ao conectar com o servidor: {e}")
 
 def mostrar_relatorios():
     st.header("📋 Relatórios de Vendas")
@@ -515,10 +529,6 @@ def mostrar_relatorios():
 # Funções para cada página
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
-    st.info("Em breve...")
-
-def mostrar_contas_cadastradas():
-    st.header("🏷️ Contas Cadastradas")
     st.info("Em breve...")
 
 def mostrar_relatorios():
