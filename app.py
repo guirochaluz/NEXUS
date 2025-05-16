@@ -50,6 +50,7 @@ params = st.query_params
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
     sync_all_accounts()
+    carregar_vendas.clear()
     st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
@@ -60,6 +61,7 @@ if not st.session_state["authenticated"]:
         if username == "GRUPONEXUS" and password == "NEXU$2025":
             st.session_state["authenticated"] = True
             sync_all_accounts()
+            carregar_vendas.clear()
             st.rerun()
         else:
             st.error("Credenciais inválidas")
