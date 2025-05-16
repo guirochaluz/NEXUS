@@ -15,10 +15,10 @@ class UserToken(Base):
 class Sale(Base):
     __tablename__ = "sales"
 
-    id                = Column(Integer, primary_key=True, index=True)
-    order_id          = Column(String, unique=True, index=True, nullable=False)  # antes não existia
-    ml_user_id        = Column(Integer, index=True, nullable=False)
-    buyer_id          = Column(String, nullable=True)
+    id                = Column(BigInteger, primary_key=True, index=True)
+    order_id          = Column(BigInteger, unique=True, index=True, nullable=False)  # antes não existia
+    ml_user_id        = Column(BigInteger, index=True, nullable=False)
+    buyer_id          = Column(BigInteger, nullable=True)
     buyer_nickname    = Column(String, nullable=True)
     buyer_email       = Column(String, nullable=True)
     buyer_first_name  = Column(String, nullable=True)
