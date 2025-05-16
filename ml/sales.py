@@ -69,51 +69,43 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
     db = SessionLocal()
     total_saved = 0
-
     try:
-        # … refresh do token …
+        # … seu refresh de token …
 
-        # 1) Último date_created no banco (as aware UTC)
+        # 1) Pega a última data
         last_db_date = (
             db.query(func.max(Sale.date_created))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
-        if last_db_date and last_db_date.tzinfo is None:
-            last_db_date = last_db_date.replace(tzinfo=tzutc())
-        print(f">>> DEBUG last_db_date (aware UTC): {last_db_date}")
+        if not last_db_date:
+            # se nunca importou nada, faça um fetch “full” ou trate como zero
+            return get_full_sales(ml_user_id, access_token)
 
-        # 2) Busca a primeira página
-        resp = requests.get(
-            f"{API_BASE}?seller={ml_user_id}&order.status=paid&offset=0&limit={FULL_PAGE_SIZE}",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
+        # 2) Chama API pedindo só o que foi criado depois daquela data:
+        params = {
+            "seller": ml_user_id,
+            "order.status": "paid",
+            "limit": FULL_PAGE_SIZE,
+            "sort": "date_desc",
+            "order.date_created.from": last_db_date.isoformat(),
+        }
+        resp = requests.get(API_BASE, params=params,
+                            headers={"Authorization": f"Bearer {access_token}"})
         resp.raise_for_status()
         orders = resp.json().get("results", [])
         if not orders:
             return 0
 
-        # 3) Filtra novass por date_created
-        novas = []
+        # 3) Persiste sem duplicar pelo order_id
         for o in orders:
-            order_dt = parser.isoparse(o["date_created"])
-            # todos aware, comparação segura
-            if last_db_date and order_dt <= last_db_date:
-                continue
-            novas.append(o)
-
-        if not novas:
-            return 0
-
-        # 4) Persiste os novos
-        for order in novas:
-            sale = _order_to_sale(order, ml_user_id)
-            db.add(sale)
-            total_saved += 1
+            oid = str(o["id"])
+            if not db.query(Sale).filter_by(order_id=oid).first():
+                db.add(_order_to_sale(o, ml_user_id))
+                total_saved += 1
 
         db.commit()
-
-    except Exception:
+    except:
         db.rollback()
         raise
     finally:
