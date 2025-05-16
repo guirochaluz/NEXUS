@@ -67,22 +67,47 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
 
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
+    """
+    Coleta apenas as vendas criadas após o último import (date_created),
+    evitando duplicação pelo order_id. Se não houver vendas anteriores,
+    faz um full import.
+    """
     db = SessionLocal()
     total_saved = 0
-    try:
-        # … seu refresh de token …
 
-        # 1) Pega a última data
+    try:
+        # 0) Refresh do access_token via backend
+        try:
+            refresh_resp = requests.post(
+                f"{BACKEND_URL}/auth/refresh",
+                json={"user_id": ml_user_id}
+            )
+            refresh_resp.raise_for_status()
+            # assume que o novo token foi salvo em user_tokens
+            new_token = db.execute(
+                text("SELECT access_token FROM user_tokens WHERE ml_user_id = :uid"),
+                {"uid": ml_user_id}
+            ).scalar()
+            if new_token:
+                access_token = new_token
+        except Exception as e:
+            print(f"⚠️ Falha ao atualizar token para {ml_user_id}: {e}")
+
+        # 1) Pega a última data criada no banco
         last_db_date = (
             db.query(func.max(Sale.date_created))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
-        if not last_db_date:
-            # se nunca importou nada, faça um fetch “full” ou trate como zero
+        # Se nunca importou nada, faça full import
+        if last_db_date is None:
             return get_full_sales(ml_user_id, access_token)
 
-        # 2) Chama API pedindo só o que foi criado depois daquela data:
+        # Garante que seja offset-aware UTC
+        if last_db_date.tzinfo is None:
+            last_db_date = last_db_date.replace(tzinfo=tzutc())
+
+        # 2) Chama API pedindo só vendas criadas após last_db_date
         params = {
             "seller": ml_user_id,
             "order.status": "paid",
@@ -97,7 +122,7 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         if not orders:
             return 0
 
-        # 3) Persiste sem duplicar pelo order_id
+        # 3) Persiste as novas, checando order_id para não duplicar
         for o in orders:
             oid = str(o["id"])
             if not db.query(Sale).filter_by(order_id=oid).first():
@@ -105,9 +130,11 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
                 total_saved += 1
 
         db.commit()
-    except:
+
+    except Exception:
         db.rollback()
         raise
+
     finally:
         db.close()
 
