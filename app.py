@@ -174,27 +174,29 @@ def salvar_tokens_no_banco(data: dict):
 def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
     if conta_id:
         sql = text("""
-            SELECT order_id,
-                   date_created,
-                   item_title,
-                   status,
-                   quantity,
-                   total_amount,
-                   nickname
-              FROM sales
-             WHERE ml_user_id = :uid
+            SELECT s.order_id,
+                   s.date_created,
+                   s.item_title,
+                   s.status,
+                   s.quantity,
+                   s.total_amount,
+                   u.nickname
+              FROM sales s
+              LEFT JOIN user_tokens u ON s.ml_user_id = u.ml_user_id
+             WHERE s.ml_user_id = :uid
         """)
         df = pd.read_sql(sql, engine, params={"uid": conta_id})
     else:
         sql = text("""
-            SELECT order_id,
-                   date_created,
-                   item_title,
-                   status,
-                   quantity,
-                   total_amount,
-                   nickname
-              FROM sales
+            SELECT s.order_id,
+                   s.date_created,
+                   s.item_title,
+                   s.status,
+                   s.quantity,
+                   s.total_amount,
+                   u.nickname
+              FROM sales s
+              LEFT JOIN user_tokens u ON s.ml_user_id = u.ml_user_id
         """)
         df = pd.read_sql(sql, engine)
 
