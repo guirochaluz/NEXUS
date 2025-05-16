@@ -496,8 +496,29 @@ def mostrar_relatorios():
     else:
         st.dataframe(df_filt)
 
+# Funções para cada página
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
+    st.info("Em breve...")
+
+def mostrar_contas_cadastradas():
+    st.header("🏷️ Contas Cadastradas")
+    st.info("Em breve...")
+
+def mostrar_relatorios():
+    st.header("📑 Relatórios")
+    st.info("Em breve...")
+
+def mostrar_gestao_sku():
+    st.header("📦 Gestão de SKU")
+    st.info("Em breve...")
+
+def mostrar_gestao_despesas():
+    st.header("💰 Gestão de Despesas")
+    st.info("Em breve...")
+
+def mostrar_painel_metas():
+    st.header("🎯 Painel de Metas")
     st.info("Em breve...")
 
 # ----------------- Fluxo Principal -----------------
@@ -513,4 +534,9 @@ elif pagina == "Relatórios":
     mostrar_relatorios()
 elif pagina == "Expedição e Logística":
     mostrar_expedicao_logistica()
-
+elif pagina == "Gestão de SKU":
+    mostrar_gestao_sku()
+elif pagina == "Gestão de Despesas":
+    mostrar_gestao_despesas()
+elif pagina == "Painel de Metas":
+    mostrar_painel_metas()
