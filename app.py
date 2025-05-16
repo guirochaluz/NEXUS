@@ -434,45 +434,70 @@ def mostrar_dashboard():
     fig.update_traces(mode='lines+markers', marker=dict(size=5), texttemplate='%{y:,.2f}', textposition='top center')
     st.plotly_chart(fig, use_container_width=True)
 
-    # =================== Gráfico de Linha - Vendas por Hora do Dia ===================
-    st.markdown("### 🕒 Vendas por Hora do Dia")
-    df["hora_dia"] = df["date_created"].dt.hour
-    vendas_por_hora = (
-        df.groupby("hora_dia")["total_amount"]
-        .sum()
-        .reset_index(name="Valor Total")
-    )
+# =================== Gráfico de Linha - Vendas Acumuladas por Hora do Dia ===================
+st.markdown("### 🕒 Vendas Acumuladas e Média Acumulada por Hora do Dia")
 
-    fig_hora = px.line(
-        vendas_por_hora,
-        x="hora_dia",
-        y="Valor Total",
-        title="🕒 Total Vendido por Hora do Dia",
-        labels={"hora_dia": "Hora do Dia", "Valor Total": "Valor Total"},
-        color_discrete_sequence=["#32CD32"]
-    )
-    st.plotly_chart(fig_hora, use_container_width=True)
+# extrai a hora
+df["hora_dia"] = df["date_created"].dt.hour
+
+# soma total por hora
+vendas_por_hora = (
+    df.groupby("hora_dia")["total_amount"]
+      .sum()
+      .reindex(range(24), fill_value=0)  # garante todas as horas 0–23
+      .reset_index(name="Valor Total")
+)
+
+# calcula acumulado e média cumulativa
+vendas_por_hora = vendas_por_hora.sort_values("hora_dia")
+vendas_por_hora["Valor Acumulado"] = vendas_por_hora["Valor Total"].cumsum()
+vendas_por_hora["Média Acumulada"]  = vendas_por_hora["Valor Total"].expanding().mean()
+
+# plota as duas séries num único gráfico
+fig_hora = px.line(
+    vendas_por_hora,
+    x="hora_dia",
+    y=["Valor Acumulado", "Média Acumulada"],
+    title="🕒 Vendas Acumuladas e Média Acumulada por Hora do Dia",
+    labels={
+        "hora_dia": "Hora do Dia",
+        "value": "R$",
+        "variable": "Métrica"
+    },
+)
+st.plotly_chart(fig_hora, use_container_width=True)
 
     # =================== Gráfico de Histograma - Vendas por Dia da Semana ===================
-    st.markdown("### 📅 Vendas por Dia da Semana")
-    df["dia_semana"] = df["date_created"].dt.day_name()
-    vendas_por_dia_semana = (
-        df.groupby("dia_semana")["total_amount"]
-        .sum()
-        .reindex(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-        .reset_index(name="Valor Total")
-    )
+st.markdown("### 📅 Vendas por Dia da Semana (Média)")
 
-    fig_dia_semana = px.bar(
-        vendas_por_dia_semana,
-        x="dia_semana",
-        y="Valor Total",
-        title="📅 Total Vendido por Dia da Semana",
-        labels={"dia_semana": "Dia da Semana", "Valor Total": "Valor Total"},
-        text_auto='.2s',
-        color_discrete_sequence=["#32CD32"]
-    )
-    st.plotly_chart(fig_dia_semana, use_container_width=True)
+# extrai o nome do dia
+df["dia_semana"] = df["date_created"].dt.day_name()
+
+# calcula a média em vez da soma
+vendas_por_dia_semana = (
+    df.groupby("dia_semana")["total_amount"]
+      .mean()
+      .reindex(
+          ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+      )
+      .reset_index(name="Valor Médio")
+)
+
+# cria o bar chart
+fig_dia_semana = px.bar(
+    vendas_por_dia_semana,
+    x="dia_semana",
+    y="Valor Médio",
+    title="📅 Média Vendida por Dia da Semana",
+    labels={
+        "dia_semana": "Dia da Semana",
+        "Valor Médio": "Valor Médio"
+    },
+    text_auto='.2s',
+    color_discrete_sequence=["#32CD32"]
+)
+
+st.plotly_chart(fig_dia_semana, use_container_width=True)
 
 def mostrar_contas_cadastradas():
     st.header("🏷️ Contas Cadastradas")
