@@ -307,7 +307,7 @@ def mostrar_dashboard():
         # limpa cache para recarregar vendas novas
         carregar_vendas.clear()
         st.success(f"{count} vendas novas sincronizadas com sucesso!")
-        st.experimental_rerun()
+        st.rerun()
 
     # 0) Carrega dados brutos
     df_full = carregar_vendas(None)
