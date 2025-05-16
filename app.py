@@ -179,7 +179,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    item_title,
                    status,
                    quantity,
-                   total_amount
+                   total_amount,
+                   nickname
               FROM sales
              WHERE ml_user_id = :uid
         """)
@@ -191,7 +192,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    item_title,
                    status,
                    quantity,
-                   total_amount
+                   total_amount,
+                   nickname
               FROM sales
         """)
         df = pd.read_sql(sql, engine)
