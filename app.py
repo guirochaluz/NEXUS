@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import locale
 from streamlit_option_menu import option_menu
 from typing import Optional
+from sales import sync_all_accounts
 
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
@@ -48,6 +49,7 @@ params = st.query_params
 # login automático via ?nexus_auth=success
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
+    sync_all_accounts()
     st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
@@ -57,6 +59,7 @@ if not st.session_state["authenticated"]:
     if st.button("Entrar"):
         if username == "GRUPONEXUS" and password == "NEXU$2025":
             st.session_state["authenticated"] = True
+            sync_all_accounts()
             st.rerun()
         else:
             st.error("Credenciais inválidas")
@@ -298,6 +301,13 @@ def mostrar_dashboard():
     )
     
     st.header("📊 Dashboard de Vendas")
+    # Botão para sincronização incremental
+    if st.button("🔄 Sincronizar Vendas"):
+        count = sync_all_accounts()
+        # limpa cache para recarregar vendas novas
+        carregar_vendas.clear()
+        st.success(f"{count} vendas novas sincronizadas com sucesso!")
+        st.experimental_rerun()
 
     # 0) Carrega dados brutos
     df_full = carregar_vendas(None)
