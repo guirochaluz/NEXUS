@@ -5,12 +5,12 @@ Base = declarative_base()
 
 class UserToken(Base):
     __tablename__ = "user_tokens"
+    id            = Column(BigInteger, primary_key=True, index=True)
+    ml_user_id    = Column(BigInteger, unique=True, index=True)   # agora um BIGINT
+    access_token  = Column(String, nullable=False)
+    refresh_token = Column(String, nullable=False)
+    expires_at    = Column(DateTime, nullable=False)
 
-    id = Column(Integer, primary_key=True, index=True)
-    ml_user_id = Column(Integer, unique=True, index=True, nullable=False)
-    access_token = Column(Text, nullable=False)
-    refresh_token = Column(Text, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
 
 class Sale(Base):
     __tablename__ = "sales"
