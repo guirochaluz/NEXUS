@@ -50,7 +50,7 @@ params = st.query_params
 if params.get("nexus_auth", [None])[0] == "success":
     st.session_state["authenticated"] = True
     sync_all_accounts()
-    carregar_vendas.clear()
+    st.cache_data.clear()
     st.experimental_set_query_params()
 
 if not st.session_state["authenticated"]:
@@ -61,7 +61,7 @@ if not st.session_state["authenticated"]:
         if username == "GRUPONEXUS" and password == "NEXU$2025":
             st.session_state["authenticated"] = True
             sync_all_accounts()
-            carregar_vendas.clear()
+            st.cache_data.clear()
             st.rerun()
         else:
             st.error("Credenciais inválidas")
@@ -141,7 +141,7 @@ def ml_callback():
     if resp.ok:
         data = resp.json()                   # {"user_id": "...", ...}
         salvar_tokens_no_banco(data)
-        carregar_vendas.clear()             # limpa cache para puxar vendas novas
+        st.cache_data.clear()             # limpa cache para puxar vendas novas
         st.experimental_set_query_params(account=data["user_id"])
         st.session_state["conta"] = data["user_id"]
         st.success("✅ Conta ML autenticada com sucesso!")
@@ -307,7 +307,7 @@ def mostrar_dashboard():
     if st.button("🔄 Sincronizar Vendas"):
         count = sync_all_accounts()
         # limpa cache para recarregar vendas novas
-        carregar_vendas.clear()
+        st.cache_data.clear()
         st.success(f"{count} vendas novas sincronizadas com sucesso!")
         st.rerun()
 
