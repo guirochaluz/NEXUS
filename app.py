@@ -386,44 +386,44 @@ def mostrar_dashboard():
     c4.metric("🎯 Ticket Médio", format_currency(ticket_medio))
     
     # Seletor de visualização diária ou mensal
-tipo_visualizacao = st.radio("Visualização do Gráfico", ["Diária", "Mensal"], horizontal=True)
+    tipo_visualizacao = st.radio("Visualização do Gráfico", ["Diária", "Mensal"], horizontal=True)
 
-if tipo_visualizacao == "Diária":
-    vendas_por_data = (
-        df
-        .groupby([df["date_created"].dt.date, "nickname"])["total_amount"]
-        .sum()
-        .reset_index(name="Valor Total")
+    # 5) Gráfico de Linha por Nickname
+    if tipo_visualizacao == "Diária":
+        vendas_por_data = (
+            df
+            .groupby([df["date_created"].dt.date, "nickname"])["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        eixo_x = "date_created"
+        titulo_grafico = "💵 Total Vendido por Dia (Linha por Nickname)"
+    else:
+        vendas_por_data = (
+            df
+            .groupby([df["date_created"].dt.to_period("M"), "nickname"])["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        vendas_por_data["date_created"] = vendas_por_data["date_created"].astype(str)
+        eixo_x = "date_created"
+        titulo_grafico = "💵 Total Vendido por Mês (Linha por Nickname)"
+
+    # Gráfico de Linha
+    fig = px.line(
+        vendas_por_data,
+        x=eixo_x,
+        y="Valor Total",
+        color="nickname",
+        title=titulo_grafico,
+        labels={"Valor Total": "Valor Total", "date_created": "Data", "nickname": "Conta"},
+        color_discrete_sequence=px.colors.sequential.Agsunset
     )
-    eixo_x = "date_created"
-    titulo_grafico = "💵 Total Vendido por Dia (Linha por Nickname)"
-else:
-    vendas_por_data = (
-        df
-        .groupby([df["date_created"].dt.to_period("M"), "nickname"])["total_amount"]
-        .sum()
-        .reset_index(name="Valor Total")
-    )
-    vendas_por_data["date_created"] = vendas_por_data["date_created"].astype(str)
-    eixo_x = "date_created"
-    titulo_grafico = "💵 Total Vendido por Mês (Linha por Nickname)"
 
-# Gráfico de Linha
-fig = px.line(
-    vendas_por_data,
-    x=eixo_x,
-    y="Valor Total",
-    color="nickname",
-    title=titulo_grafico,
-    labels={"Valor Total": "Valor Total", "date_created": "Data", "nickname": "Conta"},
-    color_discrete_sequence=px.colors.sequential.Agsunset
-)
+    fig.update_traces(mode='lines+markers', marker=dict(size=5), texttemplate='%{y:,.2f}', textposition='top center')
+    st.plotly_chart(fig, use_container_width=True)
 
-fig.update_traces(mode='lines+markers', marker=dict(size=5), texttemplate='%{y:,.2f}', textposition='top center')
-st.plotly_chart(fig, use_container_width=True)
-
-    
-    # Gráfico de Linha - Vendas por Hora do Dia
+    # =================== Gráfico de Linha - Vendas por Hora do Dia ===================
     st.markdown("### 🕒 Vendas por Hora do Dia")
     df["hora_dia"] = df["date_created"].dt.hour
     vendas_por_hora = (
@@ -442,7 +442,7 @@ st.plotly_chart(fig, use_container_width=True)
     )
     st.plotly_chart(fig_hora, use_container_width=True)
 
-    # Gráfico de Histograma - Vendas por Dia da Semana
+    # =================== Gráfico de Histograma - Vendas por Dia da Semana ===================
     st.markdown("### 📅 Vendas por Dia da Semana")
     df["dia_semana"] = df["date_created"].dt.day_name()
     vendas_por_dia_semana = (
@@ -462,7 +462,7 @@ st.plotly_chart(fig, use_container_width=True)
         color_discrete_sequence=["#32CD32"]
     )
     st.plotly_chart(fig_dia_semana, use_container_width=True)
-    
+
 def mostrar_contas_cadastradas():
     st.header("📑 Contas Cadastradas")
     render_add_account_button()
