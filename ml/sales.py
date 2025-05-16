@@ -65,9 +65,8 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
     """
-    Coleta **só a primeira página** (até 50 vendas) e insere apenas
+    Coleta só a primeira página (até 50 vendas) e insere apenas
     os pedidos com order_id maior que o último já importado.
-
     Antes disso, faz refresh do access_token chamando o backend.
     """
     db = SessionLocal()
@@ -91,13 +90,13 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
             if new_token:
                 access_token = new_token
 
-        # 1) Descobre o último order_id existente
-        last_order_id = (
+        # 1) Descobre o último order_id existente (como inteiro)
+        last_db_id = (
             db.query(func.max(Sale.order_id))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
-        last_order_id = str(last_order_id) if last_order_id else None
+        last_id_int = int(last_db_id) if last_db_id is not None else None
 
         # 2) Busca a primeira página
         url = (
@@ -115,8 +114,18 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         if not orders:
             return 0
 
-        # 3) Filtra só os novos
-        novas = [o for o in orders if not last_order_id or str(o["id"]) > last_order_id]
+        # DEBUG: veja quais IDs vieram e qual o último salvo
+        print(f"IDs retornados na primeira página: {[o['id'] for o in orders]}")
+        print(f"Último order_id no banco: {last_id_int}")
+
+        # 3) Filtra numericamente só os novos
+        novas = []
+        for o in orders:
+            oid = int(o["id"])
+            if last_id_int is not None and oid <= last_id_int:
+                continue
+            novas.append(o)
+
         if not novas:
             return 0
 
