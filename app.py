@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import locale
 from streamlit_option_menu import option_menu
 from typing import Optional
-from sales import sync_all_accounts
+from ml.sales import sync_all_accounts
 
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
