@@ -231,25 +231,36 @@ from streamlit_option_menu import option_menu
 
 def render_sidebar():
     with st.sidebar:
-        # Título
-        st.markdown("## Navegação")
-        st.markdown("---")
-
+        # Menu de navegação sem título
         selected = option_menu(
             menu_title=None,
             options=[
                 "Dashboard",
                 "Contas Cadastradas",
                 "Relatórios",
-                "Expedição e Logística"
+                "Expedição e Logística",
+                "Gestão de SKU",
+                "Gestão de Despesas",
+                "Painel de Metas"
             ],
-            icons=["house", "collection", "file-earmark-text", "truck"],
+            icons=[
+                "house",
+                "collection",
+                "file-earmark-text",
+                "truck",
+                "box-seam",
+                "currency-dollar",
+                "bar-chart-line"
+            ],
             menu_icon="list",
             default_index=[
                 "Dashboard",
                 "Contas Cadastradas",
                 "Relatórios",
-                "Expedição e Logística"
+                "Expedição e Logística",
+                "Gestão de SKU",
+                "Gestão de Despesas",
+                "Painel de Metas"
             ].index(st.session_state.get("page", "Dashboard")),
             orientation="vertical",
             styles={
@@ -280,7 +291,6 @@ def render_sidebar():
 
     st.session_state["page"] = selected
     return selected
-
 # ----------------- Telas -----------------
 import io  # no topo do seu script
 
@@ -371,42 +381,42 @@ def mostrar_dashboard():
     c3.metric("📦 Itens Vendidos", int(total_itens))
     c4.metric("🎯 Ticket Médio", format_currency(ticket_medio))
     
-   # Seletor de visualização diária ou mensal
-tipo_visualizacao = st.radio("Visualização do Gráfico", ["Diária", "Mensal"], horizontal=True)
+    # Seletor de visualização diária ou mensal
+    tipo_visualizacao = st.radio("Visualização do Gráfico", ["Diária", "Mensal"], horizontal=True)
 
-if tipo_visualizacao == "Diária":
-    vendas_por_data = (
-        df
-        .groupby([df["date_created"].dt.date, "nickname"])["total_amount"]
-        .sum()
-        .reset_index(name="Valor Total")
+    if tipo_visualizacao == "Diária":
+        vendas_por_data = (
+            df
+            .groupby([df["date_created"].dt.date, "nickname"])["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        eixo_x = "date_created"
+        titulo_grafico = "💵 Total Vendido por Dia (Empilhado por Nickname)"
+    else:
+        vendas_por_data = (
+            df
+            .groupby([df["date_created"].dt.to_period("M"), "nickname"])["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        vendas_por_data["date_created"] = vendas_por_data["date_created"].astype(str)
+        eixo_x = "date_created"
+        titulo_grafico = "💵 Total Vendido por Mês (Empilhado por Nickname)"
+
+    # Gráfico de Barras Empilhadas
+    fig = px.bar(
+        vendas_por_data,
+        x=eixo_x,
+        y="Valor Total",
+        color="nickname",
+        title=titulo_grafico,
+        labels={"Valor Total": "Valor Total", "date_created": "Data", "nickname": "Conta"},
+        color_discrete_sequence=px.colors.sequential.Agsunset
     )
-    eixo_x = "date_created"
-    titulo_grafico = "💵 Total Vendido por Dia (Empilhado por Nickname)"
-else:
-    vendas_por_data = (
-        df
-        .groupby([df["date_created"].dt.to_period("M"), "nickname"])["total_amount"]
-        .sum()
-        .reset_index(name="Valor Total")
-    )
-    vendas_por_data["date_created"] = vendas_por_data["date_created"].astype(str)
-    eixo_x = "date_created"
-    titulo_grafico = "💵 Total Vendido por Mês (Empilhado por Nickname)"
 
-# Gráfico de Barras Empilhadas
-fig = px.bar(
-    vendas_por_data,
-    x=eixo_x,
-    y="Valor Total",
-    color="nickname",
-    title=titulo_grafico,
-    labels={"Valor Total": "Valor Total", "date_created": "Data", "nickname": "Conta"},
-    color_discrete_sequence=px.colors.sequential.Agsunset
-)
-
-fig.update_traces(texttemplate='%{y:,.2f}', textposition='inside')
-st.plotly_chart(fig, use_container_width=True)
+    fig.update_traces(texttemplate='%{y:,.2f}', textposition='inside')
+    st.plotly_chart(fig, use_container_width=True)
 
     # Gráfico de Linha - Vendas por Hora do Dia
     st.markdown("### 🕒 Vendas por Hora do Dia")
@@ -427,7 +437,7 @@ st.plotly_chart(fig, use_container_width=True)
     )
     st.plotly_chart(fig_hora, use_container_width=True)
 
-# Gráfico de Histograma - Vendas por Dia da Semana
+    # Gráfico de Histograma - Vendas por Dia da Semana
     st.markdown("### 📅 Vendas por Dia da Semana")
     df["dia_semana"] = df["date_created"].dt.day_name()
     vendas_por_dia_semana = (
