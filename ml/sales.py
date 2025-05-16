@@ -26,15 +26,15 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
     try:
         while True:
-            url = (
-                f"{API_BASE}"
-                f"?seller={ml_user_id}"
-                f"&order.status=paid"
-                f"&offset={offset}"
-                f"&limit={FULL_PAGE_SIZE}"
-            )
+            params = {
+                "seller": ml_user_id,
+                "order.status": "paid",
+                "offset": offset,
+                "limit": FULL_PAGE_SIZE,
+                "sort": "date_desc",  # garante ordem cronológica
+            }
             headers = {"Authorization": f"Bearer {access_token}"}
-            resp = requests.get(url, headers=headers)
+            resp = requests.get(API_BASE, params=params, headers=headers)
             resp.raise_for_status()
 
             orders = resp.json().get("results", [])
@@ -43,6 +43,7 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
             for order in orders:
                 order_id = str(order["id"])
+                # evita duplicar pelo order_id
                 if db.query(Sale).filter_by(order_id=order_id).first():
                     continue
                 sale = _order_to_sale(order, ml_user_id)
@@ -65,8 +66,8 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
     """
-    Coleta só a primeira página (até 50 vendas) e insere apenas
-    os pedidos com order_id maior que o último já importado.
+    Coleta só a primeira página (até 50 vendas) em ordem decrescente de data
+    e insere apenas os pedidos com date_created maior que o último já importado.
     Antes disso, faz refresh do access_token chamando o backend.
     """
     db = SessionLocal()
@@ -90,39 +91,37 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
             if new_token:
                 access_token = new_token
 
-        # 1) Descobre o último order_id existente (como inteiro)
-        last_db_id = (
-            db.query(func.max(Sale.order_id))
+        # 1) Descobre a data mais recente já salva
+        last_db_date = (
+            db.query(func.max(Sale.date_created))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
-        last_id_int = int(last_db_id) if last_db_id is not None else None
 
-        # 2) Busca a primeira página
-        url = (
-            f"{API_BASE}"
-            f"?seller={ml_user_id}"
-            f"&order.status=paid"
-            f"&offset=0"
-            f"&limit={FULL_PAGE_SIZE}"
-        )
+        # 2) Busca a primeira página, ordenada pela data mais recente primeiro
+        params = {
+            "seller": ml_user_id,
+            "order.status": "paid",
+            "offset": 0,
+            "limit": FULL_PAGE_SIZE,
+            "sort": "date_desc",
+        }
         headers = {"Authorization": f"Bearer {access_token}"}
-        resp = requests.get(url, headers=headers)
+        resp = requests.get(API_BASE, params=params, headers=headers)
         resp.raise_for_status()
 
         orders = resp.json().get("results", [])
         if not orders:
             return 0
 
-        # DEBUG: veja quais IDs vieram e qual o último salvo
-        print(f"IDs retornados na primeira página: {[o['id'] for o in orders]}")
-        print(f"Último order_id no banco: {last_id_int}")
-
-        # 3) Filtra numericamente só os novos
+        # 3) Filtra só os que têm data maior que a última salva e não existem no banco
         novas = []
         for o in orders:
-            oid = int(o["id"])
-            if last_id_int is not None and oid <= last_id_int:
+            order_dt = parser.isoparse(o["date_created"])
+            order_id = str(o["id"])
+            if last_db_date and order_dt <= last_db_date:
+                continue
+            if db.query(Sale).filter_by(order_id=order_id).first():
                 continue
             novas.append(o)
 
@@ -159,6 +158,7 @@ def sync_all_accounts() -> int:
             total += get_incremental_sales(str(ml_user_id), access_token)
     finally:
         db.close()
+
     print(f"🗂️ Sincronização completa. Total de vendas importadas: {total}")
     return total
 
