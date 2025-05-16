@@ -2,116 +2,112 @@ import requests
 from dateutil import parser
 from database.db import SessionLocal
 from database.models import Sale
-from sqlalchemy import func
-from typing import Optional
+from sqlalchemy import func, text
+from typing import List
 
-def get_sales(ml_user_id: str, access_token: str) -> int:
+API_BASE = "https://api.mercadolibre.com/orders/search"
+FULL_PAGE_SIZE = 50
+
+
+def get_full_sales(ml_user_id: str, access_token: str) -> int:
     """
-    Sincroniza incrementalmente as vendas mais recentes do Mercado Livre
-    (primeira página de até 50 resultados), salvando apenas os pedidos
-    com order_id maior do que o último importado para o banco.
+    Coleta **todas** as vendas paginadas do Mercado Livre e salva no banco,
+    evitando duplicação pelo order_id. Usado para importar histórico completo.
+    """
+    db = SessionLocal()
+    offset = 0
+    total_saved = 0
 
-    Args:
-        ml_user_id (str): ID do usuário do Mercado Livre.
-        access_token (str): Token de acesso para autenticação.
+    try:
+        while True:
+            url = (
+                f"{API_BASE}"
+                f"?seller={ml_user_id}"
+                f"&order.status=paid"
+                f"&offset={offset}"
+                f"&limit={FULL_PAGE_SIZE}"
+            )
+            headers = {"Authorization": f"Bearer {access_token}"}
+            resp = requests.get(url, headers=headers)
+            resp.raise_for_status()
 
-    Returns:
-        int: Quantidade de vendas novas salvas no banco de dados.
+            orders = resp.json().get("results", [])
+            if not orders:
+                break
+
+            for order in orders:
+                order_id = str(order["id"])
+                if db.query(Sale).filter_by(order_id=order_id).first():
+                    continue
+
+                sale = _order_to_sale(order, ml_user_id)
+                db.add(sale)
+                total_saved += 1
+
+            db.commit()
+
+            if len(orders) < FULL_PAGE_SIZE:
+                break
+            offset += FULL_PAGE_SIZE
+
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+    return total_saved
+
+
+def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
+    """
+    Coleta **só a primeira página** (até 50 vendas) e insere apenas
+    os pedidos com order_id maior que o último já importado.
     """
     db = SessionLocal()
     total_saved = 0
 
     try:
-        # 1) Identifica o último order_id já salvo para essa conta
+        # 1) Descobre o último order_id existente
         last_order_id = (
             db.query(func.max(Sale.order_id))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
-        last_order_id = str(last_order_id) if last_order_id is not None else None
-        print(f"Último order_id importado para {ml_user_id}: {last_order_id}")
+        last_order_id = str(last_order_id) if last_order_id else None
 
-        # 2) Puxa a primeira página de até 50 pedidos mais recentes
+        # 2) Busca a primeira página
         url = (
-            f"https://api.mercadolibre.com/orders/search"
+            f"{API_BASE}"
             f"?seller={ml_user_id}"
             f"&order.status=paid"
             f"&offset=0"
-            f"&limit=50"
+            f"&limit={FULL_PAGE_SIZE}"
         )
         headers = {"Authorization": f"Bearer {access_token}"}
-
-        try:
-            resp = requests.get(url, headers=headers)
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            print(f"❌ Erro HTTP ao buscar vendas: {e}")
-            return 0
+        resp = requests.get(url, headers=headers)
+        resp.raise_for_status()
 
         orders = resp.json().get("results", [])
         if not orders:
-            print("🔍 Nenhuma venda encontrada na primeira página.")
             return 0
 
-        # 3) Filtra apenas as vendas com order_id maior que o último
-        novas = []
-        for order in orders:
-            oid = str(order.get("id"))
-            if last_order_id and oid <= last_order_id:
-                # pedidos antigos ou já importados
-                continue
-            novas.append(order)
-
+        # 3) Filtra só os novos
+        novas = [o for o in orders if not last_order_id or str(o["id"]) > last_order_id]
         if not novas:
-            print("🔍 Não há vendas novas para importar.")
             return 0
 
-        # 4) Constrói e persiste cada nova venda
+        # 4) Persiste os novos
         for order in novas:
-            order_id = str(order.get("id"))
-            buyer      = order.get("buyer", {}) or {}
-            item       = (order.get("order_items") or [{}])[0]
-            item_info  = item.get("item", {}) or {}
-            shipping   = order.get("shipping") or {}
-            addr       = shipping.get("receiver_address") or {}
-
-            sale = Sale(
-                order_id=order_id,
-                ml_user_id=int(ml_user_id),
-                buyer_id=buyer.get("id"),
-                buyer_nickname=buyer.get("nickname"),
-                buyer_email=buyer.get("email"),
-                buyer_first_name=buyer.get("first_name"),
-                buyer_last_name=buyer.get("last_name"),
-                total_amount=order.get("total_amount"),
-                status=order.get("status"),
-                status_detail=order.get("status_detail"),
-                date_created=parser.isoparse(order.get("date_created")),
-                item_id=item_info.get("id"),
-                item_title=item_info.get("title"),
-                quantity=item.get("quantity"),
-                unit_price=item.get("unit_price"),
-                shipping_id=shipping.get("id"),
-                shipping_status=shipping.get("status"),
-                city=addr.get("city", {}).get("name"),
-                state=addr.get("state", {}).get("name"),
-                country=addr.get("country", {}).get("id"),
-                zip_code=addr.get("zip_code"),
-                street_name=addr.get("street_name"),
-                street_number=addr.get("street_number"),
-            )
+            sale = _order_to_sale(order, ml_user_id)
             db.add(sale)
             total_saved += 1
 
-        # 5) Commit das novas vendas
-        try:
-            db.commit()
-            print(f"✅ Importadas {total_saved} vendas novas para {ml_user_id}.")
-        except Exception as e:
-            db.rollback()
-            print(f"⚠️ Erro no commit: {e}")
-            total_saved = 0
+        db.commit()
 
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -120,20 +116,54 @@ def get_sales(ml_user_id: str, access_token: str) -> int:
 
 def sync_all_accounts() -> int:
     """
-    Sincroniza vendas novas para todas as contas cadastradas em user_tokens.
-    
-    Retorna o total de vendas importadas no batch.
+    Roda o incremental (get_incremental_sales) para todas as contas
+    cadastradas em user_tokens, retorna o total de vendas importadas.
     """
     db = SessionLocal()
     total = 0
-
     try:
         rows = db.execute(text("SELECT ml_user_id, access_token FROM user_tokens")).fetchall()
         for ml_user_id, access_token in rows:
-            saved = get_sales(str(ml_user_id), access_token)
+            saved = get_incremental_sales(str(ml_user_id), access_token)
             total += saved
     finally:
         db.close()
-
-    print(f"🗂️ Sincronização completa. Total de vendas importadas: {total}")
     return total
+
+
+def _order_to_sale(order: dict, ml_user_id: str) -> Sale:
+    """
+    Converte o JSON de uma order ML num objeto database.models.Sale.
+    """
+    buyer    = order.get("buyer", {}) or {}
+    item     = (order.get("order_items") or [{}])[0]
+    item_inf = item.get("item", {}) or {}
+    ship     = order.get("shipping") or {}
+    addr     = ship.get("receiver_address") or {}
+
+    return Sale(
+        order_id       = str(order["id"]),
+        ml_user_id     = int(ml_user_id),
+        buyer_id       = buyer.get("id"),
+        buyer_nickname = buyer.get("nickname"),
+        buyer_email    = buyer.get("email"),
+        buyer_first_name  = buyer.get("first_name"),
+        buyer_last_name   = buyer.get("last_name"),
+        total_amount   = order.get("total_amount"),
+        status         = order.get("status"),
+        status_detail  = order.get("status_detail"),
+        date_created   = parser.isoparse(order.get("date_created")),
+        item_id        = item_inf.get("id"),
+        item_title     = item_inf.get("title"),
+        quantity       = item.get("quantity"),
+        unit_price     = item.get("unit_price"),
+        shipping_id    = ship.get("id"),
+        shipping_status= ship.get("status"),
+        city           = addr.get("city", {}).get("name"),
+        state          = addr.get("state", {}).get("name"),
+        country        = addr.get("country", {}).get("id"),
+        zip_code       = addr.get("zip_code"),
+        street_name    = addr.get("street_name"),
+        street_number  = addr.get("street_number"),
+    )
+
