@@ -181,7 +181,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
             st.error(f"Nickname '{conta_id}' não encontrado no banco de dados.")
             return pd.DataFrame()
 
-        ml_user_id = ml_user_id.iloc[0]["ml_user_id"]
+        # Converte para tipo nativo Python (int)
+        ml_user_id = int(ml_user_id.iloc[0]["ml_user_id"])
 
         sql = text("""
             SELECT s.order_id,
@@ -217,7 +218,6 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
           .dt.tz_localize(None)
     )
     return df
-
 
 # ----------------- Componentes de Interface -----------------
 def render_add_account_button():
