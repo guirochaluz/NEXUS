@@ -173,6 +173,16 @@ def salvar_tokens_no_banco(data: dict):
 @st.cache_data(ttl=300)
 def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
     if conta_id:
+        # Verifica se é um nickname e faz a conversão
+        ml_user_id = pd.read_sql(text("SELECT ml_user_id FROM user_tokens WHERE nickname = :nickname"), 
+                                 engine, params={"nickname": conta_id})
+
+        if ml_user_id.empty:
+            st.error(f"Nickname '{conta_id}' não encontrado no banco de dados.")
+            return pd.DataFrame()
+
+        ml_user_id = ml_user_id.iloc[0]["ml_user_id"]
+
         sql = text("""
             SELECT s.order_id,
                    s.date_created,
@@ -185,7 +195,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
               LEFT JOIN user_tokens u ON s.ml_user_id = u.ml_user_id
              WHERE s.ml_user_id = :uid
         """)
-        df = pd.read_sql(sql, engine, params={"uid": conta_id})
+        df = pd.read_sql(sql, engine, params={"uid": ml_user_id})
     else:
         sql = text("""
             SELECT s.order_id,
@@ -207,6 +217,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
           .dt.tz_localize(None)
     )
     return df
+
 
 # ----------------- Componentes de Interface -----------------
 def render_add_account_button():
