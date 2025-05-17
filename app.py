@@ -384,6 +384,9 @@ def mostrar_dashboard():
         st.warning("Nenhuma venda encontrada para os filtros selecionados.")
         return
 
+    # =================== Ajuste de Timezone ===================
+    df["date_created"] = df["date_created"].dt.tz_convert("America/Sao_Paulo")
+
     # 4) Métricas
     total_vendas = len(df)
     total_valor  = df["total_amount"].sum()
@@ -433,7 +436,7 @@ def mostrar_dashboard():
     st.plotly_chart(fig, use_container_width=True)
 
     # =================== Gráfico de Histograma - Vendas por Dia da Semana ===================
-    st.markdown("### 📅 Vendas por Dia da Semana (Média)")
+    st.markdown("### 📅 Vendas por Dia da Semana (Média Real)")
 
     if not df.empty:
         df["dia_semana"] = df["date_created"].dt.day_name()
@@ -448,14 +451,12 @@ def mostrar_dashboard():
         }
         df["dia_semana"] = df["dia_semana"].map(traducao_dias)
 
+        # Calcular média real de vendas por dia da semana
         vendas_por_dia_semana = (
-            df.groupby("dia_semana")["total_amount"]
-            .mean()
-            .reindex([
-                "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
-            ])
-            .reset_index(name="Valor Médio")
-        )
+            df.groupby("dia_semana")["total_amount"].sum() / df["dia_semana"].value_counts()
+        ).reindex([
+            "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
+        ]).reset_index(name="Valor Médio")
 
         fig_dia_semana = px.bar(
             vendas_por_dia_semana,
