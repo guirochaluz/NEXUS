@@ -324,7 +324,7 @@ def mostrar_dashboard():
             color: #32CD32 !important;
         }
         </style>
-        ''',
+        ''' ,
         unsafe_allow_html=True
     )
 
@@ -433,7 +433,7 @@ def mostrar_dashboard():
     st.plotly_chart(fig, use_container_width=True)
 
     # =================== Gráfico de Histograma - Vendas por Dia da Semana ===================
-    st.markdown("### 📅 Vendas por Dia da Semana (Valor Total Vendido)")
+    st.markdown("### 📅 Vendas por Dia da Semana (Média)")
 
     if not df.empty:
         df["dia_semana"] = df["date_created"].dt.day_name()
@@ -450,21 +450,21 @@ def mostrar_dashboard():
 
         vendas_por_dia_semana = (
             df.groupby("dia_semana")["total_amount"]
-            .sum()
+            .mean()
             .reindex([
                 "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"
             ])
-            .reset_index(name="Valor Total")
+            .reset_index(name="Valor Médio")
         )
 
         fig_dia_semana = px.bar(
             vendas_por_dia_semana,
             x="dia_semana",
-            y="Valor Total",
-            title="📅 Valor Total Vendido por Dia da Semana",
+            y="Valor Médio",
+            title="📅 Média Vendida por Dia da Semana",
             labels={
                 "dia_semana": "Dia da Semana",
-                "Valor Total": "Valor Total Vendido"
+                "Valor Médio": "Valor Médio Vendido"
             },
             text_auto='.2s',
             color_discrete_sequence=["#32CD32"]
@@ -477,19 +477,20 @@ def mostrar_dashboard():
     if not df.empty:
         df["hora"] = df["date_created"].dt.hour
         faturamento_por_hora = (
-            df.groupby("hora")["total_amount"]
+            df.groupby(["hora"])["total_amount"]
             .mean()
-            .reset_index(name="Valor Médio")
+            .cumsum()
+            .reset_index(name="Valor Médio Acumulado")
         )
 
         fig_hora = px.line(
             faturamento_por_hora,
             x="hora",
-            y="Valor Médio",
+            y="Valor Médio Acumulado",
             title="⏰ Média de Faturamento Acumulado por Hora",
             labels={
                 "hora": "Hora do Dia",
-                "Valor Médio": "Valor Médio Vendido"
+                "Valor Médio Acumulado": "Valor Médio Acumulado"
             },
             markers=True
         )
