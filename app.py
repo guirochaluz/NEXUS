@@ -435,8 +435,10 @@ def mostrar_dashboard():
     # =================== Gráfico de Histograma - Média de Faturamento por Dia da Semana ===================
 st.markdown("### 📅 Média de Faturamento por Dia da Semana")
 
-# Verificação para evitar erro
-if not df.empty:
+# Verifica se o DataFrame foi carregado corretamente
+if 'df' not in locals() or df.empty:
+    st.warning("⚠️ Nenhuma venda encontrada para gerar o gráfico.")
+else:
     # Extrai o nome do dia da semana
     df["dia_semana"] = df["date_created"].dt.day_name()
 
