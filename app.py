@@ -432,34 +432,53 @@ def mostrar_dashboard():
     fig.update_traces(mode='lines+markers', marker=dict(size=5), texttemplate='%{y:,.2f}', textposition='top center')
     st.plotly_chart(fig, use_container_width=True)
 
-    # =================== Gráfico de Histograma - Vendas por Dia da Semana ===================
-    st.markdown("### 📅 Vendas por Dia da Semana (Média)")
+    # =================== Gráfico de Histograma - Média de Faturamento por Dia da Semana ===================
+st.markdown("### 📅 Média de Faturamento por Dia da Semana")
 
-    # Verificação para evitar erro
-    if not df.empty:
-        df["dia_semana"] = df["date_created"].dt.day_name()
-        vendas_por_dia_semana = (
-            df.groupby("dia_semana")["total_amount"]
-            .mean()
-            .reindex(
-                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            )
-            .reset_index(name="Valor Médio")
-        )
+# Verificação para evitar erro
+if not df.empty:
+    # Extrai o nome do dia da semana
+    df["dia_semana"] = df["date_created"].dt.day_name()
 
-        fig_dia_semana = px.bar(
-            vendas_por_dia_semana,
-            x="dia_semana",
-            y="Valor Médio",
-            title="📅 Média Vendida por Dia da Semana",
-            labels={
-                "dia_semana": "Dia da Semana",
-                "Valor Médio": "Valor Médio"
-            },
-            text_auto='.2s',
-            color_discrete_sequence=["#32CD32"]
+    # Mapeamento dos dias para português
+    dias_traduzidos = {
+        "Monday": "Segunda-feira",
+        "Tuesday": "Terça-feira",
+        "Wednesday": "Quarta-feira",
+        "Thursday": "Quinta-feira",
+        "Friday": "Sexta-feira",
+        "Saturday": "Sábado",
+        "Sunday": "Domingo"
+    }
+
+    # Aplica a tradução
+    df["dia_semana"] = df["dia_semana"].map(dias_traduzidos)
+
+    # Calcula a média de faturamento por dia da semana
+    faturamento_por_dia_semana = (
+        df.groupby("dia_semana")["total_amount"]
+        .mean()
+        .reindex(
+            ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
         )
-        st.plotly_chart(fig_dia_semana, use_container_width=True)
+        .reset_index(name="Média de Faturamento")
+    )
+
+    # Cria o gráfico de barras
+    fig_dia_semana = px.bar(
+        faturamento_por_dia_semana,
+        x="dia_semana",
+        y="Média de Faturamento",
+        title="📅 Média de Faturamento por Dia da Semana",
+        labels={
+            "dia_semana": "Dia da Semana",
+            "Média de Faturamento": "Valor Médio (R$)"
+        },
+        text_auto='.2s',
+        color_discrete_sequence=["#32CD32"]
+    )
+    fig_dia_semana.update_layout(yaxis_tickformat="R$,.2f")
+    st.plotly_chart(fig_dia_semana, use_container_width=True)
 
 def mostrar_contas_cadastradas():
     st.header("🏷️ Contas Cadastradas")
