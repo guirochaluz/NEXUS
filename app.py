@@ -385,8 +385,13 @@ def mostrar_dashboard():
         return
 
     # =================== Ajuste de Timezone ===================
+    # Primeiro, define o timezone como UTC para os timestamps "naive"
+    df["date_created"] = df["date_created"].dt.tz_localize("UTC")
+
+    # Converte para o fuso horário de São Paulo
     df["date_created"] = df["date_created"].dt.tz_convert("America/Sao_Paulo")
 
+    
     # 4) Métricas
     total_vendas = len(df)
     total_valor  = df["total_amount"].sum()
