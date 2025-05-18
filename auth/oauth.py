@@ -1,14 +1,6 @@
-print("→ ML_CLIENT_ID >", os.getenv("ML_CLIENT_ID"))
-print("→ ML_CLIENT_SECRET >", os.getenv("ML_CLIENT_SECRET"))
-print("→ BACKEND_URL >", os.getenv("BACKEND_URL"))
-
-
-
-
 import os
 import requests
 from dotenv import load_dotenv
-load_dotenv()
 from datetime import datetime, timedelta
 
 from database.db import SessionLocal
