@@ -62,29 +62,16 @@ if not st.session_state["authenticated"]:
     password = st.text_input("Senha", type="password")
     if st.button("Entrar"):
         if username == "GRUPONEXUS" and password == "NEXU$2025":
-                st.session_state["authenticated"] = True
-
-                # 1) renova todos os access tokens antes de qualquer chamada à API
-                refresh_all_tokens()
-
-                # 2) só então roda a sincronização
-                count = sync_all_accounts()
-
-                # 3) atualiza cache e informa o usuário
-                st.cache_data.clear()
-                st.success(f"{count} vendas novas sincronizadas com sucesso!")
-
-                # 4) força reload da tela
-                st.rerun()
-
+            st.session_state["authenticated"] = True
+            sync_all_accounts()
+            st.cache_data.clear()
+            st.rerun()
         else:
             st.error("Credenciais inválidas")
     st.stop()
 
-# ----------------- Título -----------------
-st.title("Dashboard")
-
 # ----------------- Variáveis de Ambiente -----------------
+load_dotenv()
 BACKEND_URL  = os.getenv("BACKEND_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 DB_URL       = os.getenv("DB_URL")
@@ -320,60 +307,77 @@ def render_sidebar():
     st.session_state["page"] = selected
     return selected
 # ----------------- Telas -----------------
+import io  # no topo do seu script
+
+def format_currency(value):
+    """Formata valores para o padrão brasileiro."""
+    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def mostrar_dashboard():
+    import streamlit as st
+    import pandas as pd
+    from sqlalchemy import text
+
+    # --- estilo customizado para labels verdes ---
     st.markdown(
         '''
         <style>
-        .stSelectbox label div[data-testid="stMarkdownContainer"] > div > span {
-            color: #32CD32 !important;
-        }
+        .stSelectbox label div[data-testid="stMarkdownContainer"] > div > span,
         .stDateInput label div[data-testid="stMarkdownContainer"] > div > span {
             color: #32CD32 !important;
         }
         </style>
-        ''' ,
+        ''',
         unsafe_allow_html=True
     )
 
-    st.header("📊 Dashboard de Vendas")
-
-    # Botão para sincronização incremental
+    # --- botão de sincronização ---
     if st.button("🔄 Sincronizar Vendas"):
-        refresh_all_tokens()
         count = sync_all_accounts()
         st.cache_data.clear()
         st.success(f"{count} vendas novas sincronizadas com sucesso!")
         st.rerun()
 
-    # 0) Carrega dados brutos
+    # --- carrega todos os dados ---
     df_full = carregar_vendas(None)
     if df_full.empty:
         st.warning("Nenhuma venda cadastrada.")
         return
 
-    # 1) Layout dos filtros
-    col1, col2, col3 = st.columns([2, 2, 2])
-    
-    # Selectbox de Conta
+    # --- filtro discreto de Contas no topo ---
     contas_df  = pd.read_sql(text("SELECT nickname FROM user_tokens ORDER BY nickname"), engine)
     contas_lst = contas_df["nickname"].astype(str).tolist()
-    escolha    = col1.selectbox("🔹 Conta", ["Todas as contas"] + contas_lst)
-    conta_id   = None if escolha == "Todas as contas" else escolha
+    selecionadas = st.multiselect(
+        "🔹 Contas (opcional)",
+        options=contas_lst,
+        default=contas_lst,
+        key="contas_ms",
+        help="Filtre por uma ou mais contas; deixe todas selecionadas para não filtrar."
+    )
+    # aplica filtro de contas
+    if selecionadas:
+        df_full = df_full[df_full["nickname"].isin(selecionadas)]
 
-    # Selectbox de Filtro Rápido
-    filtro_rapido = col2.selectbox(
+    # --- linha única de filtros: Quick-Filter | De | Até ---
+    col1, col2, col3 = st.columns([2, 1.5, 1.5])
+
+    # 1) Filtro Rápido
+    filtro_rapido = col1.selectbox(
         "🔹 Filtro Rápido",
-        ["Período Personalizado", "Hoje", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias"]
+        ["Período Personalizado", "Hoje", "Ontem", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias"],
+        key="filtro_quick"
     )
 
-    # 2) Ajuste Dinâmico dos Campos de Data
+    # 2) Determina intervalos de data
     data_min = df_full["date_created"].dt.date.min()
     data_max = df_full["date_created"].dt.date.max()
-    hoje = pd.Timestamp.now().date()
-    
+    hoje     = pd.Timestamp.now().date()
+
     if filtro_rapido == "Hoje":
         de, ate = hoje, hoje
+    elif filtro_rapido == "Ontem":
+    ontem = hoje - pd.Timedelta(days=1)
+    de, ate = ontem, ontem
     elif filtro_rapido == "Últimos 7 Dias":
         de, ate = hoje - pd.Timedelta(days=7), hoje
     elif filtro_rapido == "Este Mês":
@@ -381,17 +385,37 @@ def mostrar_dashboard():
     elif filtro_rapido == "Últimos 30 Dias":
         de, ate = hoje - pd.Timedelta(days=30), hoje
     else:
-        col2, col3 = st.columns([1, 1])
-        de = col2.date_input("🔹 De",  value=data_min, min_value=data_min, max_value=data_max)
-        ate = col3.date_input("🔹 Até", value=data_max, min_value=data_min, max_value=data_max)
+        de, ate = data_min, data_max
 
-    # 3) Aplica filtros
-    df = carregar_vendas(conta_id)
-    df = df[(df["date_created"].dt.date >= de) & (df["date_created"].dt.date <= ate)]
+    # 3) Date inputs (sempre visíveis, mas desabilitados se não for personalizado)
+    custom = (filtro_rapido == "Período Personalizado")
+    de = col2.date_input(
+        "🔹 De",
+        value=de,
+        min_value=data_min,
+        max_value=data_max,
+        disabled=not custom,
+        key="de_q"
+    )
+    ate = col3.date_input(
+        "🔹 Até",
+        value=ate,
+        min_value=data_min,
+        max_value=data_max,
+        disabled=not custom,
+        key="ate_q"
+    )
+
+    # --- aplica filtro de datas ---
+    df = df_full[
+        (df_full["date_created"].dt.date >= de) &
+        (df_full["date_created"].dt.date <= ate)
+    ]
 
     if df.empty:
         st.warning("Nenhuma venda encontrada para os filtros selecionados.")
         return
+
 
     # =================== Ajuste de Timezone ===================
     # Primeiro, define o timezone como UTC para os timestamps "naive"
@@ -549,6 +573,7 @@ def mostrar_relatorios():
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
     st.info("Em breve...")
+
 
 def mostrar_gestao_sku():
     st.header("📦 Gestão de SKU")
