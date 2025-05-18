@@ -449,101 +449,76 @@ def mostrar_dashboard():
     
     import plotly.express as px
 
-    # =================== Gráfico de Linha - Total Vendido ===================
-    col_vis1, col_vis2 = st.columns(2)
+            # =================== Gráfico de Linha - Total Vendido ===================
+    col_title, col_visao, col_periodo = st.columns([8, 1, 1])
+    title_placeholder = col_title.empty()
     
-    # 0) Modo de agregação via radio
-    modo_agregacao = col_vis1.radio(
-        "👁️ Visão da Linha",
+    modo_agregacao = col_visao.radio(
+        "Agrupamento",
         ["Por Conta", "Total Geral"],
         horizontal=True,
         key="modo_agregacao"
     )
     
-    # 1) Frequência: diária ou mensal
-    tipo_visualizacao = col_vis2.radio(
-        "Visualização do Gráfico",
-        ["Diária", "Mensal"],
+    tipo_visualizacao = col_periodo.radio(
+        "Período",
+        ["Diário", "Mensal"],
         horizontal=True,
-        key="periodo"   # <— use uma key diferente aqui
+        key="periodo"
     )
     
-    # 2) Prepara eixo X e agrupamentos
+    # 2) Prepara e agrega os dados
+    df_plot = df.copy()
     if tipo_visualizacao == "Diária":
-        eixo_x = "date_created"
-        df_plot = df.copy()
         df_plot["date_created"] = df_plot["date_created"].dt.date
-    
-        if modo_agregacao == "Por Conta":
-            vendas_por_data = (
-                df_plot
-                .groupby(["date_created", "nickname"])["total_amount"]
-                .sum()
-                .reset_index(name="Valor Total")
-            )
-            titulo = "💵 Total Vendido por Dia (Linha por Nickname)"
-            color_dim = "nickname"
-            color_seq = px.colors.sequential.Agsunset
-    
-        else:  # Total Geral
-            vendas_por_data = (
-                df_plot
-                .groupby("date_created")["total_amount"]
-                .sum()
-                .reset_index(name="Valor Total")
-            )
-            titulo = "💵 Total Vendido por Dia (Soma Total)"
-            color_dim = None
-            color_seq = ["#27ae60"]
-    
-    elif tipo_visualizacao == "Mensal":
         eixo_x = "date_created"
-        df_plot = df.copy()
+        periodo_label = "Dia"
+    else:
         df_plot["date_created"] = df_plot["date_created"].dt.to_period("M").astype(str)
+        eixo_x = "date_created"
+        periodo_label = "Mês"
     
-        if modo_agregacao == "Por Conta":
-            vendas_por_data = (
-                df_plot
-                .groupby(["date_created", "nickname"])["total_amount"]
-                .sum()
-                .reset_index(name="Valor Total")
-            )
-            titulo = "💵 Total Vendido por Mês (Linha por Nickname)"
-            color_dim = "nickname"
-            color_seq = px.colors.sequential.Agsunset
+    if modo_agregacao == "Por Conta":
+        vendas_por_data = (
+            df_plot
+            .groupby([eixo_x, "nickname"])["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        titulo = f"💵 Total Vendido por {periodo_label} (Linha por Nickname)"
+        color_dim = "nickname"
+        color_seq = px.colors.sequential.Agsunset
+    else:
+        vendas_por_data = (
+            df_plot
+            .groupby(eixo_x)["total_amount"]
+            .sum()
+            .reset_index(name="Valor Total")
+        )
+        titulo = f"💵 Total Vendido por {periodo_label} (Soma Total)"
+        color_dim = None
+        color_seq = ["#27ae60"]
     
-        else:  # Total Geral
-            vendas_por_data = (
-                df_plot
-                .groupby("date_created")["total_amount"]
-                .sum()
-                .reset_index(name="Valor Total")
-            )
-            titulo = "💵 Total Vendido por Mês (Soma Total)"
-            color_dim = None
-            color_seq = ["#27ae60"]
+    # 3) Atualiza o título
+    title_placeholder.markdown(f"### {titulo}")
     
-    # 3) Desenha o gráfico
+    # 4) Desenha o gráfico
     fig = px.line(
         vendas_por_data,
         x=eixo_x,
         y="Valor Total",
         color=color_dim,
-        title=titulo,
-        labels={
-            "Valor Total": "Valor Total",
-            "date_created": "Data",
-            "nickname": "Conta"
-        },
-        color_discrete_sequence=color_seq
+        labels={eixo_x: "Data", "Valor Total": "Valor Total", "nickname": "Conta"},
+        color_discrete_sequence=color_seq,
     )
-    
     fig.update_traces(
-        mode='lines+markers',
+        mode="lines+markers",
         marker=dict(size=5),
-        texttemplate='%{y:,.2f}',
-        textposition='top center'
+        texttemplate="%{y:,.2f}",
+        textposition="top center"
     )
+    # garante um pouco mais de espaço em cima para o header
+    fig.update_layout(margin=dict(t=30, b=20, l=40, r=10))
     
     st.plotly_chart(fig, use_container_width=True)
 
@@ -589,7 +564,6 @@ def mostrar_dashboard():
         markers=True
     )
     st.plotly_chart(fig_hora, use_container_width=True)
-
 
 def mostrar_contas_cadastradas():
     st.header("🏷️ Contas Cadastradas")
