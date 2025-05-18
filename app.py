@@ -9,6 +9,21 @@ import locale
 from streamlit_option_menu import option_menu
 from typing import Optional
 from ml.sales import sync_all_accounts
+from auth.oauth import renovar_access_token
+from database.models import UserToken
+from database.db import SessionLocal
+
+def refresh_all_tokens():
+    db = SessionLocal()
+    try:
+        # pega todos os ML user IDs cadastrados
+        user_ids = [row[0] for row in db.query(UserToken.ml_user_id).all()]
+        for uid in user_ids:
+            novo_token = renovar_access_token(uid)
+            if not novo_token:
+                st.warning(f"Falha ao renovar token para ML user {uid}")
+    finally:
+        db.close()
 
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
@@ -59,10 +74,21 @@ if not st.session_state["authenticated"]:
     password = st.text_input("Senha", type="password")
     if st.button("Entrar"):
         if username == "GRUPONEXUS" and password == "NEXU$2025":
-            st.session_state["authenticated"] = True
-            sync_all_accounts()
-            st.cache_data.clear()
-            st.rerun()
+                st.session_state["authenticated"] = True
+
+                # 1) renova todos os access tokens antes de qualquer chamada à API
+                refresh_all_tokens()
+
+                # 2) só então roda a sincronização
+                count = sync_all_accounts()
+
+                # 3) atualiza cache e informa o usuário
+                st.cache_data.clear()
+                st.success(f"{count} vendas novas sincronizadas com sucesso!")
+
+                # 4) força reload da tela
+                st.rerun()
+
         else:
             st.error("Credenciais inválidas")
     st.stop()
@@ -71,7 +97,6 @@ if not st.session_state["authenticated"]:
 st.title("Dashboard")
 
 # ----------------- Variáveis de Ambiente -----------------
-load_dotenv()
 BACKEND_URL  = os.getenv("BACKEND_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 DB_URL       = os.getenv("DB_URL")
@@ -307,11 +332,6 @@ def render_sidebar():
     st.session_state["page"] = selected
     return selected
 # ----------------- Telas -----------------
-import io  # no topo do seu script
-
-def format_currency(value):
-    """Formata valores para o padrão brasileiro."""
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def mostrar_dashboard():
     st.markdown(
@@ -332,6 +352,7 @@ def mostrar_dashboard():
 
     # Botão para sincronização incremental
     if st.button("🔄 Sincronizar Vendas"):
+        refresh_all_tokens()
         count = sync_all_accounts()
         st.cache_data.clear()
         st.success(f"{count} vendas novas sincronizadas com sucesso!")
