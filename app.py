@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-load_dotenv()
 import os
 import streamlit as st
 import pandas as pd
@@ -98,7 +97,6 @@ if not st.session_state["authenticated"]:
 st.title("Dashboard")
 
 # ----------------- Variáveis de Ambiente -----------------
-load_dotenv()
 BACKEND_URL  = os.getenv("BACKEND_URL")
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 DB_URL       = os.getenv("DB_URL")
