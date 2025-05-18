@@ -5,6 +5,7 @@ import plotly.express as px
 import requests
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+load_dotenv()
 import locale
 from streamlit_option_menu import option_menu
 from typing import Optional
