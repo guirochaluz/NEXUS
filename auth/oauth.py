@@ -3,13 +3,13 @@
 import os
 import requests
 from dotenv import load_dotenv
+load_dotenv()
 from datetime import datetime, timedelta
 
 from database.db import SessionLocal
 from database.models import UserToken
 
 # 1) Carregar .env e variáveis obrigatórias
-load_dotenv()
 CLIENT_ID     = os.getenv("ML_CLIENT_ID")
 CLIENT_SECRET = os.getenv("ML_CLIENT_SECRET")
 BACKEND_URL   = os.getenv("BACKEND_URL")
