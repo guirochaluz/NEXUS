@@ -541,10 +541,6 @@ def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
     st.info("Em breve...")
 
-def mostrar_relatorios():
-    st.header("📑 Relatórios")
-    st.info("Em breve...")
-
 def mostrar_gestao_sku():
     st.header("📦 Gestão de SKU")
     st.info("Em breve...")
