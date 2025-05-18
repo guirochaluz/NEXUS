@@ -13,18 +13,6 @@ from auth.oauth import renovar_access_token
 from database.models import UserToken
 from database.db import SessionLocal
 
-def refresh_all_tokens():
-    db = SessionLocal()
-    try:
-        # pega todos os ML user IDs cadastrados
-        user_ids = [row[0] for row in db.query(UserToken.ml_user_id).all()]
-        for uid in user_ids:
-            novo_token = renovar_access_token(uid)
-            if not novo_token:
-                st.warning(f"Falha ao renovar token para ML user {uid}")
-    finally:
-        db.close()
-
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
