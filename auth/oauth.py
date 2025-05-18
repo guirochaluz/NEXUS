@@ -5,8 +5,8 @@ import requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
-from ml.db import SessionLocal
-from ml.models import UserToken
+from database.db import SessionLocal
+from database.models import UserToken
 
 # 1) Carregar .env e variáveis obrigatórias
 load_dotenv()
