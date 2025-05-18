@@ -458,29 +458,31 @@ def mostrar_dashboard():
 
     # =================== Gráfico de Linha - Faturamento Acumulado por Hora ===================
     st.markdown("### ⏰ Faturamento Acumulado por Hora do Dia (Média)")
+    
+    # Extrai hora e calcula média acumulada
+    df["hora"] = df["date_created"].dt.hour
+    faturamento_por_hora = (
+        df.groupby("hora")["total_amount"]
+          .mean()
+          .cumsum()
+          .reset_index(name="Valor Médio Acumulado")
+    )
+    
+    # Plota
+    fig_hora = px.line(
+        faturamento_por_hora,
+        x="hora",
+        y="Valor Médio Acumulado",
+        title="⏰ Média de Faturamento Acumulado por Hora",
+        labels={
+            "hora": "Hora do Dia",
+            "Valor Médio Acumulado": "Valor Médio Acumulado"
+        },
+        color_discrete_sequence=["#27ae60"],
+        markers=True
+    )
+    st.plotly_chart(fig_hora, use_container_width=True)
 
-    if not df.empty:
-        df["hora"] = df["date_created"].dt.hour
-        faturamento_por_hora = (
-            df.groupby(["hora"])["total_amount"]
-            .mean()
-            .cumsum()
-            .reset_index(name="Valor Médio Acumulado")
-        )
-
-        fig_hora = px.line(
-            faturamento_por_hora,
-            x="hora",
-            y="Valor Médio Acumulado",
-            title="⏰ Média de Faturamento Acumulado por Hora",
-            labels={
-                "hora": "Hora do Dia",
-                "Valor Médio Acumulado": "Valor Médio Acumulado",
-                color_discrete_sequence=["#27ae60"]
-            },
-            markers=True
-        )
-        st.plotly_chart(fig_hora, use_container_width=True)
 
 def mostrar_contas_cadastradas():
     st.header("🏷️ Contas Cadastradas")
