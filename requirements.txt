@@ -16,4 +16,5 @@ plotly>=5.0.0
 python-multipart>=0.0.5
 openpyxl
 streamlit-option-menu
+streamlit-cookies-manager
 
