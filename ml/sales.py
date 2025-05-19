@@ -7,7 +7,8 @@ from sqlalchemy import func, text
 from typing import Optional
 from dotenv import load_dotenv
 from dateutil import parser
-from dateutil.tz import tzutc
+from dateutil.tz import gettz, tzutc
+from datetime import timedelta
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -67,78 +68,66 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
 
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
-    """
-    Coleta apenas as vendas criadas após o último import (date_created),
-    evitando duplicação pelo order_id. Se não houver vendas anteriores,
-    faz um full import.
-    """
     db = SessionLocal()
     total_saved = 0
 
     try:
-        # 0) Refresh do access_token via backend
-        try:
-            refresh_resp = requests.post(
-                f"{BACKEND_URL}/auth/refresh",
-                json={"user_id": ml_user_id}
-            )
-            refresh_resp.raise_for_status()
-            # assume que o novo token foi salvo em user_tokens
-            new_token = db.execute(
-                text("SELECT access_token FROM user_tokens WHERE ml_user_id = :uid"),
-                {"uid": ml_user_id}
-            ).scalar()
-            if new_token:
-                access_token = new_token
-        except Exception as e:
-            print(f"⚠️ Falha ao atualizar token para {ml_user_id}: {e}")
-
-        # 1) Pega a última data criada no banco
-        last_db_date = (
-            db.query(func.max(Sale.date_created))
+        # refresh token…
+        # 1) último updated no banco
+        last_update = (
+            db.query(func.max(Sale.date_last_updated))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
-        # Se nunca importou nada, faça full import
-        if last_db_date is None:
+        if last_update is None:
             return get_full_sales(ml_user_id, access_token)
 
-        # Garante que seja offset-aware UTC
-        if last_db_date.tzinfo is None:
-            last_db_date = last_db_date.replace(tzinfo=tzutc())
+        # 2) timezone → UTC
+        if last_update.tzinfo is None:
+            last_update = last_update.replace(tzinfo=gettz("America/Sao_Paulo"))
+        last_update_utc = last_update.astimezone(tzutc())
 
-        # 2) Chama API pedindo só vendas criadas após last_db_date
-        params = {
-            "seller": ml_user_id,
-            "order.status": "paid",
-            "limit": FULL_PAGE_SIZE,
-            "sort": "date_desc",
-            "order.date_created.from": last_db_date.isoformat(),
-        }
-        resp = requests.get(API_BASE, params=params,
-                            headers={"Authorization": f"Bearer {access_token}"})
-        resp.raise_for_status()
-        orders = resp.json().get("results", [])
-        if not orders:
-            return 0
+        # 3) buffer de 1s
+        fetch_from = (last_update_utc - timedelta(seconds=1)).isoformat()
 
-        # 3) Persiste as novas, checando order_id para não duplicar
-        for o in orders:
-            oid = str(o["id"])
-            if not db.query(Sale).filter_by(order_id=oid).first():
-                db.add(_order_to_sale(o, ml_user_id))
-                total_saved += 1
+        # 4) paginação
+        offset = 0
+        while True:
+            params = {
+                "seller": ml_user_id,
+                "order.status": "paid",
+                "limit": FULL_PAGE_SIZE,
+                "sort": "date_desc",
+                "order.last_updated.from": fetch_from,
+                "site": "MLB",
+                "offset": offset,
+            }
+            headers = {"Authorization": f"Bearer {access_token}"}
+            resp = requests.get(API_BASE, params=params, headers=headers)
+            resp.raise_for_status()
+            orders = resp.json().get("results", [])
+            if not orders:
+                break
 
-        db.commit()
+            for o in orders:
+                oid = str(o["id"])
+                if not db.query(Sale).filter_by(order_id=oid).first():
+                    db.add(_order_to_sale(o, ml_user_id))
+                    total_saved += 1
 
-    except Exception:
+            db.commit()
+            if len(orders) < FULL_PAGE_SIZE:
+                break
+            offset += FULL_PAGE_SIZE
+
+    except:
         db.rollback()
         raise
-
     finally:
         db.close()
 
     return total_saved
+
 
 def sync_all_accounts() -> int:
     """
@@ -180,6 +169,7 @@ def _order_to_sale(order: dict, ml_user_id: str) -> Sale:
         status          = order.get("status"),
         status_detail   = order.get("status_detail"),
         date_created    = parser.isoparse(order.get("date_created")),
+        date_last_updated= parser.isoparse(order["date_last_updated"]),  # ← adicione aqui
         item_id         = item_inf.get("id"),
         item_title      = item_inf.get("title"),
         quantity        = item.get("quantity"),
