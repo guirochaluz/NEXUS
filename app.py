@@ -1,39 +1,28 @@
 import os
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import requests
-from sqlalchemy import create_engine, text
+import warnings
+
+# 1) Suprime todos os DeprecationWarning do Python
+os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# 2) (Opcional) Suprime warnings internos do Streamlit
+import logging
+logging.getLogger("streamlit").setLevel(logging.ERROR)
+
+
 from dotenv import load_dotenv
 import locale
-from streamlit_option_menu import option_menu
-from typing import Optional
-from ml.sales import sync_all_accounts
 
-# Tenta configurar locale pt_BR; guarda se deu certo
-try:
-    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
-    LOCALE_OK = True
-except locale.Error:
-    LOCALE_OK = False
+# 1) Carrega .env antes de tudo
+load_dotenv()
+COOKIE_SECRET = os.getenv("COOKIE_SECRET")
+BACKEND_URL    = os.getenv("BACKEND_URL")
+FRONTEND_URL   = os.getenv("FRONTEND_URL")
+DB_URL         = os.getenv("DB_URL")
+ML_CLIENT_ID   = os.getenv("ML_CLIENT_ID")
 
-def format_currency(valor: float) -> str:
-    """
-    Formata um float como BRL:
-    - Usa locale se LOCALE_OK for True;
-    - Senão, faz um fallback manual 'R$ 1.234,56'.
-    """
-    if LOCALE_OK:
-        try:
-            return locale.currency(valor, grouping=True)
-        except Exception:
-            pass
-    # Fallback manual:
-    inteiro, frac = f"{valor:,.2f}".split('.')
-    inteiro = inteiro.replace(',', '.')
-    return f"R$ {inteiro},{frac}"
-
-# ----------------- Configuração da Página -----------------
+# 2) Agora sim importe o Streamlit e configure a página _antes_ de qualquer outra chamada st.*
+import streamlit as st
 st.set_page_config(
     page_title="Sistema de Gestão - NEXUS",
     page_icon="📊",
@@ -41,42 +30,47 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ----------------- Autenticação -----------------
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+# 3) Depois de set_page_config, importe tudo o mais que precisar
+from streamlit_cookies_manager import EncryptedCookieManager
+import pandas as pd
+import plotly.express as px
+import requests
+from sqlalchemy import create_engine, text
+from streamlit_option_menu import option_menu
+from typing import Optional
+from ml.sales import sync_all_accounts
 
-params = st.query_params
-# login automático via ?nexus_auth=success
-if params.get("nexus_auth", [None])[0] == "success":
-    st.session_state["authenticated"] = True
-    sync_all_accounts()
-    st.cache_data.clear()
-    st.experimental_set_query_params()
+# 4) Configuração de locale
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+    LOCALE_OK = True
+except locale.Error:
+    LOCALE_OK = False
 
-if not st.session_state["authenticated"]:
-    st.title("Sistema de Gestão - Grupo Nexus")
-    username = st.text_input("Usuário")
-    password = st.text_input("Senha", type="password")
-    if st.button("Entrar"):
-        if username == "GRUPONEXUS" and password == "NEXU$2025":
-            st.session_state["authenticated"] = True
-            sync_all_accounts()
-            st.cache_data.clear()
-            st.rerun()
-        else:
-            st.error("Credenciais inválidas")
+def format_currency(valor: float) -> str:
+    # ...
+    ...
+
+# 5) Validações iniciais de ambiente
+if not COOKIE_SECRET:
+    st.error("⚠️ Defina COOKIE_SECRET no seu .env")
     st.stop()
-
-# ----------------- Variáveis de Ambiente -----------------
-load_dotenv()
-BACKEND_URL  = os.getenv("BACKEND_URL")
-FRONTEND_URL = os.getenv("FRONTEND_URL")
-DB_URL       = os.getenv("DB_URL")
-ML_CLIENT_ID = os.getenv("ML_CLIENT_ID")
 
 if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
     st.error("❌ Defina BACKEND_URL, FRONTEND_URL, DB_URL e ML_CLIENT_ID em seu .env")
     st.stop()
+
+# 6) Gerenciador de cookies e autenticação
+cookies = EncryptedCookieManager(prefix="nexus/", password=COOKIE_SECRET)
+if not cookies.ready():
+    st.stop()
+
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+if cookies.get("access_token"):
+    st.session_state["authenticated"] = True
+    st.session_state["access_token"] = cookies["access_token"]
 
 # ----------------- CSS Customizado -----------------
 st.markdown("""
@@ -454,6 +448,9 @@ def mostrar_dashboard():
     # 2) Prepara e agrega os dados
     df_plot = df.copy()
     
+    # Ajuste de fuso para São Paulo
+    df_plot["date_created"] = df_plot["date_created"].dt.tz_convert('America/Sao_Paulo')
+    
     # agrupa por hora sempre que o período for um único dia
     if de == ate:
         df_plot["date_hour"] = df_plot["date_created"].dt.floor("H")
@@ -491,7 +488,7 @@ def mostrar_dashboard():
         color_seq = ["#27ae60"]
     
     titulo = f"💵 Total Vendido por {periodo_label} " + (
-        "(Linha por Nickname)" if modo_agregacao=="Por Conta" else "(Soma Total)"
+        "(Linha por Conta)" if modo_agregacao=="Por Conta" else "(Soma Total)"
     )
     
     # 3) Atualiza o título
@@ -516,7 +513,6 @@ def mostrar_dashboard():
     
     st.plotly_chart(fig, use_container_width=True)
 
-
     # === Gráfico de barras: Média por dia da semana ===
     st.markdown('<div class="section-title">📅 Vendas por Dia da Semana</div>', unsafe_allow_html=True)
     dias = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"]
@@ -532,6 +528,7 @@ def mostrar_dashboard():
         color_discrete_sequence=["#27ae60"]
     )
     st.plotly_chart(fig_bar, use_container_width=True, theme="streamlit")
+
 
     # =================== Gráfico de Linha - Faturamento Acumulado por Hora ===================
     st.markdown("### ⏰ Faturamento Acumulado por Hora do Dia (Média)")
