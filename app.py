@@ -601,35 +601,42 @@ def mostrar_relatorios():
         st.warning("Nenhum dado para exibir.")
         return
 
+    # --- garanta que date_created é datetime ---
+    df["date_created"] = pd.to_datetime(df["date_created"])
+
     # --- filtros de data e status ---
-    data_ini = st.date_input("De:",  value=df["date_created"].min())
-    data_fim = st.date_input("Até:", value=df["date_created"].max())
+    data_ini = st.date_input("De:",  value=df["date_created"].min().date())
+    data_fim = st.date_input("Até:", value=df["date_created"].max().date())
+
     status_opts = df["status"].unique()
-    status = st.multiselect("Status:", options=status_opts, default=status_opts)
+    status_sel = st.multiselect("Status:", options=status_opts, default=status_opts)
 
     # --- filtro de Conta (usa coluna 'nickname') ---
-    conta_opts = df["nickname"].unique()
-    conta = st.multiselect("Conta:", options=conta_opts, default=conta_opts)
+    nickname_opts = df["nickname"].unique()
+    nickname_sel = st.multiselect("Conta (nickname):", options=nickname_opts, default=nickname_opts)
 
-    # --- aplica todos os filtros ---
+    # --- aplica todos os filtros em df_filt ---
     df_filt = df.loc[
         (df["date_created"].dt.date >= data_ini) &
         (df["date_created"].dt.date <= data_fim) &
-        (df["status"].isin(status)) &
-        (df["nickname"].isin(conta))
+        (df["status"].isin(status_sel)) &
+        (df["nickname"].isin(nickname_sel))
     ]
 
     if df_filt.empty:
         st.warning("Sem registros para os filtros escolhidos.")
-    else:
-        st.dataframe(df_filt)
-        csv = df_filt.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="⬇️ Exportar CSV",
-            data=csv,
-            file_name="relatorio_vendas_filtrado.csv",
-            mime="text/csv"
-        )
+        return
+
+    # --- exibe e exporta apenas o filtrado ---
+    st.dataframe(df_filt)
+
+    csv = df_filt.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="⬇️ Exportar CSV",
+        data=csv,
+        file_name="relatorio_vendas_filtrado.csv",
+        mime="text/csv"
+    )
 
 
 # Funções para cada página
