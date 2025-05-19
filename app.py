@@ -39,6 +39,7 @@ from sqlalchemy import create_engine, text
 from streamlit_option_menu import option_menu
 from typing import Optional
 from ml.sales import sync_all_accounts
+import matplotlib.pyplot as plt
 
 # 4) Configuração de locale
 try:
@@ -593,48 +594,79 @@ def mostrar_contas_cadastradas():
                 except Exception as e:
                     st.error(f"❌ Erro ao conectar com o servidor: {e}")
 
-def mostrar_relatorios():
-    st.header("📋 Relatórios de Vendas")
+def mostrar_anuncios():
+    st.header("🎯 Análise de Anúncios")
     df = carregar_vendas()
 
     if df.empty:
         st.warning("Nenhum dado para exibir.")
         return
 
-    # --- garanta que date_created é datetime ---
-    df["date_created"] = pd.to_datetime(df["date_created"])
+    # — garanta que date_created seja datetime —
+    df['date_created'] = pd.to_datetime(df['date_created'])
 
-    # --- filtros de data e status ---
-    data_ini = st.date_input("De:",  value=df["date_created"].min().date())
-    data_fim = st.date_input("Até:", value=df["date_created"].max().date())
+    # — filtros de período —
+    data_ini = st.date_input("De:",  value=df['date_created'].min().date())
+    data_fim = st.date_input("Até:", value=df['date_created'].max().date())
 
-    status_opts = df["status"].unique()
-    status_sel = st.multiselect("Status:", options=status_opts, default=status_opts)
+    # — detecte dinamicamente o nome da coluna de MLB —
+    mlb_cols = [c for c in df.columns if 'mlb' in c.lower()]
+    if not mlb_cols:
+        st.error(f"Coluna de MLB não encontrada. Colunas disponíveis: {list(df.columns)}")
+        return
+    mlb_col = mlb_cols[0]
 
-    # --- filtro de Conta (usa coluna 'nickname') ---
-    nickname_opts = df["nickname"].unique()
-    nickname_sel = st.multiselect("Conta (nickname):", options=nickname_opts, default=nickname_opts)
+    # — filtro multiselect para MLB —
+    mlb_opts = df[mlb_col].unique()
+    mlb_sel = st.multiselect("MLB:", options=mlb_opts, default=mlb_opts)
 
-    # --- aplica todos os filtros em df_filt ---
+    # — aplica filtros —
     df_filt = df.loc[
-        (df["date_created"].dt.date >= data_ini) &
-        (df["date_created"].dt.date <= data_fim) &
-        (df["status"].isin(status_sel)) &
-        (df["nickname"].isin(nickname_sel))
+        (df['date_created'].dt.date >= data_ini) &
+        (df['date_created'].dt.date <= data_fim) &
+        (df[mlb_col].isin(mlb_sel))
     ]
 
     if df_filt.empty:
         st.warning("Sem registros para os filtros escolhidos.")
         return
 
-    # --- exibe e exporta apenas o filtrado ---
-    st.dataframe(df_filt)
+    faturamento_col = 'faturamento'  # ajuste se necessário
 
-    csv = df_filt.to_csv(index=False).encode("utf-8")
+    # — Top 10 títulos por faturamento —
+    top10 = (
+        df_filt
+        .groupby('title')[faturamento_col]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+        .reset_index()
+    )
+    st.subheader("🌟 Top 10 Títulos por Faturamento")
+    fig, ax = plt.subplots()
+    ax.barh(top10['title'], top10[faturamento_col])
+    ax.invert_yaxis()
+    ax.set_xlabel("Faturamento")
+    ax.set_ylabel("Título")
+    st.pyplot(fig)
+
+    # — tabela de faturamento por MLB —
+    st.subheader("📊 Faturamento por MLB")
+    df_mlb = (
+        df_filt
+        .groupby(mlb_col)[faturamento_col]
+        .sum()
+        .reset_index()
+        .sort_values(by=faturamento_col, ascending=False)
+    )
+    st.dataframe(df_mlb)
+
+    # — exportação CSV —
+    csv = df_mlb.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="⬇️ Exportar CSV",
         data=csv,
-        file_name="relatorio_vendas_filtrado.csv",
+        file_name="anuncios_faturamento_mlb.csv",
         mime="text/csv"
     )
 
