@@ -350,7 +350,7 @@ def mostrar_dashboard():
     hoje     = pd.Timestamp.now().date()
     
     if filtro_rapido == "Hoje":
-        de, ate = hoje, hoje
+        de = ate = min(hoje, data_max)
     
     elif filtro_rapido == "Ontem":
         ontem = hoje - pd.Timedelta(days=1)
