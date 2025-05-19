@@ -638,7 +638,76 @@ def mostrar_relatorios():
         mime="text/csv"
     )
 
+def mostrar_anuncios():
+    st.header("🎯 Análise de Anúncios")
+    df = carregar_vendas()
 
+    if df.empty:
+        st.warning("Nenhum dado para exibir.")
+        return
+
+    # — Garanta que date_created seja datetime
+    df['date_created'] = pd.to_datetime(df['date_created'])
+
+    # — Filtros de período
+    data_ini = st.date_input("De:",  value=df['date_created'].min().date())
+    data_fim = st.date_input("Até:", value=df['date_created'].max().date())
+
+    # — Filtro por MLB
+    mlb_opts = df['mlb'].unique()
+    mlb_sel = st.multiselect("MLB:", options=mlb_opts, default=mlb_opts)
+
+    # — Aplica filtros
+    df_filt = df.loc[
+        (df['date_created'].dt.date >= data_ini) &
+        (df['date_created'].dt.date <= data_fim) &
+        (df['mlb'].isin(mlb_sel))
+    ]
+
+    if df_filt.empty:
+        st.warning("Sem registros para os filtros escolhidos.")
+        return
+
+    # — Top 10 Títulos por faturamento
+    faturamento_col = 'faturamento'  # ajuste para o nome da sua coluna de faturamento
+    top10 = (
+        df_filt
+        .groupby('title')[faturamento_col]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+        .reset_index()
+    )
+    st.subheader("🌟 Top 10 Títulos por Faturamento")
+    fig, ax = plt.subplots()
+    ax.barh(top10['title'], top10[faturamento_col])
+    ax.invert_yaxis()
+    ax.set_xlabel("Faturamento")
+    ax.set_ylabel("Título")
+    st.pyplot(fig)
+
+    # — Tabela de faturamento por MLB
+    st.subheader("📊 Faturamento por MLB")
+    df_mlb = (
+        df_filt
+        .groupby('mlb')[faturamento_col]
+        .sum()
+        .reset_index()
+        .sort_values(by=faturamento_col, ascending=False)
+    )
+    st.dataframe(df_mlb)
+
+    # — Botão de exportação CSV
+    csv = df_mlb.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="⬇️ Exportar CSV",
+        data=csv,
+        file_name="anuncios_faturamento_mlb.csv",
+        mime="text/csv"
+    )
+
+
+    
 # Funções para cada página
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
@@ -657,9 +726,6 @@ def mostrar_painel_metas():
     st.header("🎯 Painel de Metas")
     st.info("Em breve...")
     
-def mostrar_anuncios():
-    st.header("🎯 Análise de Anúncios")
-    st.info("Em breve...")
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
