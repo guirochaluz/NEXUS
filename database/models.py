@@ -27,6 +27,7 @@ class Sale(Base):
     status            = Column(String,  nullable=True)
     status_detail     = Column(String,  nullable=True)
     date_created      = Column(DateTime, nullable=False)
+    date_last_updated= Column(DateTime(timezone=True), nullable=False)  # <--- novo
     item_id           = Column(String,  nullable=True)
     item_title        = Column(String,  nullable=True)
     quantity          = Column(Integer, nullable=True)
