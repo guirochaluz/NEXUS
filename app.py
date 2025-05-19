@@ -247,7 +247,8 @@ def render_sidebar():
                 "Expedição e Logística",
                 "Gestão de SKU",
                 "Gestão de Despesas",
-                "Painel de Metas"
+                "Painel de Metas",
+                "Gestão de Anúncios"
             ],
             icons=[
                 "house",
@@ -266,7 +267,8 @@ def render_sidebar():
                 "Expedição e Logística",
                 "Gestão de SKU",
                 "Gestão de Despesas",
-                "Painel de Metas"
+                "Painel de Metas",
+                "Gestão de Anúncios"
             ].index(st.session_state.get("page", "Dashboard")),
             orientation="vertical",
             styles={
