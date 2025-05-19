@@ -594,21 +594,48 @@ def mostrar_contas_cadastradas():
 def mostrar_relatorios():
     st.header("📋 Relatórios de Vendas")
     df = carregar_vendas()
+
     if df.empty:
         st.warning("Nenhum dado para exibir.")
         return
-    data_ini = st.date_input("De:",  value=df["date_created"].min())
+
+    # --- filtros de data, status, nickname e conta ---
+    data_ini = st.date_input("De:", value=df["date_created"].min())
     data_fim = st.date_input("Até:", value=df["date_created"].max())
-    status  = st.multiselect("Status:", options=df["status"].unique(), default=df["status"].unique())
+
+    status_opts = df["status"].unique()
+    status = st.multiselect("Status:", options=status_opts, default=status_opts)
+
+    nickname_opts = df["nickname"].unique()
+    nickname = st.multiselect("Nickname:", options=nickname_opts, default=nickname_opts)
+
+    conta_opts = df["conta"].unique()
+    conta = st.multiselect("Conta:", options=conta_opts, default=conta_opts)
+
+    # --- aplicação dos filtros ---
     df_filt = df.loc[
         (df["date_created"].dt.date >= data_ini) &
         (df["date_created"].dt.date <= data_fim) &
-        (df["status"].isin(status))
+        (df["status"].isin(status)) &
+        (df["nickname"].isin(nickname)) &
+        (df["conta"].isin(conta))
     ]
+
     if df_filt.empty:
         st.warning("Sem registros para os filtros escolhidos.")
     else:
+        # exibição da tabela filtrada
         st.dataframe(df_filt)
+
+        # botão para exportar apenas o filtrado
+        csv = df_filt.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Exportar CSV",
+            data=csv,
+            file_name="relatorio_vendas_filtrado.csv",
+            mime="text/csv"
+        )
+
 
 # Funções para cada página
 def mostrar_expedicao_logistica():
