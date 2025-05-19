@@ -1,3 +1,15 @@
+import os
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import requests
+from sqlalchemy import create_engine, text
+from dotenv import load_dotenv
+import locale
+from streamlit_option_menu import option_menu
+from typing import Optional
+from ml.sales import sync_all_accounts
+
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
