@@ -1,8 +1,8 @@
 import os
 import requests
 from dateutil import parser
-from database.db import SessionLocal
-from database.models import Sale
+from db import SessionLocal
+from models import Sale
 from sqlalchemy import func, text
 from typing import Optional
 from dotenv import load_dotenv
