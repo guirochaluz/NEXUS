@@ -1,15 +1,3 @@
-import os
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import requests
-from sqlalchemy import create_engine, text
-from dotenv import load_dotenv
-import locale
-from streamlit_option_menu import option_menu
-from typing import Optional
-from ml.sales import sync_all_accounts
-
 # Tenta configurar locale pt_BR; guarda se deu certo
 try:
     locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
@@ -311,22 +299,6 @@ def format_currency(value):
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def mostrar_dashboard():
-    import streamlit as st
-    import pandas as pd
-    from sqlalchemy import text
-
-    # --- estilo customizado para labels verdes ---
-    st.markdown(
-        '''
-        <style>
-        .stSelectbox label div[data-testid="stMarkdownContainer"] > div > span,
-        .stDateInput label div[data-testid="stMarkdownContainer"] > div > span {
-            color: #32CD32 !important;
-        }
-        </style>
-        ''',
-        unsafe_allow_html=True
-    )
 
     # --- botão de sincronização ---
     if st.button("🔄 Sincronizar Vendas"):
@@ -575,7 +547,8 @@ def mostrar_dashboard():
         markers=True
     )
     st.plotly_chart(fig_hora, use_container_width=True)
-    
+
+
 def mostrar_contas_cadastradas():
     st.header("🏷️ Contas Cadastradas")
     
@@ -645,6 +618,10 @@ def mostrar_gestao_despesas():
 def mostrar_painel_metas():
     st.header("🎯 Painel de Metas")
     st.info("Em breve...")
+    
+def mostrar_anuncios():
+    st.header("🎯 Análise de Anúncios")
+    st.info("Em breve...")
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
@@ -665,3 +642,5 @@ elif pagina == "Gestão de Despesas":
     mostrar_gestao_despesas()
 elif pagina == "Painel de Metas":
     mostrar_painel_metas()
+elif pagina == "Gestão de Anúncios":
+    mostrar_anuncios()
