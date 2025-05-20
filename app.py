@@ -38,8 +38,10 @@ import requests
 from sqlalchemy import create_engine, text
 from streamlit_option_menu import option_menu
 from typing import Optional
-from ml.sales import sync_all_accounts
+from sales import sync_all_accounts
 import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+
 
 # 4) Configuração de locale
 try:
