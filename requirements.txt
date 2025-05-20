@@ -18,3 +18,4 @@ openpyxl
 streamlit-option-menu
 streamlit-cookies-manager
 matplotlib
+wordcloud
