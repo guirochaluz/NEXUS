@@ -178,7 +178,10 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    s.item_title,
                    s.status,
                    s.quantity,
+                   s.unit_price,
                    s.total_amount,
+                   s.ml_user_id,
+                   s.buyer_nickname,
                    u.nickname
               FROM sales s
               LEFT JOIN user_tokens u ON s.ml_user_id = u.ml_user_id
@@ -194,7 +197,10 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    s.item_title,
                    s.status,
                    s.quantity,
+                   s.unit_price,
                    s.total_amount,
+                   s.ml_user_id,
+                   s.buyer_nickname,
                    u.nickname
               FROM sales s
               LEFT JOIN user_tokens u ON s.ml_user_id = u.ml_user_id
@@ -741,7 +747,73 @@ def mostrar_anuncios():
         mime="text/csv"
     )
 
+def mostrar_relatorios():
+    st.header("📋 Relatórios de Vendas")
 
+    df = carregar_vendas()
+
+    if df.empty:
+        st.warning("Nenhum dado encontrado.")
+        return
+
+    df['date_created'] = pd.to_datetime(df['date_created'])
+
+    # Filtro de período
+    col1, col2 = st.columns(2)
+    with col1:
+        data_ini = st.date_input("De:", value=df['date_created'].min().date())
+    with col2:
+        data_fim = st.date_input("Até:", value=df['date_created'].max().date())
+
+    df_filt = df.loc[
+        (df['date_created'].dt.date >= data_ini) &
+        (df['date_created'].dt.date <= data_fim)
+    ]
+
+    if df_filt.empty:
+        st.warning("Nenhuma venda no período selecionado.")
+        return
+
+    # Adiciona coluna de link para o anúncio
+    df_filt['link'] = df_filt['item_id'].apply(
+        lambda x: f"[🔗 Ver Anúncio](https://www.mercadolivre.com.br/anuncio/{x})"
+    )
+
+    # Reorganiza e seleciona as colunas principais
+    colunas = [
+        'date_created',
+        'item_id',
+        'item_title',
+        'quantity',
+        'unit_price',
+        'total_amount',
+        'order_id',
+        'buyer_nickname',
+        'ml_user_id',
+        'status',
+        'link'
+    ]
+
+    df_exibir = df_filt[colunas].copy()
+
+    # Formatação visual
+    df_exibir['unit_price'] = df_exibir['unit_price'].apply(
+        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    )
+    df_exibir['total_amount'] = df_exibir['total_amount'].apply(
+        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    )
+
+    st.dataframe(df_exibir, use_container_width=True)
+
+    # Exportação CSV com dados crus
+    csv = df_filt[colunas].to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="⬇️ Exportar CSV das Vendas",
+        data=csv,
+        file_name="relatorio_vendas.csv",
+        mime="text/csv"
+    )
     
 # Funções para cada página
 def mostrar_expedicao_logistica():
