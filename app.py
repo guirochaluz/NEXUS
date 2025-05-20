@@ -264,7 +264,8 @@ def render_sidebar():
                 "truck",
                 "box-seam",
                 "currency-dollar",
-                "bar-chart-line"
+                "bar-chart-line",
+                "bullseye"
             ],
             menu_icon="list",
             default_index=[
@@ -602,7 +603,7 @@ def mostrar_contas_cadastradas():
 
 def mostrar_anuncios():
     st.header("🎯 Análise de Anúncios")
-    df = carregar_vendas()  # ou cargar_vendas(), conforme seu código
+    df = carregar_vendas() 
 
     if df.empty:
         st.warning("Nenhum dado para exibir.")
