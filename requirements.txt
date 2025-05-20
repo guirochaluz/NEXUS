@@ -20,3 +20,5 @@ streamlit-cookies-manager
 matplotlib
 wordcloud
 altair
+scikit-learn
+textblob
