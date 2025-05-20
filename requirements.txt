@@ -17,7 +17,6 @@ python-multipart>=0.0.5
 openpyxl
 streamlit-option-menu
 streamlit-cookies-manager
-matplotlib
 wordcloud
 altair
 scikit-learn
