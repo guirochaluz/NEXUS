@@ -38,7 +38,7 @@ import requests
 from sqlalchemy import create_engine, text
 from streamlit_option_menu import option_menu
 from typing import Optional
-from sales import sync_all_accounts
+from ml.sales import sync_all_accounts
 
 # 4) Configuração de locale
 try:
