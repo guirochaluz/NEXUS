@@ -173,7 +173,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
         # … seu código de consulta por nickname …
         sql = text("""
             SELECT s.order_id,
-                   s.date_created,
+                   s.date_closed,
                    s.item_id,
                    s.item_title,
                    s.status,
@@ -192,7 +192,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
     else:
         sql = text("""
             SELECT s.order_id,
-                   s.date_created,
+                   s.date_closed,
                    s.item_id,
                    s.item_title,
                    s.status,
@@ -209,8 +209,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
         df = pd.read_sql(sql, engine)
 
     # converte de UTC para Horário de Brasília e descarta tz
-    df["date_created"] = (
-        pd.to_datetime(df["date_created"], utc=True)
+    df["date_closed"] = (
+        pd.to_datetime(df["date_closed"], utc=True)
           .dt.tz_convert("America/Sao_Paulo")
           .dt.tz_localize(None)
     )
@@ -361,8 +361,8 @@ def mostrar_dashboard():
     )
     
     # 2) Determina intervalos de data (com “Ontem”)
-    data_min = df_full["date_created"].dt.date.min()
-    data_max = df_full["date_created"].dt.date.max()
+    data_min = df_full["date_closed"].dt.date.min()
+    data_max = df_full["date_closed"].dt.date.max()
     hoje     = pd.Timestamp.now().date()
     
     if filtro_rapido == "Hoje":
@@ -405,8 +405,8 @@ def mostrar_dashboard():
 
     # --- aplica filtro de datas ---
     df = df_full[
-        (df_full["date_created"].dt.date >= de) &
-        (df_full["date_created"].dt.date <= ate)
+        (df_full["date_closed"].dt.date >= de) &
+        (df_full["date_closed"].dt.date <= ate)
     ]
 
     if df.empty:
@@ -416,10 +416,10 @@ def mostrar_dashboard():
 
     # =================== Ajuste de Timezone ===================
     # Primeiro, define o timezone como UTC para os timestamps "naive"
-    df["date_created"] = df["date_created"].dt.tz_localize("UTC")
+    df["date_closed"] = df["date_closed"].dt.tz_localize("UTC")
 
     # Converte para o fuso horário de São Paulo
-    df["date_created"] = df["date_created"].dt.tz_convert("America/Sao_Paulo")
+    df["date_closed"] = df["date_closed"].dt.tz_convert("America/Sao_Paulo")
 
     
     # 4) Métricas
@@ -459,22 +459,22 @@ def mostrar_dashboard():
     df_plot = df.copy()
     
     # Ajuste de fuso para São Paulo
-    df_plot["date_created"] = df_plot["date_created"].dt.tz_convert('America/Sao_Paulo')
+    df_plot["date_closed"] = df_plot["date_closed"].dt.tz_convert('America/Sao_Paulo')
     
     # agrupa por hora sempre que o período for um único dia
     if de == ate:
-        df_plot["date_hour"] = df_plot["date_created"].dt.floor("H")
+        df_plot["date_hour"] = df_plot["date_closed"].dt.floor("H")
         eixo_x = "date_hour"
         periodo_label = "Hora"
     else:
         # mais de um dia: usa o seletor Diário/Mensal
         if tipo_visualizacao == "Diário":
-            df_plot["date_created"] = df_plot["date_created"].dt.date
-            eixo_x = "date_created"
+            df_plot["date_closed"] = df_plot["date_closed"].dt.date
+            eixo_x = "date_closed"
             periodo_label = "Dia"
         else:
-            df_plot["date_created"] = df_plot["date_created"].dt.to_period("M").astype(str)
-            eixo_x = "date_created"
+            df_plot["date_closed"] = df_plot["date_closed"].dt.to_period("M").astype(str)
+            eixo_x = "date_closed"
             periodo_label = "Mês"
     
     # aplica agregação comum
@@ -526,11 +526,11 @@ def mostrar_dashboard():
     # === Gráfico de barras: Média por dia da semana ===
     st.markdown('<div class="section-title">📅 Vendas por Dia da Semana</div>', unsafe_allow_html=True)
     dias = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"]
-    df["dia"] = df["date_created"].dt.day_name().map({
+    df["dia"] = df["date_closed"].dt.day_name().map({
         "Monday":"Segunda","Tuesday":"Terça","Wednesday":"Quarta",
         "Thursday":"Quinta","Friday":"Sexta","Saturday":"Sábado","Sunday":"Domingo"
     })
-    gb = df.groupby(["dia", df["date_created"].dt.date])["total_amount"].sum().reset_index()
+    gb = df.groupby(["dia", df["date_closed"].dt.date])["total_amount"].sum().reset_index()
     ab = gb.groupby("dia")["total_amount"].mean().reindex(dias).reset_index()
     fig_bar = px.bar(
         ab, x="dia", y="total_amount", text_auto=".2s",
@@ -544,7 +544,7 @@ def mostrar_dashboard():
     st.markdown("### ⏰ Faturamento Acumulado por Hora do Dia (Média)")
     
     # Extrai hora e calcula média acumulada
-    df["hora"] = df["date_created"].dt.hour
+    df["hora"] = df["date_closed"].dt.hour
     faturamento_por_hora = (
         df.groupby("hora")["total_amount"]
           .mean()
@@ -609,15 +609,15 @@ def mostrar_anuncios():
         st.warning("Nenhum dado para exibir.")
         return
 
-    df['date_created'] = pd.to_datetime(df['date_created'])
+    df['date_closed'] = pd.to_datetime(df['date_closed'])
 
     # ========== FILTROS ==========
-    data_ini = st.date_input("De:",  value=df['date_created'].min().date())
-    data_fim = st.date_input("Até:", value=df['date_created'].max().date())
+    data_ini = st.date_input("De:",  value=df['date_closed'].min().date())
+    data_fim = st.date_input("Até:", value=df['date_closed'].max().date())
 
     df_filt = df.loc[
-    (df['date_created'].dt.date >= data_ini) &
-    (df['date_created'].dt.date <= data_fim)
+    (df['date_closed'].dt.date >= data_ini) &
+    (df['date_closed'].dt.date <= data_fim)
     ]
 
     if df_filt.empty:
@@ -756,18 +756,18 @@ def mostrar_relatorios():
         st.warning("Nenhum dado encontrado.")
         return
 
-    df['date_created'] = pd.to_datetime(df['date_created'])
+    df['date_closed'] = pd.to_datetime(df['date_closed'])
 
     # Filtro de período
     col1, col2 = st.columns(2)
     with col1:
-        data_ini = st.date_input("De:", value=df['date_created'].min().date())
+        data_ini = st.date_input("De:", value=df['date_closed'].min().date())
     with col2:
-        data_fim = st.date_input("Até:", value=df['date_created'].max().date())
+        data_fim = st.date_input("Até:", value=df['date_closed'].max().date())
 
     df_filt = df.loc[
-        (df['date_created'].dt.date >= data_ini) &
-        (df['date_created'].dt.date <= data_fim)
+        (df['date_closed'].dt.date >= data_ini) &
+        (df['date_closed'].dt.date <= data_fim)
     ]
 
     if df_filt.empty:
@@ -781,7 +781,7 @@ def mostrar_relatorios():
 
     # Reorganiza e seleciona as colunas principais
     colunas = [
-        'date_created',
+        'date_closed',
         'item_id',
         'item_title',
         'quantity',
