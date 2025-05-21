@@ -95,7 +95,7 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
 
         # 1) Última data no banco
         last_db_date = (
-            db.query(func.max(Sale.date_created))
+            db.query(func.max(Sale.date_closed))
               .filter(Sale.ml_user_id == int(ml_user_id))
               .scalar()
         )
@@ -111,7 +111,7 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
             "order.status": "paid",
             "limit": FULL_PAGE_SIZE,
             "sort": "date_desc",
-            "order.date_created.from": last_db_date.isoformat(),
+            "order.date_closed.from": last_db_date.isoformat(),
         }
         headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -203,7 +203,7 @@ def _order_to_sale(order: dict, ml_user_id: str) -> Sale:
         total_amount    = order.get("total_amount"),
         status          = order.get("status"),
         status_detail   = order.get("status_detail"),
-        date_created    = parser.isoparse(order.get("date_created")),
+        date_closed    = parser.isoparse(order.get("date_closed")),
         item_id         = item_inf.get("id"),
         item_title      = item_inf.get("title"),
         quantity        = item.get("quantity"),
