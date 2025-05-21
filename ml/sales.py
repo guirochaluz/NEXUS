@@ -8,6 +8,11 @@ from typing import Optional
 from dotenv import load_dotenv
 from dateutil import parser
 from dateutil.tz import tzutc
+from requests.exceptions import HTTPError
+except RequestException as err:
+    print(f"Erro ao acessar a API do Mercado Livre: {err}")
+
+
 
 # Carrega variáveis de ambiente
 load_dotenv()
