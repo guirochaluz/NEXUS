@@ -26,7 +26,7 @@ class Sale(Base):
     total_amount      = Column(Float,   nullable=True)
     status            = Column(String,  nullable=True)
     status_detail     = Column(String,  nullable=True)
-    date_created      = Column(DateTime, nullable=False)
+    date_closed      = Column(DateTime, nullable=False)
     item_id           = Column(String,  nullable=True)
     item_title        = Column(String,  nullable=True)
     quantity          = Column(Integer, nullable=True)
