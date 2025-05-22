@@ -183,7 +183,7 @@ def sync_all_accounts() -> int:
 
 
 def _order_to_sale(order: dict, ml_user_id: str) -> Sale:
-    from db import SessionLocal
+    from database.db import SessionLocal
     db = SessionLocal()
 
     buyer    = order.get("buyer", {}) or {}
