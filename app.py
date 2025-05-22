@@ -44,6 +44,7 @@ import altair as alt
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from textblob import TextBlob
+import io
 
 
 # 4) Configuração de locale
@@ -173,7 +174,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
         # … seu código de consulta por nickname …
         sql = text("""
             SELECT s.order_id,
-                   s.date_closed,
+                   s.date_adjusted,
                    s.item_id,
                    s.item_title,
                    s.status,
@@ -192,7 +193,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
     else:
         sql = text("""
             SELECT s.order_id,
-                   s.date_closed,
+                   s.date_adjusted,
                    s.item_id,
                    s.item_title,
                    s.status,
@@ -207,13 +208,6 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
         """)
         # **ADICIONE esta linha abaixo**
         df = pd.read_sql(sql, engine)
-
-    # converte de UTC para Horário de Brasília e descarta tz
-    df["date_closed"] = (
-        pd.to_datetime(df["date_closed"], utc=True)
-          .dt.tz_convert("America/Sao_Paulo")
-          .dt.tz_localize(None)
-    )
     return df
 
 
@@ -361,8 +355,8 @@ def mostrar_dashboard():
     )
     
     # 2) Determina intervalos de data (com “Ontem”)
-    data_min = df_full["date_closed"].dt.date.min()
-    data_max = df_full["date_closed"].dt.date.max()
+    data_min = df_full["date_adjusted"].dt.date.min()
+    data_max = df_full["date_adjusted"].dt.date.max()
     hoje     = pd.Timestamp.now().date()
     
     if filtro_rapido == "Hoje":
@@ -405,8 +399,8 @@ def mostrar_dashboard():
 
     # --- aplica filtro de datas ---
     df = df_full[
-        (df_full["date_closed"].dt.date >= de) &
-        (df_full["date_closed"].dt.date <= ate)
+        (df_full["date_adjusted"].dt.date >= de) &
+        (df_full["date_adjusted"].dt.date <= ate)
     ]
 
     if df.empty:
@@ -415,12 +409,6 @@ def mostrar_dashboard():
 
 
     # =================== Ajuste de Timezone ===================
-    # Primeiro, define o timezone como UTC para os timestamps "naive"
-    df["date_closed"] = df["date_closed"].dt.tz_localize("UTC")
-
-    # Converte para o fuso horário de São Paulo
-    df["date_closed"] = df["date_closed"].dt.tz_convert("America/Sao_Paulo")
-
     
     # 4) Métricas
     total_vendas = len(df)
@@ -458,23 +446,20 @@ def mostrar_dashboard():
     # 2) Prepara e agrega os dados
     df_plot = df.copy()
     
-    # Ajuste de fuso para São Paulo
-    df_plot["date_closed"] = df_plot["date_closed"].dt.tz_convert('America/Sao_Paulo')
-    
     # agrupa por hora sempre que o período for um único dia
     if de == ate:
-        df_plot["date_hour"] = df_plot["date_closed"].dt.floor("H")
+        df_plot["date_hour"] = df_plot["date_adjusted"].dt.floor("H")
         eixo_x = "date_hour"
         periodo_label = "Hora"
     else:
         # mais de um dia: usa o seletor Diário/Mensal
         if tipo_visualizacao == "Diário":
-            df_plot["date_closed"] = df_plot["date_closed"].dt.date
-            eixo_x = "date_closed"
+            df_plot["date_adjusted"] = df_plot["date_adjusted"].dt.date
+            eixo_x = "date_adjusted"
             periodo_label = "Dia"
         else:
-            df_plot["date_closed"] = df_plot["date_closed"].dt.to_period("M").astype(str)
-            eixo_x = "date_closed"
+            df_plot["date_adjusted"] = df_plot["date_adjusted"].dt.to_period("M").astype(str)
+            eixo_x = "date_adjusted"
             periodo_label = "Mês"
     
     # aplica agregação comum
@@ -525,47 +510,114 @@ def mostrar_dashboard():
 
     # === Gráfico de barras: Média por dia da semana ===
     st.markdown('<div class="section-title">📅 Vendas por Dia da Semana</div>', unsafe_allow_html=True)
-    dias = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"]
-    df["dia"] = df["date_closed"].dt.day_name().map({
-        "Monday":"Segunda","Tuesday":"Terça","Wednesday":"Quarta",
-        "Thursday":"Quinta","Friday":"Sexta","Saturday":"Sábado","Sunday":"Domingo"
+    
+    # Nome dos dias na ordem certa
+    dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+    
+    # Extrai dia da semana em português
+    df["dia_semana"] = df["date_adjusted"].dt.day_name().map({
+        "Monday": "Segunda", "Tuesday": "Terça", "Wednesday": "Quarta",
+        "Thursday": "Quinta", "Friday": "Sexta", "Saturday": "Sábado", "Sunday": "Domingo"
     })
-    gb = df.groupby(["dia", df["date_closed"].dt.date])["total_amount"].sum().reset_index()
-    ab = gb.groupby("dia")["total_amount"].mean().reindex(dias).reset_index()
+    
+    # Extrai a data (sem hora)
+    df["data"] = df["date_adjusted"].dt.date
+    
+    # Soma o total vendido por dia (independente da hora)
+    total_por_data = df.groupby(["dia_semana", "data"])["total_amount"].sum().reset_index()
+    
+    # Agora calcula a média por dia da semana
+    media_por_dia = total_por_data.groupby("dia_semana")["total_amount"].mean().reindex(dias).reset_index()
+    
+    # Plota o gráfico de barras
     fig_bar = px.bar(
-        ab, x="dia", y="total_amount", text_auto=".2s",
-        labels={"dia":"Dia","total_amount":"Média"},
+        media_por_dia,
+        x="dia_semana",
+        y="total_amount",
+        text_auto=".2s",
+        labels={"dia_semana": "Dia da Semana", "total_amount": "Média Vendida (R$)"},
         color_discrete_sequence=["#27ae60"]
     )
+    
     st.plotly_chart(fig_bar, use_container_width=True, theme="streamlit")
+
+
 
 
     # =================== Gráfico de Linha - Faturamento Acumulado por Hora ===================
     st.markdown("### ⏰ Faturamento Acumulado por Hora do Dia (Média)")
     
-    # Extrai hora e calcula média acumulada
-    df["hora"] = df["date_closed"].dt.hour
-    faturamento_por_hora = (
-        df.groupby("hora")["total_amount"]
-          .mean()
-          .cumsum()
-          .reset_index(name="Valor Médio Acumulado")
+    # Extrai hora e data
+    df["hora"] = df["date_adjusted"].dt.hour
+    df["data"] = df["date_adjusted"].dt.date
+    
+    # Soma o total vendido por hora e por dia
+    vendas_por_dia_e_hora = df.groupby(["data", "hora"])["total_amount"].sum().reset_index()
+    
+    # Garante que todas as horas estejam presentes para todos os dias
+    todos_dias = vendas_por_dia_e_hora["data"].unique()
+    todas_horas = list(range(0, 24))
+    malha_completa = pd.MultiIndex.from_product([todos_dias, todas_horas], names=["data", "hora"])
+    vendas_completa = vendas_por_dia_e_hora.set_index(["data", "hora"]).reindex(malha_completa, fill_value=0).reset_index()
+    
+    # Acumula por hora dentro de cada dia
+    vendas_completa["acumulado_dia"] = vendas_completa.groupby("data")["total_amount"].cumsum()
+    
+    # Agora calcula a média acumulada por hora (entre os dias)
+    media_acumulada_por_hora = (
+        vendas_completa
+        .groupby("hora")["acumulado_dia"]
+        .mean()
+        .reset_index(name="Valor Médio Acumulado")
     )
     
-    # Plota
+    # Verifica se é filtro de hoje
+    hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
+    filtro_hoje = (de == ate) and (de == hoje)
+    
+    if filtro_hoje:
+        hora_atual = pd.Timestamp.now(tz="America/Sao_Paulo").hour
+        df_hoje = df[df["data"] == hoje]
+        vendas_hoje_por_hora = (
+            df_hoje.groupby("hora")["total_amount"].sum().reindex(range(24), fill_value=0)
+            .cumsum()
+            .reset_index(name="Valor Médio Acumulado")
+            .rename(columns={"index": "hora"})
+        )
+        # Traz o ponto até hora atual
+        ponto_extra = pd.DataFrame([{
+            "hora": hora_atual,
+            "Valor Médio Acumulado": vendas_hoje_por_hora.loc[hora_atual, "Valor Médio Acumulado"]
+        }])
+        media_acumulada_por_hora = pd.concat([media_acumulada_por_hora, ponto_extra]).groupby("hora").last().reset_index()
+    
+    else:
+        # Para histórico, adiciona o ponto final às 23h com média total diária
+        media_final = df.groupby("data")["total_amount"].sum().mean()
+        ponto_final = pd.DataFrame([{
+            "hora": 23,
+            "Valor Médio Acumulado": media_final
+        }])
+        media_acumulada_por_hora = pd.concat([media_acumulada_por_hora, ponto_final]).groupby("hora").last().reset_index()
+    
+    # Plota o gráfico
     fig_hora = px.line(
-        faturamento_por_hora,
+        media_acumulada_por_hora,
         x="hora",
         y="Valor Médio Acumulado",
-        title="⏰ Média de Faturamento Acumulado por Hora",
+        title="⏰ Faturamento Acumulado por Hora (Média por Dia)",
         labels={
             "hora": "Hora do Dia",
-            "Valor Médio Acumulado": "Valor Médio Acumulado"
+            "Valor Médio Acumulado": "Valor Acumulado (R$)"
         },
         color_discrete_sequence=["#27ae60"],
         markers=True
     )
+    fig_hora.update_layout(xaxis=dict(dtick=1))
+    
     st.plotly_chart(fig_hora, use_container_width=True)
+
+
 
 
 def mostrar_contas_cadastradas():
@@ -609,15 +661,15 @@ def mostrar_anuncios():
         st.warning("Nenhum dado para exibir.")
         return
 
-    df['date_closed'] = pd.to_datetime(df['date_closed'])
+    df['date_adjusted'] = pd.to_datetime(df['date_adjusted'])
 
     # ========== FILTROS ==========
-    data_ini = st.date_input("De:",  value=df['date_closed'].min().date())
-    data_fim = st.date_input("Até:", value=df['date_closed'].max().date())
+    data_ini = st.date_input("De:",  value=df['date_adjusted'].min().date())
+    data_fim = st.date_input("Até:", value=df['date_adjusted'].max().date())
 
     df_filt = df.loc[
-    (df['date_closed'].dt.date >= data_ini) &
-    (df['date_closed'].dt.date <= data_fim)
+    (df['date_adjusted'].dt.date >= data_ini) &
+    (df['date_adjusted'].dt.date <= data_fim)
     ]
 
     if df_filt.empty:
@@ -756,18 +808,18 @@ def mostrar_relatorios():
         st.warning("Nenhum dado encontrado.")
         return
 
-    df['date_closed'] = pd.to_datetime(df['date_closed'])
+    df['date_adjusted'] = pd.to_datetime(df['date_adjusted'])
 
     # Filtro de período
     col1, col2 = st.columns(2)
     with col1:
-        data_ini = st.date_input("De:", value=df['date_closed'].min().date())
+        data_ini = st.date_input("De:", value=df['date_adjusted'].min().date())
     with col2:
-        data_fim = st.date_input("Até:", value=df['date_closed'].max().date())
+        data_fim = st.date_input("Até:", value=df['date_adjusted'].max().date())
 
     df_filt = df.loc[
-        (df['date_closed'].dt.date >= data_ini) &
-        (df['date_closed'].dt.date <= data_fim)
+        (df['date_adjusted'].dt.date >= data_ini) &
+        (df['date_adjusted'].dt.date <= data_fim)
     ]
 
     if df_filt.empty:
@@ -781,7 +833,7 @@ def mostrar_relatorios():
 
     # Reorganiza e seleciona as colunas principais
     colunas = [
-        'date_closed',
+        'date_adjusted',
         'item_id',
         'item_title',
         'quantity',
@@ -814,15 +866,118 @@ def mostrar_relatorios():
         file_name="relatorio_vendas.csv",
         mime="text/csv"
     )
-    
-# Funções para cada página
-def mostrar_expedicao_logistica():
-    st.header("🚚 Expedição e Logística")
-    st.info("Em breve...")
 
 
 def mostrar_gestao_sku():
     st.header("📦 Gestão de SKU")
+
+    # 1️⃣ Consulta a tabela SKU (id fica oculto na interface)
+    df_sku = pd.read_sql("SELECT * FROM sku ORDER BY sku", engine)
+    df_visivel = df_sku.drop(columns=["id"])
+
+    st.markdown("### 🧾 Base de SKUs Cadastrados")
+    df_editado = st.data_editor(
+        df_visivel,
+        use_container_width=True,
+        num_rows="dynamic",
+        key="editor_sku"
+    )
+
+    # 2️⃣ Salvar alterações feitas na própria tabela
+    if st.button("💾 Salvar Alterações na Tabela"):
+        try:
+            with engine.begin() as conn:
+                for _, row in df_editado.iterrows():
+                    sku = row["sku"]
+                    row_dict = row.to_dict()
+                    # Recupera o id real da linha original
+                    row_dict["id"] = int(df_sku.loc[df_sku["sku"] == sku, "id"].values[0])
+                    conn.execute(text("""
+                        UPDATE sku
+                           SET level1         = :level1,
+                               level2         = :level2,
+                               custo_unitario = :custo_unitario,
+                               quantity       = :quantity
+                         WHERE id = :id
+                    """), row_dict)
+            st.success("✅ Alterações salvas com sucesso!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Erro ao salvar: {e}")
+
+    # 3️⃣ Botão para excluir SKUs selecionados
+    st.markdown("---")
+    st.markdown("### 🗑️ Excluir SKUs Selecionados")
+    skus_para_excluir = st.multiselect(
+        "Selecione os SKUs a excluir:",
+        df_visivel["sku"].tolist()
+    )
+
+    if st.button("❌ Excluir Selecionados"):
+        if not skus_para_excluir:
+            st.warning("⚠️ Nenhum SKU selecionado.")
+        else:
+            try:
+                with engine.begin() as conn:
+                    for sku in skus_para_excluir:
+                        conn.execute(text("DELETE FROM sku WHERE sku = :sku"), {"sku": sku})
+                st.success("✅ SKUs excluídos com sucesso!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erro ao excluir: {e}")
+
+    st.markdown("---")
+
+    # 4️⃣ Exportar modelo Excel
+    modelo = pd.DataFrame(columns=["sku", "level1", "level2", "custo_unitario", "quantity"])
+    buffer = io.BytesIO()
+    modelo.to_excel(buffer, index=False, engine="openpyxl")
+    st.download_button(
+        label="⬇️ Baixar Modelo Excel",
+        data=buffer.getvalue(),
+        file_name="modelo_sku.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # 5️⃣ Upload da planilha e processamento sob demanda
+    st.markdown("### ⬆️ Importar Planilha para Atualizar Base de SKUs")
+    arquivo = st.file_uploader("Selecione um arquivo Excel (.xlsx)", type=["xlsx"])
+
+    if arquivo is not None:
+        df_novo = pd.read_excel(arquivo)
+        colunas_esperadas = {"sku", "level1", "level2", "custo_unitario", "quantity"}
+
+        if not colunas_esperadas.issubset(df_novo.columns):
+            st.error("❌ Colunas inválidas. Verifique se o arquivo contém: sku, level1, level2, custo_unitario, quantity.")
+        else:
+            # Normaliza quantity (NaN → 0) e garante tipo int
+            df_novo["quantity"] = df_novo["quantity"].fillna(1).astype(int)
+
+            if st.button("✅ Processar Planilha e Atualizar"):
+                try:
+                    with engine.begin() as conn:
+                        for _, row in df_novo.iterrows():
+                            conn.execute(text("""
+                                INSERT INTO sku (sku, level1, level2, custo_unitario, quantity)
+                                VALUES (:sku, :level1, :level2, :custo_unitario, :quantity)
+                                ON CONFLICT (sku)
+                                DO UPDATE SET
+                                    level1         = EXCLUDED.level1,
+                                    level2         = EXCLUDED.level2,
+                                    custo_unitario = EXCLUDED.custo_unitario,
+                                    quantity       = EXCLUDED.quantity
+                            """), row.to_dict())
+
+                    st.success("✅ Planilha importada com sucesso e dados atualizados!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar o arquivo: {e}")
+
+            
+    
+# Funções para cada página
+def mostrar_expedicao_logistica():
+    st.header("🚚 Expedição e Logística")
     st.info("Em breve...")
 
 def mostrar_gestao_despesas():
