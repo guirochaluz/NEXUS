@@ -183,37 +183,69 @@ def sync_all_accounts() -> int:
 
 
 def _order_to_sale(order: dict, ml_user_id: str) -> Sale:
-    """
-    Converte o JSON de uma order ML num objeto database.models.Sale.
-    """
+    from db import SessionLocal
+    db = SessionLocal()
+
     buyer    = order.get("buyer", {}) or {}
     item     = (order.get("order_items") or [{}])[0]
     item_inf = item.get("item", {}) or {}
     ship     = order.get("shipping") or {}
     addr     = ship.get("receiver_address") or {}
 
+    item_id = item_inf.get("id")
+    sku = None
+    quantity_sku = None
+    custo_unitario = None
+    level1 = None
+    level2 = None
+
+    try:
+        sku_result = db.execute(text("""
+            SELECT sku FROM skumlb WHERE mlb = :mlb LIMIT 1
+        """), {"mlb": item_id}).scalar()
+
+        if sku_result:
+            sku = sku_result
+            sku_info = db.execute(text("""
+                SELECT quantity, custo_unitario, level1, level2
+                FROM sku
+                WHERE sku = :sku
+                ORDER BY date_created DESC
+                LIMIT 1
+            """), {"sku": sku}).fetchone()
+
+            if sku_info:
+                quantity_sku, custo_unitario, level1, level2 = sku_info
+    finally:
+        db.close()
+
     return Sale(
-        order_id        = str(order["id"]),
-        ml_user_id      = int(ml_user_id),
-        buyer_id        = buyer.get("id"),
-        buyer_nickname  = buyer.get("nickname"),
-        buyer_email     = buyer.get("email"),
-        buyer_first_name= buyer.get("first_name"),
-        buyer_last_name = buyer.get("last_name"),
-        total_amount    = order.get("total_amount"),
-        status          = order.get("status"),
-        status_detail   = order.get("status_detail"),
-        date_closed    = parser.isoparse(order.get("date_closed")),
-        item_id         = item_inf.get("id"),
-        item_title      = item_inf.get("title"),
-        quantity        = item.get("quantity"),
-        unit_price      = item.get("unit_price"),
-        shipping_id     = ship.get("id"),
-        shipping_status = ship.get("status"),
-        city            = addr.get("city", {}).get("name"),
-        state           = addr.get("state", {}).get("name"),
-        country         = addr.get("country", {}).get("id"),
-        zip_code        = addr.get("zip_code"),
-        street_name     = addr.get("street_name"),
-        street_number   = addr.get("street_number"),
+        order_id         = str(order["id"]),
+        ml_user_id       = int(ml_user_id),
+        buyer_id         = buyer.get("id"),
+        buyer_nickname   = buyer.get("nickname"),
+        buyer_email      = buyer.get("email"),
+        buyer_first_name = buyer.get("first_name"),
+        buyer_last_name  = buyer.get("last_name"),
+        total_amount     = order.get("total_amount"),
+        status           = order.get("status"),
+        status_detail    = order.get("status_detail"),
+        date_closed      = parser.isoparse(order.get("date_closed")),
+        item_id          = item_id,
+        item_title       = item_inf.get("title"),
+        quantity         = item.get("quantity"),
+        unit_price       = item.get("unit_price"),
+        shipping_id      = ship.get("id"),
+        shipping_status  = ship.get("status"),
+        city             = addr.get("city", {}).get("name"),
+        state            = addr.get("state", {}).get("name"),
+        country          = addr.get("country", {}).get("id"),
+        zip_code         = addr.get("zip_code"),
+        street_name      = addr.get("street_name"),
+        street_number    = addr.get("street_number"),
+        sku              = sku,
+        quantity_sku     = quantity_sku,
+        custo_unitario   = custo_unitario,
+        level1           = level1,
+        level2           = level2
     )
