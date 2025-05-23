@@ -888,190 +888,8 @@ def mostrar_relatorios():
     )
 
 
-import pandas as pd
-import streamlit as st
-from sqlalchemy import text
-import io
-
 def mostrar_gestao_sku():
     st.header("📦 Gestão de SKU")
-
-    # 1️⃣ Consulta apenas o SKU mais recente por código
-    df_sku = pd.read_sql("""
-        SELECT DISTINCT ON (sku) *
-        FROM sku
-        ORDER BY sku, date_created DESC
-    """, engine)
-
-    df_visivel = df_sku.drop(columns=["id", "date_created"])
-
-    st.markdown("### 🧾 Base de SKUs Cadastrados")
-    df_editado = st.data_editor(
-        df_visivel,
-        use_container_width=True,
-        num_rows="dynamic",
-        key="editor_sku"
-    )
-
-    # 2️⃣ Salvar alterações feitas na interface
-    if st.button("💾 Salvar Alterações na Tabela"):
-        try:
-            with engine.begin() as conn:
-                for _, row in df_editado.iterrows():
-                    row["quantity"] = int(row["quantity"])
-                    row["custo_unitario"] = float(row["custo_unitario"])
-                    row["sku"] = row["sku"].strip()
-                    row["level1"] = row["level1"].strip()
-                    row["level2"] = row["level2"].strip()
-
-                    result = conn.execute(text("""
-                        SELECT 1 FROM sku
-                        WHERE sku = :sku
-                          AND TRIM(level1) = :level1
-                          AND TRIM(level2) = :level2
-                          AND ROUND(custo_unitario::numeric, 2) = ROUND(:custo_unitario::numeric, 2)
-                          AND quantity = :quantity
-                        LIMIT 1
-                    """), row.to_dict()).fetchone()
-
-                    if result is None:
-                        conn.execute(text("""
-                            INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                            VALUES (:sku, :level1, :level2, :custo_unitario, :quantity, NOW())
-                        """), row.to_dict())
-
-            st.success("✅ Novas versões salvas com sucesso!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ Erro ao salvar: {e}")
-
-    # 3️⃣ Excluir SKUs selecionados
-    st.markdown("---")
-    st.markdown("### 🗑️ Excluir SKUs Selecionados")
-    skus_para_excluir = st.multiselect("Selecione os SKUs a excluir:", df_visivel["sku"].tolist())
-
-    if st.button("❌ Excluir Selecionados"):
-        if not skus_para_excluir:
-            st.warning("⚠️ Nenhum SKU selecionado.")
-        else:
-            try:
-                with engine.begin() as conn:
-                    for sku in skus_para_excluir:
-                        conn.execute(text("DELETE FROM sku WHERE sku = :sku"), {"sku": sku})
-                st.success("✅ SKUs excluídos com sucesso!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro ao excluir: {e}")
-
-    st.markdown("---")
-
-    # 4️⃣ Modelo Excel de SKU
-    modelo = pd.DataFrame(columns=["sku", "level1", "level2", "custo_unitario", "quantity"])
-    buffer = io.BytesIO()
-    modelo.to_excel(buffer, index=False, engine="openpyxl")
-    st.download_button(
-        label="⬇️ Baixar Modelo Excel de SKUs",
-        data=buffer.getvalue(),
-        file_name="modelo_sku.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # 5️⃣ Upload de Planilha SKU
-    st.markdown("### ⬆️ Importar Planilha para Atualizar Base de SKUs")
-    arquivo = st.file_uploader("Selecione um arquivo Excel (.xlsx)", type=["xlsx"])
-    
-    if arquivo is not None:
-        df_novo = pd.read_excel(arquivo)
-        colunas_esperadas = {"sku", "level1", "level2", "custo_unitario", "quantity"}
-    
-        if not colunas_esperadas.issubset(df_novo.columns):
-            st.error("❌ A planilha deve conter: sku, level1, level2, custo_unitario, quantity.")
-        else:
-            if st.button("✅ Processar Planilha e Atualizar"):
-                try:
-                    # Normalização dos dados
-                    df_novo["quantity"] = df_novo["quantity"].fillna(0).astype(int)
-                    df_novo["custo_unitario"] = df_novo["custo_unitario"].fillna(0).astype(float)
-                    df_novo["sku"] = df_novo["sku"].astype(str).str.strip()
-                    df_novo["level1"] = df_novo["level1"].astype(str).str.strip()
-                    df_novo["level2"] = df_novo["level2"].astype(str).str.strip()
-    
-                    with engine.begin() as conn:
-                        for _, row in df_novo.iterrows():
-                            row_dict = row.to_dict()
-    
-                            # Verifica se já existe uma linha exatamente igual
-                            result = conn.execute(text("""
-                                SELECT 1 FROM sku
-                                WHERE sku = :sku
-                                  AND TRIM(level1) = :level1
-                                  AND TRIM(level2) = :level2
-                                  AND ROUND(CAST(custo_unitario AS numeric), 2) = ROUND(CAST(:custo_unitario AS numeric), 2)
-                                  AND quantity = :quantity
-                                LIMIT 1
-                            """), row_dict).fetchone()
-    
-                            # Insere nova linha SOMENTE se não existir igual
-                            if result is None:
-                                conn.execute(text("""
-                                    INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                                    VALUES (:sku, :level1, :level2, :custo_unitario, :quantity, NOW())
-                                """), row_dict)
-    
-                    st.success("✅ Planilha importada com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao processar: {e}")
-
-    # 6️⃣ Planilha de relação SKU ↔ MLB
-    st.markdown("---")
-    st.markdown("### 🔄 Planilha de Relação SKU com MLB")
-
-    # Botão para baixar modelo da relação SKU ↔ MLB
-    modelo_relacao = pd.DataFrame(columns=["sku", "mlb"])
-    buffer_rel = io.BytesIO()
-    modelo_relacao.to_excel(buffer_rel, index=False, engine="openpyxl")
-    st.download_button(
-        label="⬇️ Baixar Modelo Relação SKU ↔ MLB",
-        data=buffer_rel.getvalue(),
-        file_name="modelo_relacao_skumlb.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # Upload da planilha preenchida
-    arquivo_relacao = st.file_uploader("Selecione a planilha de relação (SKU + MLB)", type=["xlsx"], key="relacao_skumlb")
-
-    if arquivo_relacao:
-        df_relacao = pd.read_excel(arquivo_relacao)
-        colunas_esperadas = {"sku", "mlb"}
-
-        if not colunas_esperadas.issubset(df_relacao.columns):
-            st.error("❌ A planilha precisa conter as colunas: sku e mlb.")
-        else:
-            if st.button("📥 Processar Planilha de SKU-MLB"):
-                try:
-                    with engine.begin() as conn:
-                        for _, row in df_relacao.iterrows():
-                            conn.execute(text("""
-                                INSERT INTO skumlb (sku, mlb)
-                                VALUES (:sku, :mlb)
-                                ON CONFLICT (sku, mlb) DO NOTHING
-                            """), row.to_dict())
-                    st.success("✅ Relações SKU-MLB importadas com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao importar a planilha: {e}")
-
-    # 7️⃣ Visualização da base já cadastrada
-    st.markdown("### 📄 Relações SKU ↔ MLB Cadastradas")
-    try:
-        df_skumlb = pd.read_sql("SELECT * FROM skumlb ORDER BY sku", engine)
-        st.dataframe(df_skumlb, use_container_width=True)
-    except Exception as e:
-        st.error(f"❌ Erro ao carregar relações: {e}")
-
-def mostrar_configuracoes():
-    st.header("⚙️ Configurações e Diagnóstico de Dados")
 
     # 1️⃣ Métricas principais
     with engine.begin() as conn:
@@ -1081,11 +899,15 @@ def mostrar_configuracoes():
             SELECT COUNT(*) FROM sales
             WHERE sku IS NOT NULL AND custo_unitario IS NULL
         """)).scalar()
+        mlb_com_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE sku IS NOT NULL")).scalar()
+        mlb_sem_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE sku IS NULL")).scalar()
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("🔗 Vendas com SKU", total_com_sku)
     col2.metric("🚫 Vendas sem SKU", total_sem_sku)
     col3.metric("❌ SKUs sem Preço", total_sem_preco)
+    col4.metric("📦 MLBs com SKU", mlb_com_sku)
+    col5.metric("📦 MLBs sem SKU", mlb_sem_sku)
 
     st.markdown("---")
     st.markdown("### 🔍 Filtros de Diagnóstico")
@@ -1109,22 +931,18 @@ def mostrar_configuracoes():
         df = df[df["sku"].isna()]
     elif op_sku == "Não Nulo":
         df = df[df["sku"].notna()]
-
     if op_level1 == "Nulo":
         df = df[df["level1"].isna()]
     elif op_level1 == "Não Nulo":
         df = df[df["level1"].notna()]
-
     if op_level2 == "Nulo":
         df = df[df["level2"].isna()]
     elif op_level2 == "Não Nulo":
         df = df[df["level2"].notna()]
-
     if op_preco == "Nulo":
         df = df[df["custo_unitario"].isna()]
     elif op_preco == "Não Nulo":
         df = df[df["custo_unitario"].notna()]
-
     if filtro_txt:
         filtro_txt = filtro_txt.lower()
         df = df[df.apply(lambda row: filtro_txt in str(row["item_id"]).lower()
@@ -1132,41 +950,110 @@ def mostrar_configuracoes():
                          or filtro_txt in str(row["level1"]).lower()
                          or filtro_txt in str(row["level2"]).lower(), axis=1)]
 
-    # 4️⃣ Editor de dados
-    st.markdown("### ✏️ Editar Dados Inconsistentes")
-    df_editado = st.data_editor(
-        df,
-        use_container_width=True,
-        num_rows="dynamic",
-        key="editor_config",
-        disabled=["id", "item_id"]
+    # 4️⃣ Tabela logo após os filtros
+    st.markdown("### 📊 Tabela de Vendas com SKUs")
+    if df.empty:
+        st.warning("⚠️ Nenhum dado encontrado com os filtros aplicados.")
+    else:
+        st.dataframe(df, use_container_width=True)
+
+    # 5️⃣ Atualização da base SKU via planilha
+    st.markdown("---")
+    st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
+    modelo = pd.DataFrame(columns=["sku", "level1", "level2", "custo_unitario", "quantity"])
+    buffer = io.BytesIO()
+    modelo.to_excel(buffer, index=False, engine="openpyxl")
+    st.download_button(
+        label="⬇️ Baixar Modelo Excel de SKUs",
+        data=buffer.getvalue(),
+        file_name="modelo_sku.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    if st.button("💾 Salvar Alterações"):
-        try:
-            with engine.begin() as conn:
-                for _, row in df_editado.iterrows():
-                    conn.execute(text("""
-                        UPDATE sales
-                           SET sku = :sku,
-                               level1 = :level1,
-                               level2 = :level2,
-                               custo_unitario = :custo_unitario
-                         WHERE id = :id
-                    """), {
-                        "sku": row["sku"],
-                        "level1": row["level1"],
-                        "level2": row["level2"],
-                        "custo_unitario": row["custo_unitario"],
-                        "id": row["id"]
-                    })
-            st.success("✅ Alterações salvas com sucesso!")
-            st.experimental_rerun()
-        except Exception as e:
-            st.error(f"❌ Erro ao salvar alterações: {e}")
+    arquivo = st.file_uploader("Selecione um arquivo Excel (.xlsx)", type=["xlsx"])
+    if arquivo is not None:
+        df_novo = pd.read_excel(arquivo)
+        colunas_esperadas = {"sku", "level1", "level2", "custo_unitario", "quantity"}
+        if not colunas_esperadas.issubset(df_novo.columns):
+            st.error("❌ A planilha deve conter: sku, level1, level2, custo_unitario, quantity.")
+        else:
+            if st.button("✅ Processar Planilha e Atualizar"):
+                try:
+                    df_novo["quantity"] = df_novo["quantity"].fillna(0).astype(int)
+                    df_novo["custo_unitario"] = df_novo["custo_unitario"].fillna(0).astype(float)
+                    df_novo["sku"] = df_novo["sku"].astype(str).str.strip()
+                    df_novo["level1"] = df_novo["level1"].astype(str).str.strip()
+                    df_novo["level2"] = df_novo["level2"].astype(str).str.strip()
+
+                    with engine.begin() as conn:
+                        for _, row in df_novo.iterrows():
+                            row_dict = row.to_dict()
+                            result = conn.execute(text("""
+                                SELECT 1 FROM sku
+                                WHERE sku = :sku
+                                  AND TRIM(level1) = :level1
+                                  AND TRIM(level2) = :level2
+                                  AND ROUND(CAST(custo_unitario AS numeric), 2) = ROUND(CAST(:custo_unitario AS numeric), 2)
+                                  AND quantity = :quantity
+                                LIMIT 1
+                            """), row_dict).fetchone()
+                            if result is None:
+                                conn.execute(text("""
+                                    INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
+                                    VALUES (:sku, :level1, :level2, :custo_unitario, :quantity, NOW())
+                                """), row_dict)
+                    st.success("✅ Planilha importada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar: {e}")
+
+    # 6️⃣ Relação SKU ↔ MLB
+    st.markdown("---")
+    st.markdown("### 🔄 Relação SKU com MLB")
+    modelo_relacao = pd.DataFrame(columns=["sku", "mlb"])
+    buffer_rel = io.BytesIO()
+    modelo_relacao.to_excel(buffer_rel, index=False, engine="openpyxl")
+    st.download_button(
+        label="⬇️ Baixar Modelo Relação SKU ↔ MLB",
+        data=buffer_rel.getvalue(),
+        file_name="modelo_relacao_skumlb.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    arquivo_relacao = st.file_uploader("Selecione a planilha de relação (SKU + MLB)", type=["xlsx"], key="relacao_skumlb")
+    if arquivo_relacao:
+        df_relacao = pd.read_excel(arquivo_relacao)
+        colunas_esperadas = {"sku", "mlb"}
+        if not colunas_esperadas.issubset(df_relacao.columns):
+            st.error("❌ A planilha precisa conter as colunas: sku e mlb.")
+        else:
+            if st.button("📥 Processar Planilha de SKU-MLB"):
+                try:
+                    with engine.begin() as conn:
+                        for _, row in df_relacao.iterrows():
+                            conn.execute(text("""
+                                INSERT INTO skumlb (sku, mlb)
+                                VALUES (:sku, :mlb)
+                                ON CONFLICT (sku, mlb) DO NOTHING
+                            """), row.to_dict())
+                        conn.execute(text("""
+                            UPDATE sales
+                            SET sku = skumlb.sku
+                            FROM skumlb
+                            WHERE sales.item_id = skumlb.mlb
+                              AND sales.sku IS NULL
+                        """))
+                    st.success("✅ Relações SKU-MLB importadas e conciliadas com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro ao importar ou conciliar dados: {e}")
 
     
 # Funções para cada página
+def mostrar_configuracoes():
+    st.header("Configurações")
+    st.info("Em breve...")
+
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
     st.info("Em breve...")
