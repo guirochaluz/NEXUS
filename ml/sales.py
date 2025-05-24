@@ -29,11 +29,11 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
     from datetime import datetime, timedelta
     from dateutil.relativedelta import relativedelta
     from dateutil import parser
-    from db import SessionLocal
-    from models import Sale
+    from database.db import SessionLocal
+    from database.models import Sale
     import requests
     from sqlalchemy import func, text
-    from sales import _order_to_sale
+    from ml.sales import _order_to_sale
 
     API_BASE = "https://api.mercadolibre.com/orders/search"
     FULL_PAGE_SIZE = 50
