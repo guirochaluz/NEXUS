@@ -23,46 +23,77 @@ FULL_PAGE_SIZE = 50
 
 def get_full_sales(ml_user_id: str, access_token: str) -> int:
     """
-    Coleta **todas** as vendas paginadas do Mercado Livre e salva no banco,
-    evitando duplicação pelo order_id. Usado para importar histórico completo.
+    Coleta todas as vendas paginadas do Mercado Livre divididas por faixas mensais
+    para evitar problemas com limite de paginação (offset > 10000).
     """
+    from datetime import datetime, timedelta
+    from dateutil.relativedelta import relativedelta
+    from dateutil import parser
+    from db import SessionLocal
+    from models import Sale
+    import requests
+    from sqlalchemy import func, text
+    from sales import _order_to_sale
+
+    API_BASE = "https://api.mercadolibre.com/orders/search"
+    FULL_PAGE_SIZE = 50
+
     db = SessionLocal()
-    offset = 0
     total_saved = 0
 
     try:
-        while True:
-            params = {
-                "seller": ml_user_id,
-                "offset": offset,
-                "limit": FULL_PAGE_SIZE,
-                "sort": "date_asc",  # garante ordem cronológica
-            }
-            headers = {"Authorization": f"Bearer {access_token}"}
-            resp = requests.get(API_BASE, params=params, headers=headers)
-            resp.raise_for_status()
+        # 1. Descobre a data da primeira e última venda (ou define intervalo de 1 ano)
+        data_min = db.query(func.min(Sale.date_closed)).filter(Sale.ml_user_id == int(ml_user_id)).scalar()
+        data_max = db.query(func.max(Sale.date_closed)).filter(Sale.ml_user_id == int(ml_user_id)).scalar()
 
-            orders = resp.json().get("results", [])
-            if not orders:
-                break
+        if not data_min or not data_max:
+            data_max = datetime.utcnow()
+            data_min = data_max - relativedelta(years=1)
 
-            for order in orders:
-                order_id = str(order["id"])
-                # evita duplicar pelo order_id
-                if db.query(Sale).filter_by(order_id=order_id).first():
-                    continue
-                sale = _order_to_sale(order, ml_user_id)
-                db.add(sale)
-                total_saved += 1
+        if data_min.tzinfo is None:
+            data_min = data_min.replace(tzinfo=tzutc())
+        if data_max.tzinfo is None:
+            data_max = data_max.replace(tzinfo=tzutc())
 
-            db.commit()
-            if len(orders) < FULL_PAGE_SIZE:
-                break
-            offset += FULL_PAGE_SIZE
+        current_start = data_min.replace(day=1)
+        while current_start <= data_max:
+            current_end = (current_start + relativedelta(months=1)) - timedelta(seconds=1)
+            offset = 0
+            while True:
+                params = {
+                    "seller": ml_user_id,
+                    "offset": offset,
+                    "limit": FULL_PAGE_SIZE,
+                    "sort": "date_asc",
+                    "order.date_closed.from": current_start.isoformat(),
+                    "order.date_closed.to": current_end.isoformat()
+                }
+                headers = {"Authorization": f"Bearer {access_token}"}
+                resp = requests.get(API_BASE, params=params, headers=headers)
+                resp.raise_for_status()
+                orders = resp.json().get("results", [])
+                if not orders:
+                    break
 
-    except Exception:
+                for order in orders:
+                    order_id = str(order["id"])
+                    if db.query(Sale).filter_by(order_id=order_id).first():
+                        continue
+                    try:
+                        sale = _order_to_sale(order, ml_user_id, db)
+                        db.add(sale)
+                        total_saved += 1
+                    except Exception as e:
+                        print(f"Erro ao processar venda {order_id}: {e}")
+
+                db.commit()
+                if len(orders) < FULL_PAGE_SIZE:
+                    break
+                offset += FULL_PAGE_SIZE
+            current_start += relativedelta(months=1)
+    except Exception as e:
         db.rollback()
-        raise
+        raise RuntimeError(f"Erro ao importar vendas por intervalo: {e}")
     finally:
         db.close()
 
@@ -107,7 +138,6 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         # 2) Parâmetros da chamada incremental
         params = {
             "seller": ml_user_id,
-            "order.status": "paid",
             "limit": FULL_PAGE_SIZE,
             "sort": "date_desc",
             "order.date_closed.from": last_db_date.isoformat(),
@@ -196,7 +226,7 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
     """
     internal_session = False
     if db is None:
-        from database.db import SessionLocal
+        from db import SessionLocal
         db = SessionLocal()
         internal_session = True
 
@@ -268,72 +298,145 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
 
 def revisar_status_historico(ml_user_id: str, access_token: str, return_changes: bool = False) -> Tuple[int, List[Tuple[str, str, str]]]:
     """
-    Revarre todas as vendas da conta no Mercado Livre e atualiza os status na base local.
-    Retorna o total de vendas que tiveram o status alterado e, se return_changes=True,
-    também retorna a lista de alterações (order_id, status_antigo, status_novo).
+    Revisa todas as vendas da conta, atualiza o status no banco e padroniza os existentes.
+    Divide por faixa de datas para evitar o erro de offset > 10000 da API do Mercado Livre.
     """
+    from datetime import datetime, timedelta
+    from dateutil.relativedelta import relativedelta
+    from dateutil.tz import tzutc
+    from database.db import SessionLocal
+    from database.models import Sale
+    import requests
+    from sqlalchemy import func
+
+    tradutor_status = {
+        "paid": "Pago",
+        "pago": "Pago",
+        "cancelled": "Cancelado",
+        "cancelado": "Cancelado",
+        "payment_required": "Pagamento Pendente",
+        "payment_in_process": "Pagamento em Processamento",
+        "partially_paid": "Parcialmente Pago",
+        "partially_refunded": "Parcialmente Reembolsado",
+        "parcialmente reembolsado": "Parcialmente Reembolsado",
+        "pending_cancel": "Cancelamento Pendente",
+        "cancelamento pendente": "Cancelamento Pendente",
+    }
+
     db = SessionLocal()
     atualizadas = 0
     alteracoes = []
 
-    # Tradução de status da API para padrão do sistema
-    tradutor_status = {
-        "paid": "Pago",
-        "cancelled": "Cancelado",
-        "payment_required": "Pagamento Pendente",
-        "payment_in_process": "Pagamento em Processamento",
-        "partially_paid": "Parcialmente Pago",
-    }
-
-    MAX_OFFSET = 10000  # Limite imposto pela API
-
     try:
-        offset = 0
-        headers = {"Authorization": f"Bearer {access_token}"}
-        params_base = {
-            "seller": ml_user_id,
-            "sort": "date_desc",
-            "limit": FULL_PAGE_SIZE,
-        }
+        # --- PASSO EXTRA: Padroniza todos os status já salvos no banco ---
+        todas_vendas = db.query(Sale).filter(Sale.ml_user_id == int(ml_user_id)).all()
+        for venda in todas_vendas:
+            status_atual = venda.status.strip().lower() if venda.status else ""
+            status_padrao = tradutor_status.get(status_atual, status_atual.capitalize())
 
-        while offset < MAX_OFFSET:
-            params = params_base.copy()
-            params["offset"] = offset
+            if venda.status != status_padrao:
+                if return_changes:
+                    alteracoes.append((venda.order_id, venda.status, status_padrao))
+                venda.status = status_padrao
+                atualizadas += 1
+        db.commit()
 
-            resp = requests.get(API_BASE, headers=headers, params=params)
-            resp.raise_for_status()
-            orders = resp.json().get("results", [])
+        # --- Continuação: Atualiza com base na API (como antes) ---
+        data_min = db.query(func.min(Sale.date_closed)).filter(Sale.ml_user_id == int(ml_user_id)).scalar()
+        data_max = db.query(func.max(Sale.date_closed)).filter(Sale.ml_user_id == int(ml_user_id)).scalar()
 
-            if not orders:
-                break
+        if not data_min or not data_max:
+            return atualizadas, alteracoes
 
-            for o in orders:
-                oid = str(o["id"])
-                status_api_raw = o.get("status", "").strip().lower()
-                status_api_formatado = tradutor_status.get(status_api_raw, status_api_raw.capitalize())
+        if data_min.tzinfo is None:
+            data_min = data_min.replace(tzinfo=tzutc())
+        if data_max.tzinfo is None:
+            data_max = data_max.replace(tzinfo=tzutc())
 
-                existing_sale = db.query(Sale).filter_by(order_id=oid).first()
-                if existing_sale:
-                    status_local = existing_sale.status.strip().capitalize() if existing_sale.status else ""
+        current_start = data_min.replace(day=1)
+        while current_start <= data_max:
+            current_end = (current_start + relativedelta(months=1)) - timedelta(seconds=1)
 
-                    if status_local != status_api_formatado:
-                        if return_changes:
-                            alteracoes.append((oid, status_local, status_api_formatado))
-                        existing_sale.status = status_api_formatado
-                        atualizadas += 1
+            offset = 0
+            while offset < 10000:
+                params = {
+                    "seller": ml_user_id,
+                    "offset": offset,
+                    "limit": 50,
+                    "sort": "date_asc",
+                    "order.date_closed.from": current_start.isoformat(),
+                    "order.date_closed.to": current_end.isoformat()
+                }
+                headers = {"Authorization": f"Bearer {access_token}"}
+                resp = requests.get("https://api.mercadolibre.com/orders/search", headers=headers, params=params)
+                resp.raise_for_status()
 
-            db.commit()
+                orders = resp.json().get("results", [])
+                if not orders:
+                    break
 
-            if len(orders) < FULL_PAGE_SIZE:
-                break
+                for o in orders:
+                    oid = str(o["id"])
+                    status_api_raw = o.get("status", "").strip().lower()
+                    status_api_formatado = tradutor_status.get(status_api_raw, status_api_raw.capitalize())
 
-            offset += FULL_PAGE_SIZE
+                    existing_sale = db.query(Sale).filter_by(order_id=oid).first()
+                    if existing_sale:
+                        status_local = existing_sale.status.strip().lower() if existing_sale.status else ""
+                        status_local_formatado = tradutor_status.get(status_local, status_local.capitalize())
+
+                        if status_local_formatado != status_api_formatado:
+                            if return_changes:
+                                alteracoes.append((oid, status_local_formatado, status_api_formatado))
+                            existing_sale.status = status_api_formatado
+                            atualizadas += 1
+
+                db.commit()
+                if len(orders) < 50:
+                    break
+                offset += 50
+
+            current_start += relativedelta(months=1)
 
     except Exception as e:
         db.rollback()
         raise RuntimeError(f"Erro ao revisar histórico: {e}")
-
     finally:
         db.close()
 
     return (atualizadas, alteracoes) if return_changes else (atualizadas, [])
+
+def atualizar_sales_com_sku(engine):
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE sales
+            SET
+                sku = s.sku,
+                quantity_sku = s.quantity,
+                custo_unitario = s.custo_unitario,
+                level1 = s.level1,
+                level2 = s.level2
+            FROM skumlb m
+            JOIN sku s ON s.sku = m.sku
+            WHERE sales.item_id = m.mlb;
+        """))
+
+def padronizar_status_sales(engine):
+    """
+    Atualiza a tabela sales:
+    - Converte 'paid' (qualquer variação de maiúscula/minúscula) para 'Pago'
+    - Todos os outros status viram 'Cancelado'
+    """
+    with engine.begin() as conn:
+        # Primeiro, tudo vira 'Cancelado'
+        conn.execute(text("""
+            UPDATE sales
+            SET status = 'Cancelado'
+        """))
+        
+        # Depois, sobrescreve para 'Pago' onde for 'paid'
+        conn.execute(text("""
+            UPDATE sales
+            SET status = 'Pago'
+            WHERE LOWER(status) = 'paid'
+        """))
