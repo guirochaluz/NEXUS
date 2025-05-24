@@ -334,15 +334,16 @@ def padronizar_status_sales(engine):
     - Todos os outros status viram 'Cancelado'
     """
     with engine.begin() as conn:
-        # Primeiro, tudo vira 'Cancelado'
-        conn.execute(text("""
-            UPDATE sales
-            SET status = 'Cancelado'
-        """))
-        
-        # Depois, sobrescreve para 'Pago' onde for 'paid'
+        # Primeiro, converte 'paid' em 'Pago'
         conn.execute(text("""
             UPDATE sales
             SET status = 'Pago'
             WHERE LOWER(status) = 'paid'
+        """))
+
+        # Depois, define como 'Cancelado' tudo que NÃO for 'Pago'
+        conn.execute(text("""
+            UPDATE sales
+            SET status = 'Cancelado'
+            WHERE status != 'Pago'
         """))
