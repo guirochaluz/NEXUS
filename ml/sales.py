@@ -196,7 +196,7 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
     """
     internal_session = False
     if db is None:
-        from db import SessionLocal
+        from database.db import SessionLocal
         db = SessionLocal()
         internal_session = True
 
