@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 # 3) Depois de set_page_config, importe tudo o mais que precisar
-from ml.sales import sync_all_accounts, get_full_sales, revisar_status_historico
+from sales import sync_all_accounts, get_full_sales, revisar_status_historico, atualizar_sales_com_sku, get_incremental_sales
 from streamlit_cookies_manager import EncryptedCookieManager
 import pandas as pd
 import plotly.express as px
@@ -656,34 +656,50 @@ def mostrar_contas_cadastradas():
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    # Botão global: Atualizar Vendas Recentes (incremental)
-    if st.button("🔄 Atualizar Vendas Recentes (Todas as Contas)", use_container_width=True):
-        with st.spinner("🔄 Executando atualizações incrementais..."):
-            for row in df.itertuples(index=False):
-                ml_user_id = str(row.ml_user_id)
-                access_token = row.access_token
-                nickname = row.nickname
+    # --- Botões globais ---
+    col_a, col_b, col_c = st.columns(3)
+    
+    with col_a:
+        if st.button("🔄 Atualizar Vendas Recentes (Todas)", use_container_width=True):
+            with st.spinner("🔄 Executando atualizações incrementais..."):
+                for row in df.itertuples(index=False):
+                    ml_user_id = str(row.ml_user_id)
+                    access_token = row.access_token
+                    nickname = row.nickname
 
-                st.subheader(f"🔗 Conta: {nickname}")
-                novas = get_incremental_sales(ml_user_id, access_token)
-                st.success(f"✅ {novas} novas vendas ou alterações recentes importadas.")
+                    st.subheader(f"🔗 Conta: {nickname}")
+                    novas = get_incremental_sales(ml_user_id, access_token)
+                    st.success(f"✅ {novas} novas vendas ou alterações recentes importadas.")
 
-    # Botão global: Reprocessar Histórico Completo
-    if st.button("📜 Reprocessar Histórico Completo (Todas as Contas)", use_container_width=True):
-        with st.spinner("🔁 Reprocessando todas as contas..."):
-            for row in df.itertuples(index=False):
-                ml_user_id = str(row.ml_user_id)
-                access_token = row.access_token
-                nickname = row.nickname
+    with col_b:
+        if st.button("♻️ Processar Status (Todas)", use_container_width=True):
+            with st.spinner("♻️ Atualizando status de todas as vendas..."):
+                for row in df.itertuples(index=False):
+                    ml_user_id = str(row.ml_user_id)
+                    access_token = row.access_token
+                    nickname = row.nickname
 
-                st.subheader(f"🔗 Conta: {nickname}")
-                novas = get_full_sales(ml_user_id, access_token)
-                atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
+                    st.subheader(f"🔗 Conta: {nickname}")
+                    atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
+                    st.info(f"♻️ {atualizadas} vendas com status alterados.")
 
-                st.success(f"✅ {novas} novas vendas históricas importadas.")
-                st.info(f"♻️ {atualizadas} vendas com status alterados no histórico.")
+                # ✅ Executa padronização depois de todas as contas
+                padronizar_status_sales(engine)
+                st.success("✅ Todos os status foram padronizados com sucesso.")
+                    
+    with col_c:
+        if st.button("📜 Reprocessar Histórico (Todas)", use_container_width=True):
+            with st.spinner("📜 Reprocessando histórico completo..."):
+                for row in df.itertuples(index=False):
+                    ml_user_id = str(row.ml_user_id)
+                    access_token = row.access_token
+                    nickname = row.nickname
 
-    # Exibir contas individualmente
+                    st.subheader(f"🔗 Conta: {nickname}")
+                    novas = get_full_sales(ml_user_id, access_token)
+                    st.success(f"✅ {novas} vendas históricas importadas.")
+
+    # --- Seção por conta individual ---
     for row in df.itertuples(index=False):
         with st.expander(f"🔗 Conta ML: {row.nickname}"):
             ml_user_id = str(row.ml_user_id)
@@ -694,7 +710,7 @@ def mostrar_contas_cadastradas():
             st.write(f"**Access Token:** `{access_token}`")
             st.write(f"**Refresh Token:** `{refresh_token}`")
 
-            col1, col2 = st.columns([2, 3])
+            col1, col2, col3 = st.columns(3)
 
             # Renovar Token
             with col1:
@@ -710,15 +726,22 @@ def mostrar_contas_cadastradas():
                     except Exception as e:
                         st.error(f"❌ Erro ao conectar com o servidor: {e}")
 
-            # Histórico Completo por conta
+            # Processar Status (somente da conta)
             with col2:
+                if st.button("♻️ Processar Status", key=f"status_{ml_user_id}"):
+                    with st.spinner("♻️ Atualizando status das vendas..."):
+                        atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
+                        st.info(f"♻️ {atualizadas} vendas com status alterados.")
+
+            # Histórico Completo por conta
+            with col3:
                 if st.button("📜 Histórico Completo", key=f"historico_{ml_user_id}"):
                     progresso = st.progress(0, text="🔁 Iniciando reprocessamento...")
-                    with st.spinner("♻️ Verificando alterações de status no histórico..."):
+                    with st.spinner("📜 Importando histórico completo..."):
                         novas = get_full_sales(ml_user_id, access_token)
                         atualizadas, alteracoes = revisar_status_historico(ml_user_id, access_token, return_changes=True)
-                        progresso.progress(100, text="✅ Reprocessamento concluído!")
-                        st.success(f"✅ {novas} novas vendas históricas importadas.")
+                        progresso.progress(100, text="✅ Concluído!")
+                        st.success(f"✅ {novas} vendas históricas importadas.")
                         st.info(f"♻️ {atualizadas} vendas com status alterados.")
                         st.cache_data.clear()
                     progresso.empty()
@@ -952,6 +975,23 @@ def mostrar_relatorios():
 def mostrar_gestao_sku():
     st.header("📦 Gestão de SKU")
 
+    # 🔄 Botão de atualização total (atualiza banco + recarrega dados)
+    if st.button("🔄 Atualizar Dados"):
+        atualizar_sales_com_sku(engine)
+        st.session_state["atualizar_gestao_sku"] = True
+
+    # 🔁 Recarrega os dados do banco se necessário
+    if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
+        df = pd.read_sql(text("""
+            SELECT s.item_id, s.sku, s.level1, s.level2, s.custo_unitario, s.quantity_sku
+            FROM sales s
+            ORDER BY s.date_closed DESC
+        """), engine)
+        st.session_state["df_gestao_sku"] = df
+        st.session_state["atualizar_gestao_sku"] = False
+    else:
+        df = st.session_state["df_gestao_sku"]
+
     # 1️⃣ Métricas principais
     with engine.begin() as conn:
         total_com_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE sku IS NOT NULL")).scalar()
@@ -972,13 +1012,6 @@ def mostrar_gestao_sku():
 
     st.markdown("---")
     st.markdown("### 🔍 Filtros de Diagnóstico")
-
-    # 2️⃣ Consulta base
-    df = pd.read_sql(text("""
-        SELECT id, item_id, sku, level1, level2, custo_unitario
-        FROM sales
-        ORDER BY date_closed DESC
-    """), engine)
 
     # 3️⃣ Filtros dinâmicos
     colf1, colf2, colf3, colf4, colf5 = st.columns([1.2, 1.2, 1.2, 1.2, 2])
@@ -1011,7 +1044,7 @@ def mostrar_gestao_sku():
                          or filtro_txt in str(row["level1"]).lower()
                          or filtro_txt in str(row["level2"]).lower(), axis=1)]
 
-    # 4️⃣ Tabela logo após os filtros
+    # 4️⃣ Tabela de visualização
     st.markdown("### 📊 Tabela de Vendas com SKUs")
     if df.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros aplicados.")
@@ -1105,6 +1138,7 @@ def mostrar_gestao_sku():
                               AND sales.sku IS NULL
                         """))
                     st.success("✅ Relações SKU-MLB importadas e conciliadas com sucesso!")
+                    st.session_state["atualizar_gestao_sku"] = True
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Erro ao importar ou conciliar dados: {e}")
