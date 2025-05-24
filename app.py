@@ -31,6 +31,7 @@ st.set_page_config(
 )
 
 # 3) Depois de set_page_config, importe tudo o mais que precisar
+from sales import sync_all_accounts, get_full_sales, revisar_status_historico
 from streamlit_cookies_manager import EncryptedCookieManager
 import pandas as pd
 import plotly.express as px
@@ -38,7 +39,6 @@ import requests
 from sqlalchemy import create_engine, text
 from streamlit_option_menu import option_menu
 from typing import Optional
-from ml.sales import sync_all_accounts
 from wordcloud import WordCloud
 import altair as alt
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -322,7 +322,7 @@ def mostrar_dashboard():
         placeholder = st.empty()
         with placeholder:
             st.success(f"{count} vendas novas sincronizadas com sucesso!")
-            time.sleep(4)
+            time.sleep(3)
         placeholder.empty()
         st.session_state["vendas_sincronizadas"] = True
 
@@ -332,39 +332,41 @@ def mostrar_dashboard():
         st.warning("Nenhuma venda cadastrada.")
         return
 
-    # --- CSS para compactar inputs ---
+    # --- CSS para compactar inputs e remover espaços ---
     st.markdown(
         """
         <style>
         .stSelectbox > div, .stDateInput > div {
-            padding-top: 0.1rem;
-            padding-bottom: 0.1rem;
+            padding-top: 0rem;
+            padding-bottom: 0rem;
         }
         .stMultiSelect {
             max-height: 40px;
             overflow-y: auto;
         }
+        .block-container {
+            padding-top: 0rem;
+        }
+        .stMarkdown h1 { display: none; }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # --- Expander de contas ---
-    with st.expander("Contas (opcional)", expanded=False):
+    # --- Expander de contas (opcional) ---
+    with st.expander("Contas", expanded=False):
         contas_df  = pd.read_sql(text("SELECT nickname FROM user_tokens ORDER BY nickname"), engine)
         contas_lst = contas_df["nickname"].astype(str).tolist()
-        selecionadas = st.multiselect(
-            "", options=contas_lst, default=contas_lst, key="contas_ms"
-        )
+        selecionadas = st.multiselect("", options=contas_lst, default=contas_lst, key="contas_ms")
         if selecionadas:
             df_full = df_full[df_full["nickname"].isin(selecionadas)]
 
-    # --- linha única de filtros: Filtro Rápido | De | Até ---
-    col1, col2, col3 = st.columns([2, 1.3, 1.3])
+    # --- Linha única de filtros: Rápido | De | Até | Status ---
+    col1, col2, col3, col4 = st.columns([1.5, 1.2, 1.2, 1.5])
 
     with col1:
         filtro_rapido = st.selectbox(
-            "Filtro",
+            "",  # escondido
             [
                 "Período Personalizado",
                 "Hoje",
@@ -375,8 +377,7 @@ def mostrar_dashboard():
                 "Este Ano"
             ],
             index=1,
-            key="filtro_quick",
-            label_visibility="collapsed"
+            key="filtro_quick"
         )
 
     hoje = pd.Timestamp.now().date()
@@ -405,23 +406,28 @@ def mostrar_dashboard():
             "De", value=de,
             min_value=data_min, max_value=data_max,
             disabled=not custom,
-            key="de_q",
-            label_visibility="collapsed"
+            key="de_q"
         )
+
     with col3:
         ate = st.date_input(
             "Até", value=ate,
             min_value=data_min, max_value=data_max,
             disabled=not custom,
-            key="ate_q",
-            label_visibility="collapsed"
+            key="ate_q"
         )
 
-    # --- aplica filtro de datas ---
+    with col4:
+        status_options = df_full["status"].dropna().unique().tolist()
+        status_selecionado = st.selectbox("Status", ["Todos"] + status_options, index=0)
+
+    # --- Filtro de datas e status ---
     df = df_full[
         (df_full["date_adjusted"].dt.date >= de) &
         (df_full["date_adjusted"].dt.date <= ate)
     ]
+    if status_selecionado != "Todos":
+        df = df[df["status"] == status_selecionado]
 
     if df.empty:
         st.warning("Nenhuma venda encontrada para os filtros selecionados.")
@@ -642,36 +648,91 @@ def mostrar_dashboard():
 
 def mostrar_contas_cadastradas():
     st.header("🏷️ Contas Cadastradas")
-    
-    # Botão para Adicionar Nova Conta
     render_add_account_button()
 
-    # Carregar as contas cadastradas
     df = pd.read_sql(text("SELECT ml_user_id, nickname, access_token, refresh_token FROM user_tokens ORDER BY nickname"), engine)
-    
+
     if df.empty:
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    # Loop para criar expansores para cada conta
+    # Botão global: Atualizar Vendas Recentes (incremental)
+    if st.button("🔄 Atualizar Vendas Recentes (Todas as Contas)", use_container_width=True):
+        with st.spinner("🔄 Executando atualizações incrementais..."):
+            for row in df.itertuples(index=False):
+                ml_user_id = str(row.ml_user_id)
+                access_token = row.access_token
+                nickname = row.nickname
+
+                st.subheader(f"🔗 Conta: {nickname}")
+                novas = get_incremental_sales(ml_user_id, access_token)
+                st.success(f"✅ {novas} novas vendas ou alterações recentes importadas.")
+
+    # Botão global: Reprocessar Histórico Completo
+    if st.button("📜 Reprocessar Histórico Completo (Todas as Contas)", use_container_width=True):
+        with st.spinner("🔁 Reprocessando todas as contas..."):
+            for row in df.itertuples(index=False):
+                ml_user_id = str(row.ml_user_id)
+                access_token = row.access_token
+                nickname = row.nickname
+
+                st.subheader(f"🔗 Conta: {nickname}")
+                novas = get_full_sales(ml_user_id, access_token)
+                atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
+
+                st.success(f"✅ {novas} novas vendas históricas importadas.")
+                st.info(f"♻️ {atualizadas} vendas com status alterados no histórico.")
+
+    # Exibir contas individualmente
     for row in df.itertuples(index=False):
         with st.expander(f"🔗 Conta ML: {row.nickname}"):
-            st.write(f"**User ID:** {row.ml_user_id}")
-            st.write(f"**Access Token:** `{row.access_token}`")
-            st.write(f"**Refresh Token:** `{row.refresh_token}`")
-            
-            # Botão para renovar o token
-            if st.button("🔄 Renovar Token", key=f"renew_{row.ml_user_id}"):
-                try:
-                    resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": row.ml_user_id})
-                    if resp.ok:
-                        data = resp.json()
-                        salvar_tokens_no_banco(data)
-                        st.success("✅ Token atualizado com sucesso!")
-                    else:
-                        st.error(f"❌ Erro ao atualizar o token: {resp.text}")
-                except Exception as e:
-                    st.error(f"❌ Erro ao conectar com o servidor: {e}")
+            ml_user_id = str(row.ml_user_id)
+            access_token = row.access_token
+            refresh_token = row.refresh_token
+
+            st.write(f"**User ID:** `{ml_user_id}`")
+            st.write(f"**Access Token:** `{access_token}`")
+            st.write(f"**Refresh Token:** `{refresh_token}`")
+
+            col1, col2 = st.columns([2, 3])
+
+            # Renovar Token
+            with col1:
+                if st.button("🔄 Renovar Token", key=f"renew_{ml_user_id}"):
+                    try:
+                        resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": ml_user_id})
+                        if resp.ok:
+                            data = resp.json()
+                            salvar_tokens_no_banco(data)
+                            st.success("✅ Token atualizado com sucesso!")
+                        else:
+                            st.error(f"❌ Erro ao atualizar o token: {resp.text}")
+                    except Exception as e:
+                        st.error(f"❌ Erro ao conectar com o servidor: {e}")
+
+            # Histórico Completo por conta
+            with col2:
+                if st.button("📜 Histórico Completo", key=f"historico_{ml_user_id}"):
+                    progresso = st.progress(0, text="🔁 Iniciando reprocessamento...")
+                    with st.spinner("♻️ Verificando alterações de status no histórico..."):
+                        novas = get_full_sales(ml_user_id, access_token)
+                        atualizadas, alteracoes = revisar_status_historico(ml_user_id, access_token, return_changes=True)
+                        progresso.progress(100, text="✅ Reprocessamento concluído!")
+                        st.success(f"✅ {novas} novas vendas históricas importadas.")
+                        st.info(f"♻️ {atualizadas} vendas com status alterados.")
+                        st.cache_data.clear()
+                    progresso.empty()
+
+                    if alteracoes:
+                        df_alt = pd.DataFrame(alteracoes, columns=["order_id", "status_antigo", "status_novo"])
+                        csv = df_alt.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label="⬇️ Exportar Alterações de Status",
+                            data=csv,
+                            file_name=f"status_alterados_{row.nickname}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
 
 def mostrar_anuncios():
     st.header("🎯 Análise de Anúncios")
@@ -1047,12 +1108,6 @@ def mostrar_gestao_sku():
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Erro ao importar ou conciliar dados: {e}")
-
-    
-# Funções para cada página
-def mostrar_configuracoes():
-    st.header("Configurações")
-    st.info("Em breve...")
 
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
