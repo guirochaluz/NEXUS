@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 # 3) Depois de set_page_config, importe tudo o mais que precisar
-from sales import sync_all_accounts, get_full_sales, revisar_status_historico, atualizar_sales_com_sku, get_incremental_sales
+from sales import sync_all_accounts, get_full_sales, revisar_status_historico, atualizar_sales_com_sku, get_incremental_sales, padronizar_status_sales
 from streamlit_cookies_manager import EncryptedCookieManager
 import pandas as pd
 import plotly.express as px
@@ -331,6 +331,7 @@ def mostrar_dashboard():
     if df_full.empty:
         st.warning("Nenhuma venda cadastrada.")
         return
+    
 
     # --- CSS para compactar inputs e remover espaços ---
     st.markdown(
