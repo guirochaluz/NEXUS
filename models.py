@@ -28,6 +28,8 @@ class Sale(Base):
     quantity         = Column(Integer, nullable=True)
     unit_price       = Column(Float, nullable=True)
     shipping_id      = Column(String, nullable=True)
+    seller_sku       = Column(String, nullable=True)
+
 
     # 🔽 Campos de SKU (mantidos)
     sku              = Column(String, nullable=True)
