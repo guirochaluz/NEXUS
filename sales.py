@@ -183,8 +183,9 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
     buyer    = order.get("buyer", {}) or {}
     item     = (order.get("order_items") or [{}])[0]
     item_inf = item.get("item", {}) or {}
+    payments = order.get("payments", [])
+    payment  = payments[0] if payments else {}
 
-    # 🔎 Campos SKU
     item_id = item_inf.get("id")
     sku = None
     quantity_sku = None
@@ -192,18 +193,14 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
     level1 = None
     level2 = None
 
-    # 🔎 Campo de pagamento (primeiro payment, se houver)
-    payments = order.get("payments", [])
-    payment = payments[0] if payments else {}
-
-    # 🔎 Campo de Ads (existe se "ads" estiver em internal_tags)
+    # Detectar se houve Ads com base nas tags internas
     internal_tags = order.get("internal_tags", [])
     ads = 1.00 if "ads" in internal_tags else 0.00
 
-    # 🔎 Fee do ML
+    # Calcular a fee total
     sale_fee = item.get("sale_fee", 0) or 0
-    ml_fee = payment.get("marketplace_fee", 0) or 0
-    ml_fee_total = round(sale_fee + ml_fee, 2)
+    marketplace_fee = payment.get("marketplace_fee", 0) or 0
+    ml_fee_total = round(sale_fee + marketplace_fee, 2)
 
     try:
         sku_result = db.execute(text("""
@@ -242,14 +239,14 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         unit_price       = item.get("unit_price"),
         shipping_id      = order.get("shipping", {}).get("id"),
 
-        # 🟦 Dados SKU
+        # Dados de SKU
         sku              = sku,
         quantity_sku     = quantity_sku,
         custo_unitario   = custo_unitario,
         level1           = level1,
         level2           = level2,
 
-        # 🆕 Novos campos
+        # Novos campos
         ads              = ads,
         ml_fee           = ml_fee_total,
         payment_id       = payment.get("id")
