@@ -183,15 +183,27 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
     buyer    = order.get("buyer", {}) or {}
     item     = (order.get("order_items") or [{}])[0]
     item_inf = item.get("item", {}) or {}
-    ship     = order.get("shipping") or {}
-    addr     = ship.get("receiver_address") or {}
 
+    # 🔎 Campos SKU
     item_id = item_inf.get("id")
     sku = None
     quantity_sku = None
     custo_unitario = None
     level1 = None
     level2 = None
+
+    # 🔎 Campo de pagamento (primeiro payment, se houver)
+    payments = order.get("payments", [])
+    payment = payments[0] if payments else {}
+
+    # 🔎 Campo de Ads (existe se "ads" estiver em internal_tags)
+    internal_tags = order.get("internal_tags", [])
+    ads = 1.00 if "ads" in internal_tags else 0.00
+
+    # 🔎 Fee do ML
+    sale_fee = item.get("sale_fee", 0) or 0
+    ml_fee = payment.get("marketplace_fee", 0) or 0
+    ml_fee_total = round(sale_fee + ml_fee, 2)
 
     try:
         sku_result = db.execute(text("""
@@ -220,9 +232,6 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         ml_user_id       = int(ml_user_id),
         buyer_id         = buyer.get("id"),
         buyer_nickname   = buyer.get("nickname"),
-        buyer_email      = buyer.get("email"),
-        buyer_first_name = buyer.get("first_name"),
-        buyer_last_name  = buyer.get("last_name"),
         total_amount     = order.get("total_amount"),
         status           = order.get("status"),
         status_detail    = order.get("status_detail"),
@@ -231,19 +240,19 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         item_title       = item_inf.get("title"),
         quantity         = item.get("quantity"),
         unit_price       = item.get("unit_price"),
-        shipping_id      = ship.get("id"),
-        shipping_status  = ship.get("status"),
-        city             = addr.get("city", {}).get("name"),
-        state            = addr.get("state", {}).get("name"),
-        country          = addr.get("country", {}).get("id"),
-        zip_code         = addr.get("zip_code"),
-        street_name      = addr.get("street_name"),
-        street_number    = addr.get("street_number"),
+        shipping_id      = order.get("shipping", {}).get("id"),
+
+        # 🟦 Dados SKU
         sku              = sku,
         quantity_sku     = quantity_sku,
         custo_unitario   = custo_unitario,
         level1           = level1,
-        level2           = level2
+        level2           = level2,
+
+        # 🆕 Novos campos
+        ads              = ads,
+        ml_fee           = ml_fee_total,
+        payment_id       = payment.get("id")
     )
 
 def revisar_status_historico(ml_user_id: str, access_token: str, return_changes: bool = False) -> Tuple[int, List[Tuple[str, str, str]]]:
