@@ -238,6 +238,8 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         quantity         = item.get("quantity"),
         unit_price       = item.get("unit_price"),
         shipping_id      = order.get("shipping", {}).get("id"),
+        seller_sku       = item_inf.get("seller_sku"),
+
 
         # Dados de SKU
         sku              = sku,
