@@ -32,7 +32,6 @@ class Sale(Base):
 
 
     # 🔽 Campos de SKU (mantidos)
-    sku              = Column(String, nullable=True)
     quantity_sku     = Column(Integer, nullable=True)
     custo_unitario   = Column(Numeric(10, 2), nullable=True)
     level1           = Column(String, nullable=True)
