@@ -737,8 +737,8 @@ def mostrar_contas_cadastradas():
                     st.success(f"✅ {novas} novas vendas ou alterações recentes importadas.")
 
     with col_b:
-        if st.button("♻️ Processar Status (Todas)", use_container_width=True):
-            with st.spinner("♻️ Atualizando status de todas as vendas..."):
+        if st.button("♻️ Reprocessar Histórico de Vendas", use_container_width=True):
+            with st.spinner("♻️ Atualizando histórico de todas as vendas..."):
                 for row in df.itertuples(index=False):
                     ml_user_id = str(row.ml_user_id)
                     access_token = row.access_token
@@ -753,7 +753,7 @@ def mostrar_contas_cadastradas():
                 st.success("✅ Todos os status foram padronizados com sucesso.")
                     
     with col_c:
-        if st.button("📜 Reprocessar Histórico (Todas)", use_container_width=True):
+        if st.button("📜 Procurar novas vendas históricas", use_container_width=True):
             with st.spinner("📜 Reprocessando histórico completo..."):
                 for row in df.itertuples(index=False):
                     ml_user_id = str(row.ml_user_id)
