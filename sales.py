@@ -214,9 +214,6 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         ml_user_id       = int(ml_user_id),
         buyer_id         = buyer.get("id"),
         buyer_nickname   = buyer.get("nickname"),
-        buyer_email      = buyer.get("email"),
-        buyer_first_name = buyer.get("first_name"),
-        buyer_last_name  = buyer.get("last_name"),
         total_amount     = order.get("total_amount"),
         status           = order.get("status"),
         status_detail    = order.get("status_detail"),
@@ -226,21 +223,15 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         quantity         = item.get("quantity"),
         unit_price       = item.get("unit_price"),
         shipping_id      = ship.get("id"),
-        shipping_status  = ship.get("status"),
-        city             = addr.get("city", {}).get("name"),
-        state            = addr.get("state", {}).get("name"),
-        country          = addr.get("country", {}).get("id"),
-        zip_code         = addr.get("zip_code"),
-        street_name      = addr.get("street_name"),
-        street_number    = addr.get("street_number"),
-
-        # Campos vindos da tabela sku
         seller_sku       = seller_sku,
+    
+        # Campos da tabela sku
         quantity_sku     = quantity_sku,
         custo_unitario   = custo_unitario,
         level1           = level1,
         level2           = level2
     )
+
 def revisar_status_historico(ml_user_id: str, access_token: str, return_changes: bool = False) -> Tuple[int, List[Tuple[str, str, str]]]:
     from datetime import datetime, timedelta
     from dateutil.relativedelta import relativedelta
