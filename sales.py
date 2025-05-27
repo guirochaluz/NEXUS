@@ -142,13 +142,16 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         for o in orders:
             oid = str(o["id"])
             existing_sale = db.query(Sale).filter_by(order_id=oid).first()
-            if not existing_sale:
-                db.add(_order_to_sale(o, ml_user_id))
-                total_saved += 1
+            nova_venda = _order_to_sale(o, ml_user_id, db)
+
+            if existing_sale:
+                # Atualiza todos os campos, exceto o estado interno do SQLAlchemy
+                for attr, value in nova_venda.__dict__.items():
+                    if attr != "_sa_instance_state":
+                        setattr(existing_sale, attr, value)
             else:
-                novo_status = o.get("status", "").lower()
-                if novo_status and existing_sale.status != novo_status:
-                    existing_sale.status = novo_status
+                db.add(nova_venda)
+                total_saved += 1
 
         db.commit()
 
@@ -160,6 +163,7 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         db.close()
 
     return total_saved
+
 
 def sync_all_accounts() -> int:
     db = SessionLocal()
