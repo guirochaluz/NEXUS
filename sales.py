@@ -267,7 +267,7 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
                     "seller": ml_user_id,
                     "offset": offset,
                     "limit": 50,
-                    "sort": "date_asc",
+                    "sort": "date_desc",
                     "order.date_closed.from": current_start.isoformat(),
                     "order.date_closed.to": current_end.isoformat()
                 }
