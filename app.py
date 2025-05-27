@@ -171,7 +171,6 @@ def salvar_tokens_no_banco(data: dict):
 @st.cache_data(ttl=300)
 def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
     if conta_id:
-        # … seu código de consulta por nickname …
         sql = text("""
             SELECT s.order_id,
                    s.date_adjusted,
@@ -183,7 +182,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    s.total_amount,
                    s.ml_user_id,
                    s.buyer_nickname,
-                   s.sku,
+                   s.seller_sku,
                    s.custo_unitario,
                    s.level1,
                    s.level2,
@@ -206,7 +205,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    s.total_amount,
                    s.ml_user_id,
                    s.buyer_nickname,
-                   s.sku,
+                   s.seller_sku,
                    s.custo_unitario,
                    s.level1,
                    s.level2,
@@ -214,8 +213,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
               FROM sales s
               LEFT JOIN user_tokens u ON s.ml_user_id = u.ml_user_id
         """)
-        # **ADICIONE esta linha abaixo**
         df = pd.read_sql(sql, engine)
+
     return df
 
 
@@ -1048,7 +1047,7 @@ def mostrar_gestao_sku():
     # 🔁 Recarrega os dados do banco se necessário
     if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
         df = pd.read_sql(text("""
-            SELECT s.item_id, s.sku, s.level1, s.level2, s.custo_unitario, s.quantity_sku
+            SELECT s.item_id, s.seller_sku, s.level1, s.level2, s.custo_unitario, s.quantity_sku
             FROM sales s
             ORDER BY s.date_closed DESC
         """), engine)
@@ -1059,14 +1058,14 @@ def mostrar_gestao_sku():
 
     # 1️⃣ Métricas principais
     with engine.begin() as conn:
-        total_com_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE sku IS NOT NULL")).scalar()
-        total_sem_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE sku IS NULL")).scalar()
+        total_com_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NOT NULL")).scalar()
+        total_sem_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NULL")).scalar()
         total_sem_preco = conn.execute(text("""
             SELECT COUNT(*) FROM sales
-            WHERE sku IS NOT NULL AND custo_unitario IS NULL
+            WHERE seller_sku IS NOT NULL AND custo_unitario IS NULL
         """)).scalar()
-        mlb_com_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE sku IS NOT NULL")).scalar()
-        mlb_sem_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE sku IS NULL")).scalar()
+        mlb_com_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE seller_sku IS NOT NULL")).scalar()
+        mlb_sem_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE seller_sku IS NULL")).scalar()
 
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("🔗 Vendas com SKU", total_com_sku)
@@ -1078,18 +1077,19 @@ def mostrar_gestao_sku():
     st.markdown("---")
     st.markdown("### 🔍 Filtros de Diagnóstico")
 
+
     # 3️⃣ Filtros dinâmicos
     colf1, colf2, colf3, colf4, colf5 = st.columns([1.2, 1.2, 1.2, 1.2, 2])
-    op_sku     = colf1.selectbox("SKU", ["Todos", "Nulo", "Não Nulo"])
+    op_sku     = colf1.selectbox("Seller SKU", ["Todos", "Nulo", "Não Nulo"])
     op_level1  = colf2.selectbox("Level1", ["Todos", "Nulo", "Não Nulo"])
     op_level2  = colf3.selectbox("Level2", ["Todos", "Nulo", "Não Nulo"])
     op_preco   = colf4.selectbox("Preço Unitário", ["Todos", "Nulo", "Não Nulo"])
-    filtro_txt = colf5.text_input("🔎 Pesquisa (MLB, SKU, Level1, Level2)")
-
+    filtro_txt = colf5.text_input("🔎 Pesquisa (MLB, Seller SKU, Level1, Level2)")
+    
     if op_sku == "Nulo":
-        df = df[df["sku"].isna()]
+        df = df[df["seller_sku"].isna()]
     elif op_sku == "Não Nulo":
-        df = df[df["sku"].notna()]
+        df = df[df["seller_sku"].notna()]
     if op_level1 == "Nulo":
         df = df[df["level1"].isna()]
     elif op_level1 == "Não Nulo":
@@ -1105,21 +1105,21 @@ def mostrar_gestao_sku():
     if filtro_txt:
         filtro_txt = filtro_txt.lower()
         df = df[df.apply(lambda row: filtro_txt in str(row["item_id"]).lower()
-                         or filtro_txt in str(row["sku"]).lower()
+                         or filtro_txt in str(row["seller_sku"]).lower()
                          or filtro_txt in str(row["level1"]).lower()
                          or filtro_txt in str(row["level2"]).lower(), axis=1)]
-
+    
     # 4️⃣ Tabela de visualização
     st.markdown("### 📊 Tabela de Vendas com SKUs")
     if df.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros aplicados.")
     else:
         st.dataframe(df, use_container_width=True)
-
+    
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
     st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
-    modelo = pd.DataFrame(columns=["sku", "level1", "level2", "custo_unitario", "quantity"])
+    modelo = pd.DataFrame(columns=["seller_sku", "level1", "level2", "custo_unitario", "quantity"])
     buffer = io.BytesIO()
     modelo.to_excel(buffer, index=False, engine="openpyxl")
     st.download_button(
@@ -1132,24 +1132,24 @@ def mostrar_gestao_sku():
     arquivo = st.file_uploader("Selecione um arquivo Excel (.xlsx)", type=["xlsx"])
     if arquivo is not None:
         df_novo = pd.read_excel(arquivo)
-        colunas_esperadas = {"sku", "level1", "level2", "custo_unitario", "quantity"}
+        colunas_esperadas = {"seller_sku", "level1", "level2", "custo_unitario", "quantity"}
         if not colunas_esperadas.issubset(df_novo.columns):
-            st.error("❌ A planilha deve conter: sku, level1, level2, custo_unitario, quantity.")
+            st.error("❌ A planilha deve conter: seller_sku, level1, level2, custo_unitario, quantity.")
         else:
             if st.button("✅ Processar Planilha e Atualizar"):
                 try:
                     df_novo["quantity"] = df_novo["quantity"].fillna(0).astype(int)
                     df_novo["custo_unitario"] = df_novo["custo_unitario"].fillna(0).astype(float)
-                    df_novo["sku"] = df_novo["sku"].astype(str).str.strip()
+                    df_novo["seller_sku"] = df_novo["seller_sku"].astype(str).str.strip()
                     df_novo["level1"] = df_novo["level1"].astype(str).str.strip()
                     df_novo["level2"] = df_novo["level2"].astype(str).str.strip()
-
+    
                     with engine.begin() as conn:
                         for _, row in df_novo.iterrows():
                             row_dict = row.to_dict()
                             result = conn.execute(text("""
                                 SELECT 1 FROM sku
-                                WHERE sku = :sku
+                                WHERE sku = :seller_sku
                                   AND TRIM(level1) = :level1
                                   AND TRIM(level2) = :level2
                                   AND ROUND(CAST(custo_unitario AS numeric), 2) = ROUND(CAST(:custo_unitario AS numeric), 2)
@@ -1159,54 +1159,12 @@ def mostrar_gestao_sku():
                             if result is None:
                                 conn.execute(text("""
                                     INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                                    VALUES (:sku, :level1, :level2, :custo_unitario, :quantity, NOW())
+                                    VALUES (:seller_sku, :level1, :level2, :custo_unitario, :quantity, NOW())
                                 """), row_dict)
                     st.success("✅ Planilha importada com sucesso!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Erro ao processar: {e}")
-
-    # 6️⃣ Relação SKU ↔ MLB
-    st.markdown("---")
-    st.markdown("### 🔄 Relação SKU com MLB")
-    modelo_relacao = pd.DataFrame(columns=["sku", "mlb"])
-    buffer_rel = io.BytesIO()
-    modelo_relacao.to_excel(buffer_rel, index=False, engine="openpyxl")
-    st.download_button(
-        label="⬇️ Baixar Modelo Relação SKU ↔ MLB",
-        data=buffer_rel.getvalue(),
-        file_name="modelo_relacao_skumlb.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    arquivo_relacao = st.file_uploader("Selecione a planilha de relação (SKU + MLB)", type=["xlsx"], key="relacao_skumlb")
-    if arquivo_relacao:
-        df_relacao = pd.read_excel(arquivo_relacao)
-        colunas_esperadas = {"sku", "mlb"}
-        if not colunas_esperadas.issubset(df_relacao.columns):
-            st.error("❌ A planilha precisa conter as colunas: sku e mlb.")
-        else:
-            if st.button("📥 Processar Planilha de SKU-MLB"):
-                try:
-                    with engine.begin() as conn:
-                        for _, row in df_relacao.iterrows():
-                            conn.execute(text("""
-                                INSERT INTO skumlb (sku, mlb)
-                                VALUES (:sku, :mlb)
-                                ON CONFLICT (sku, mlb) DO NOTHING
-                            """), row.to_dict())
-                        conn.execute(text("""
-                            UPDATE sales
-                            SET sku = skumlb.sku
-                            FROM skumlb
-                            WHERE sales.item_id = skumlb.mlb
-                              AND sales.sku IS NULL
-                        """))
-                    st.success("✅ Relações SKU-MLB importadas e conciliadas com sucesso!")
-                    st.session_state["atualizar_gestao_sku"] = True
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao importar ou conciliar dados: {e}")
 
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
