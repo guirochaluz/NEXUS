@@ -746,7 +746,7 @@ def mostrar_contas_cadastradas():
 
                     st.subheader(f"🔗 Conta: {nickname}")
                     atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
-                    st.info(f"♻️ {atualizadas} vendas com status alterados.")
+                    st.info(f"♻️ {atualizadas} vendas atualizadas com dados mais recentes.")
 
                 # ✅ Executa padronização depois de todas as contas
                 padronizar_status_sales(engine)
