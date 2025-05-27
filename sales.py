@@ -142,16 +142,13 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         for o in orders:
             oid = str(o["id"])
             existing_sale = db.query(Sale).filter_by(order_id=oid).first()
-            nova_venda = _order_to_sale(o, ml_user_id, db)
-
-            if existing_sale:
-                # Atualiza todos os campos, exceto o estado interno do SQLAlchemy
-                for attr, value in nova_venda.__dict__.items():
-                    if attr != "_sa_instance_state":
-                        setattr(existing_sale, attr, value)
-            else:
-                db.add(nova_venda)
+            if not existing_sale:
+                db.add(_order_to_sale(o, ml_user_id))
                 total_saved += 1
+            else:
+                novo_status = o.get("status", "").lower()
+                if novo_status and existing_sale.status != novo_status:
+                    existing_sale.status = novo_status
 
         db.commit()
 
@@ -163,7 +160,6 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
         db.close()
 
     return total_saved
-
 
 def sync_all_accounts() -> int:
     db = SessionLocal()
@@ -187,39 +183,24 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
     buyer    = order.get("buyer", {}) or {}
     item     = (order.get("order_items") or [{}])[0]
     item_inf = item.get("item", {}) or {}
-    payments = order.get("payments", [])
-    payment  = payments[0] if payments else {}
+    ship     = order.get("shipping") or {}
+    addr     = ship.get("receiver_address") or {}
 
-    item_id = item_inf.get("id")
-    sku = None
+    seller_sku = item_inf.get("seller_sku")
     quantity_sku = None
     custo_unitario = None
     level1 = None
     level2 = None
 
-    # Detectar se houve Ads com base nas tags internas
-    internal_tags = order.get("internal_tags", [])
-    ads = 1.00 if "ads" in internal_tags else 0.00
-
-    # Calcular a fee total
-    sale_fee = item.get("sale_fee", 0) or 0
-    marketplace_fee = payment.get("marketplace_fee", 0) or 0
-    ml_fee_total = round(sale_fee + marketplace_fee, 2)
-
     try:
-        sku_result = db.execute(text("""
-            SELECT sku FROM skumlb WHERE mlb = :mlb LIMIT 1
-        """), {"mlb": item_id}).scalar()
-
-        if sku_result:
-            sku = sku_result
+        if seller_sku:
             sku_info = db.execute(text("""
                 SELECT quantity, custo_unitario, level1, level2
                 FROM sku
                 WHERE sku = :sku
                 ORDER BY date_created DESC
                 LIMIT 1
-            """), {"sku": sku}).fetchone()
+            """), {"sku": seller_sku}).fetchone()
 
             if sku_info:
                 quantity_sku, custo_unitario, level1, level2 = sku_info
@@ -233,31 +214,33 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         ml_user_id       = int(ml_user_id),
         buyer_id         = buyer.get("id"),
         buyer_nickname   = buyer.get("nickname"),
+        buyer_email      = buyer.get("email"),
+        buyer_first_name = buyer.get("first_name"),
+        buyer_last_name  = buyer.get("last_name"),
         total_amount     = order.get("total_amount"),
         status           = order.get("status"),
         status_detail    = order.get("status_detail"),
         date_closed      = parser.isoparse(order.get("date_closed")),
-        item_id          = item_id,
+        item_id          = item_inf.get("id"),
         item_title       = item_inf.get("title"),
         quantity         = item.get("quantity"),
         unit_price       = item.get("unit_price"),
-        shipping_id      = order.get("shipping", {}).get("id"),
-        seller_sku       = item_inf.get("seller_sku"),
+        shipping_id      = ship.get("id"),
+        shipping_status  = ship.get("status"),
+        city             = addr.get("city", {}).get("name"),
+        state            = addr.get("state", {}).get("name"),
+        country          = addr.get("country", {}).get("id"),
+        zip_code         = addr.get("zip_code"),
+        street_name      = addr.get("street_name"),
+        street_number    = addr.get("street_number"),
 
-
-        # Dados de SKU
-        sku              = sku,
+        # Campos vindos da tabela sku
+        seller_sku       = seller_sku,
         quantity_sku     = quantity_sku,
         custo_unitario   = custo_unitario,
         level1           = level1,
-        level2           = level2,
-
-        # Novos campos
-        ads              = ads,
-        ml_fee           = ml_fee_total,
-        payment_id       = payment.get("id")
+        level2           = level2
     )
-
 def revisar_status_historico(ml_user_id: str, access_token: str, return_changes: bool = False) -> Tuple[int, List[Tuple[str, str, str]]]:
     from datetime import datetime, timedelta
     from dateutil.relativedelta import relativedelta
@@ -332,20 +315,6 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
 
     return (atualizadas, alteracoes) if return_changes else (atualizadas, [])
 
-def atualizar_sales_com_sku(engine):
-    with engine.begin() as conn:
-        conn.execute(text("""
-            UPDATE sales
-            SET
-                sku = s.sku,
-                quantity_sku = s.quantity,
-                custo_unitario = s.custo_unitario,
-                level1 = s.level1,
-                level2 = s.level2
-            FROM skumlb m
-            JOIN sku s ON s.sku = m.sku
-            WHERE sales.item_id = m.mlb;
-        """))
 
 def padronizar_status_sales(engine):
     """
