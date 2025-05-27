@@ -260,6 +260,7 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
     from dateutil.tz import tzutc
     from db import SessionLocal
     from models import Sale
+    from sales import _order_to_sale
     import requests
     from sqlalchemy import func
 
@@ -298,23 +299,30 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
                 orders = resp.json().get("results", [])
                 if not orders:
                     break
-                for o in orders:
-                    oid = str(o["id"])
-                    status_api_raw = o.get("status", "").strip().lower()
+
+                for order in orders:
+                    oid = str(order["id"])
                     existing_sale = db.query(Sale).filter_by(order_id=oid).first()
-                    if existing_sale and existing_sale.status != status_api_raw:
-                        if return_changes:
-                            alteracoes.append((oid, existing_sale.status, status_api_raw))
-                        existing_sale.status = status_api_raw
+                    if existing_sale:
+                        old_status = existing_sale.status
+                        nova_venda = _order_to_sale(order, ml_user_id, db)
+                        for attr, value in nova_venda.__dict__.items():
+                            if attr != "_sa_instance_state":
+                                setattr(existing_sale, attr, value)
+                        if return_changes and old_status != nova_venda.status:
+                            alteracoes.append((oid, old_status, nova_venda.status))
                         atualizadas += 1
                 db.commit()
+
                 if len(orders) < 50:
                     break
                 offset += 50
             current_start += relativedelta(months=1)
+
     except Exception as e:
         db.rollback()
         raise RuntimeError(f"Erro ao revisar histórico: {e}")
+
     finally:
         db.close()
 
