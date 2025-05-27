@@ -184,6 +184,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    s.buyer_nickname,
                    s.seller_sku,
                    s.custo_unitario,
+                   s.quantity_sku,
+                   s.ml_fee,
                    s.level1,
                    s.level2,
                    u.nickname
@@ -207,6 +209,8 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
                    s.buyer_nickname,
                    s.seller_sku,
                    s.custo_unitario,
+                   s.quantity_sku,
+                   s.ml_fee,
                    s.level1,
                    s.level2,
                    u.nickname
@@ -216,6 +220,7 @@ def carregar_vendas(conta_id: Optional[str] = None) -> pd.DataFrame:
         df = pd.read_sql(sql, engine)
 
     return df
+
 
 
 # ----------------- Componentes de Interface -----------------
@@ -362,20 +367,48 @@ def mostrar_dashboard():
         unsafe_allow_html=True,
     )
 
-    # --- Filtro de contas fixo com checkboxes lado a lado ---
+    # --- Filtro de contas fixo com checkboxes lado a lado + botão selecionar todos ---
     contas_df = pd.read_sql(text("SELECT nickname FROM user_tokens ORDER BY nickname"), engine)
     contas_lst = contas_df["nickname"].astype(str).tolist()
     
+    st.markdown("""
+        <style>
+            /* Estilo verde para checkboxes (só funciona com hack CSS para dark mode) */
+            input[type="checkbox"]:checked + div span {
+                background-color: #27ae60 !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
     st.markdown("**🧾 Contas Mercado Livre:**")
-    colunas_contas = st.columns(8)  # ajuste o número conforme necessário
+    
+    # Estado para controlar se todas estão selecionadas
+    if "todas_contas_marcadas" not in st.session_state:
+        st.session_state["todas_contas_marcadas"] = True
+    
+    # Botão alternar seleção
+    col_btn, _ = st.columns([1, 7])
+    with col_btn:
+        if st.button(
+            "✅ Selecionar Todos" if not st.session_state["todas_contas_marcadas"] else "❌ Desmarcar Todos",
+            use_container_width=True
+        ):
+            st.session_state["todas_contas_marcadas"] = not st.session_state["todas_contas_marcadas"]
+    
+    # Renderiza os checkboxes em colunas
+    colunas_contas = st.columns(8)
     selecionadas = []
     
     for i, conta in enumerate(contas_lst):
-        if colunas_contas[i % 8].checkbox(conta, value=True, key=f"conta_{conta}"):
+        key = f"conta_{conta}"
+        default = st.session_state["todas_contas_marcadas"]
+        if colunas_contas[i % 8].checkbox(conta, value=default, key=key):
             selecionadas.append(conta)
     
+    # Aplica filtro
     if selecionadas:
         df_full = df_full[df_full["nickname"].isin(selecionadas)]
+
 
 
     # --- Linha única de filtros: Rápido | De | Até | Status ---
@@ -481,82 +514,123 @@ def mostrar_dashboard():
 
 
     
-    # 4️⃣ Métricas detalhadas
+    # Estilo customizado (CSS)
+    st.markdown("""
+        <style>
+            .kpi-title {
+                font-size: 15px;
+                font-weight: 600;
+                color: #000000;
+                margin-bottom: 4px;
+            }
+            .kpi-value {
+                font-size: 22px;
+                font-weight: bold;
+                color: #000000;
+            }
+            .kpi-card {
+                background-color: #ffffff;
+                border-radius: 12px;
+                padding: 16px 20px;
+                margin: 5px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                border-left: 5px solid #27ae60;
+            }
+        </style>
+    """, unsafe_allow_html=True)
     
-    # Métricas base
-    total_vendas   = len(df)
-    total_valor    = df["total_amount"].sum()
-    total_itens    = df["quantity"].sum()
-    ticket_venda   = total_valor / total_vendas if total_vendas else 0
-    ticket_unidade = total_valor / total_itens if total_itens else 0
+    # Função para renderizar KPI card em coluna
+    def kpi_card(col, title, value):
+        col.markdown(f"""
+            <div class="kpi-card">
+                <div class="kpi-title">{title}</div>
+                <div class="kpi-value">{value}</div>
+            </div>
+        """, unsafe_allow_html=True)
     
-    # Custos estimados
-    frete = total_valor * 0.10
-    taxa_mktplace = total_valor * 0.20
-    cmv = (df["quantity"] * df["custo_unitario"].fillna(0)).sum()
+    # Cálculos (ajustado)
+    total_vendas     = len(df)
+    total_valor      = df["total_amount"].sum()
+    total_itens      = df["quantity_sku"].sum()
+    ticket_venda     = total_valor / total_vendas if total_vendas else 0
+    ticket_unidade   = total_valor / total_itens if total_itens else 0
+    frete            = total_valor * 0.10
+    taxa_mktplace    = df["ml_fee"].fillna(0).sum()
+    cmv              = (df["quantity_sku"] * df["custo_unitario"].fillna(0)).sum()
     margem_operacional = total_valor - frete - taxa_mktplace - cmv
+    sem_sku          = df["quantity_sku"].isnull().sum()
     
-    # Linha 1: Faturamento e custos
-    st.subheader("💼 Indicadores Financeiros")
-    colf1, colf2, colf3, colf4, colf5 = st.columns(5)
-    colf1.metric("💰 Faturamento", format_currency(total_valor))
-    colf2.metric("🚚 Frete (10%)", format_currency(frete))
-    colf3.metric("📉 Taxa Marketplace (20%)", format_currency(taxa_mktplace))
-    colf4.metric("📦 CMV", format_currency(cmv))
-    colf5.metric("💵 Margem Operacional", format_currency(margem_operacional))
+    # Bloco 1: Indicadores Financeiros
+    st.markdown("### 💼 Indicadores Financeiros")
+    row1 = st.columns(5)
+    kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
+    kpi_card(row1[1], "🚚 Frete Estimado (10%)", format_currency(frete))
+    kpi_card(row1[2], "📉 Taxa Marketplace", format_currency(taxa_mktplace))
+    kpi_card(row1[3], "📦 CMV", format_currency(cmv))
+    kpi_card(row1[4], "💵 Margem Operacional", format_currency(margem_operacional))
     
-    # Linha 2: Volume e tickets
-    st.subheader("📊 Indicadores de Vendas")
-    colv1, colv2, colv3, colv4 = st.columns(4)
-    colv1.metric("🧾 Vendas Realizadas", total_vendas)
-    colv2.metric("📦 Unidades Vendidas", int(total_itens))
-    colv3.metric("🎯 Ticket Médio por Venda", format_currency(ticket_venda))
-    colv4.metric("🎯 Ticket Médio por Unidade", format_currency(ticket_unidade))
+    # Bloco 2: Indicadores de Vendas
+    st.markdown("### 📊 Indicadores de Vendas")
+    row2 = st.columns(5)
+    kpi_card(row2[0], "🧾 Vendas Realizadas", str(total_vendas))
+    kpi_card(row2[1], "📦 Unidades Vendidas", str(int(total_itens)))
+    kpi_card(row2[2], "🎯 Ticket Médio por Venda", format_currency(ticket_venda))
+    kpi_card(row2[3], "🎯 Ticket Médio por Unidade", format_currency(ticket_unidade))
+    kpi_card(row2[4], "❌ Sem SKU Registrado", str(sem_sku))
     
     import plotly.express as px
 
     # =================== Gráfico de Linha - Total Vendido ===================
-    col_title, col_visao, col_periodo = st.columns([8, 1, 1])
-    title_placeholder = col_title.empty()
+    st.markdown("### 💵 Total Vendido por Período")
     
-    modo_agregacao = col_visao.radio(
-        "Agrupamento",
-        ["Por Conta", "Total Geral"],
-        horizontal=True,
-        key="modo_agregacao"
-    )
+    # Cria colunas horizontais abaixo do título para os seletores
+    col1, col2 = st.columns([2, 2])
     
-    tipo_visualizacao = col_periodo.radio(
-        "Período",
-        ["Diário", "Mensal"],
-        horizontal=True,
-        key="periodo"
-    )
+    with col1:
+        tipo_visualizacao = st.radio(
+            "📆 Período",
+            ["Diário", "Semanal", "Quinzenal", "Mensal"],
+            horizontal=True,
+            key="periodo"
+        )
     
-    # 2) Prepara e agrega os dados
+    with col2:
+        modo_agregacao = st.radio(
+            "👥 Agrupamento",
+            ["Por Conta", "Total Geral"],
+            horizontal=True,
+            key="modo_agregacao"
+        )
+    
+    # Prepara dados
     df_plot = df.copy()
     
-    # agrupa por hora sempre que o período for um único dia
+    # Define o eixo_x com base no tipo de período
     if de == ate:
-        df_plot["date_hour"] = df_plot["date_adjusted"].dt.floor("H")
-        eixo_x = "date_hour"
+        df_plot["date_bucket"] = df_plot["date_adjusted"].dt.floor("H")
         periodo_label = "Hora"
     else:
-        # mais de um dia: usa o seletor Diário/Mensal
         if tipo_visualizacao == "Diário":
-            df_plot["date_adjusted"] = df_plot["date_adjusted"].dt.date
-            eixo_x = "date_adjusted"
+            df_plot["date_bucket"] = df_plot["date_adjusted"].dt.date
             periodo_label = "Dia"
+        elif tipo_visualizacao == "Semanal":
+            df_plot["date_bucket"] = df_plot["date_adjusted"].dt.to_period("W").apply(lambda p: p.start_time.date())
+            periodo_label = "Semana"
+        elif tipo_visualizacao == "Quinzenal":
+            df_plot["quinzena"] = df_plot["date_adjusted"].apply(
+                lambda d: f"{d.year}-Q{(d.month-1)*2//30 + 1}-{1 if d.day <= 15 else 2}"
+            )
+            df_plot["date_bucket"] = df_plot["quinzena"]
+            periodo_label = "Quinzena"
         else:
-            df_plot["date_adjusted"] = df_plot["date_adjusted"].dt.to_period("M").astype(str)
-            eixo_x = "date_adjusted"
+            df_plot["date_bucket"] = df_plot["date_adjusted"].dt.to_period("M").astype(str)
             periodo_label = "Mês"
     
-    # aplica agregação comum
+    # Agrupamento por conta ou total
     if modo_agregacao == "Por Conta":
         vendas_por_data = (
             df_plot
-            .groupby([eixo_x, "nickname"])["total_amount"]
+            .groupby(["date_bucket", "nickname"])["total_amount"]
             .sum()
             .reset_index(name="Valor Total")
         )
@@ -565,38 +639,31 @@ def mostrar_dashboard():
     else:
         vendas_por_data = (
             df_plot
-            .groupby(eixo_x)["total_amount"]
+            .groupby("date_bucket")["total_amount"]
             .sum()
             .reset_index(name="Valor Total")
         )
         color_dim = None
         color_seq = ["#27ae60"]
     
-    titulo = f"💵 Total Vendido por {periodo_label} " + (
-        "(Linha por Conta)" if modo_agregacao=="Por Conta" else "(Soma Total)"
-    )
-    
-    # 3) Atualiza o título
-    title_placeholder.markdown(f"### {titulo}")
-    
-    # 4) Desenha o gráfico
+    # Gráfico final
     fig = px.line(
         vendas_por_data,
-        x=eixo_x,
+        x="date_bucket",
         y="Valor Total",
         color=color_dim,
-        labels={eixo_x: "Data", "Valor Total": "Valor Total", "nickname": "Conta"},
+        labels={"date_bucket": periodo_label, "Valor Total": "Valor Total", "nickname": "Conta"},
         color_discrete_sequence=color_seq,
     )
+    
     fig.update_traces(
         mode="lines+markers",
-        marker=dict(size=5),
-        texttemplate="%{y:,.2f}",
-        textposition="top center"
+        marker=dict(size=5)
     )
-    fig.update_layout(margin=dict(t=30, b=20, l=40, r=10))
+    fig.update_layout(margin=dict(t=20, b=20, l=40, r=10))
     
     st.plotly_chart(fig, use_container_width=True)
+
 
     # === Gráfico de barras: Média por dia da semana ===
     st.markdown('<div class="section-title">📅 Vendas por Dia da Semana</div>', unsafe_allow_html=True)
