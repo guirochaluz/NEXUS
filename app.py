@@ -373,9 +373,18 @@ def mostrar_dashboard():
     
     st.markdown("""
         <style>
-            /* Estilo verde para checkboxes (só funciona com hack CSS para dark mode) */
             input[type="checkbox"]:checked + div span {
                 background-color: #27ae60 !important;
+            }
+            .mini-toggle-button {
+                background-color: transparent;
+                color: #999;
+                border: 1px solid #444;
+                padding: 2px 8px;
+                font-size: 12px;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-bottom: 4px;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -389,10 +398,12 @@ def mostrar_dashboard():
     # Botão alternar seleção
     col_btn, _ = st.columns([1, 7])
     with col_btn:
-        if st.button(
-            "✅ Selecionar Todos" if not st.session_state["todas_contas_marcadas"] else "❌ Desmarcar Todos",
-            use_container_width=True
-        ):
+        label = "✅ Selecionar Todos" if not st.session_state["todas_contas_marcadas"] else "❌ Desmarcar Todos"
+        st.markdown(
+            f"<button class='mini-toggle-button'>{label}</button>",
+            unsafe_allow_html=True
+        )
+        if st.button(" ", key="alternar_todas", help="Alternar seleção de todas as contas"):
             st.session_state["todas_contas_marcadas"] = not st.session_state["todas_contas_marcadas"]
     
     # Renderiza os checkboxes em colunas

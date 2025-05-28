@@ -63,7 +63,7 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
                     if db.query(Sale).filter_by(order_id=order_id).first():
                         continue
                     try:
-                        sale = _order_to_sale(order, ml_user_id, db)
+                        sale = _order_to_sale(order, ml_user_id, access_token, db)
                         db.add(sale)
                         total_saved += 1
                     except Exception as e:
@@ -143,7 +143,7 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
             oid = str(o["id"])
             existing_sale = db.query(Sale).filter_by(order_id=oid).first()
             if not existing_sale:
-                db.add(_order_to_sale(o, ml_user_id))
+                db.add(_order_to_sale(o, ml_user_id, access_token, db))
                 total_saved += 1
             else:
                 novo_status = o.get("status", "").lower()
@@ -174,11 +174,25 @@ def sync_all_accounts() -> int:
     print(f"📂️ Sincronização completa. Total de vendas importadas: {total}")
     return total
 
-def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = None) -> Sale:
+def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional[SessionLocal] = None) -> Sale:
     internal_session = False
     if db is None:
         db = SessionLocal()
         internal_session = True
+
+    try:
+        # 🔄 Se payments não está presente, buscar a ordem completa
+        if "payments" not in order or not order["payments"]:
+            order_id = order.get("id")
+            resp = requests.get(
+                f"https://api.mercadolibre.com/orders/{order_id}?access_token={access_token}"
+            )
+            if resp.ok:
+                order = resp.json()
+            else:
+                print(f"⚠️ Falha ao buscar dados completos da ordem {order_id}: {resp.status_code}")
+    except Exception as e:
+        print(f"⚠️ Erro ao tentar complementar dados da ordem {order.get('id')}: {e}")
 
     buyer    = order.get("buyer", {}) or {}
     item     = (order.get("order_items") or [{}])[0]
@@ -204,10 +218,14 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
 
             if sku_info:
                 quantity_sku, custo_unitario, level1, level2 = sku_info
-
     finally:
         if internal_session:
             db.close()
+
+    # 🔎 marketplace_fee direto de payments
+    payment_info = (order.get("payments") or [{}])[0]
+    payment_id = payment_info.get("id")
+    marketplace_fee = payment_info.get("marketplace_fee")
 
     return Sale(
         order_id         = str(order["id"]),
@@ -216,7 +234,6 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         buyer_nickname   = buyer.get("nickname"),
         total_amount     = order.get("total_amount"),
         status           = order.get("status"),
-        status_detail    = order.get("status_detail"),
         date_closed      = parser.isoparse(order.get("date_closed")),
         item_id          = item_inf.get("id"),
         item_title       = item_inf.get("title"),
@@ -224,13 +241,19 @@ def _order_to_sale(order: dict, ml_user_id: str, db: Optional[SessionLocal] = No
         unit_price       = item.get("unit_price"),
         shipping_id      = ship.get("id"),
         seller_sku       = seller_sku,
-    
-        # Campos da tabela sku
+
+        # Dados complementares do SKU
         quantity_sku     = quantity_sku,
         custo_unitario   = custo_unitario,
         level1           = level1,
-        level2           = level2
+        level2           = level2,
+
+        # Taxa real do marketplace
+        ml_fee           = marketplace_fee,
+        payment_id       = payment_id,
     )
+
+
 
 def revisar_status_historico(ml_user_id: str, access_token: str, return_changes: bool = False) -> Tuple[int, List[Tuple[str, str, str]]]:
     from datetime import datetime, timedelta
@@ -283,7 +306,7 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
                     existing_sale = db.query(Sale).filter_by(order_id=oid).first()
                     if existing_sale:
                         old_status = existing_sale.status
-                        nova_venda = _order_to_sale(order, ml_user_id, db)
+                        nova_venda = _order_to_sale(order, ml_user_id, access_token, db)
                         for attr, value in nova_venda.__dict__.items():
                             if attr != "_sa_instance_state":
                                 setattr(existing_sale, attr, value)
