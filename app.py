@@ -508,6 +508,8 @@ def mostrar_dashboard():
                 font-size: 22px;
                 font-weight: bold;
                 color: #000000;
+                line-height: 1.2;
+                word-break: break-word;
             }
             .kpi-card {
                 background-color: #ffffff;
@@ -532,7 +534,7 @@ def mostrar_dashboard():
     # Cálculos (ajustado)
     total_vendas     = len(df)
     total_valor      = df["total_amount"].sum()
-    total_itens      = df["quantity_sku"].sum()
+    total_itens      = (df["quantity_sku"] * df["quantity"]).sum()
     ticket_venda     = total_valor / total_vendas if total_vendas else 0
     ticket_unidade   = total_valor / total_itens if total_itens else 0
     frete            = total_valor * 0.10
@@ -541,22 +543,25 @@ def mostrar_dashboard():
     margem_operacional = total_valor - frete - taxa_mktplace - cmv
     sem_sku          = df["quantity_sku"].isnull().sum()
     
+    pct = lambda val: f"<span style='font-size: 70%; color: #666; display: inline-block; margin-left: 6px;'>({val / total_valor * 100:.1f}%)</span>" if total_valor else "<span style='font-size: 70%'>(0%)</span>"
+
+    
     # Bloco 1: Indicadores Financeiros
     st.markdown("### 💼 Indicadores Financeiros")
     row1 = st.columns(5)
     kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
-    kpi_card(row1[1], "🚚 Frete Estimado", format_currency(frete))
-    kpi_card(row1[2], "📉 Taxa Marketplace", format_currency(taxa_mktplace))
-    kpi_card(row1[3], "📦 CMV", format_currency(cmv))
-    kpi_card(row1[4], "💵 Margem Operacional", format_currency(margem_operacional))
+    kpi_card(row1[1], "🚚 Frete Estimado", f"{format_currency(frete)} {pct(frete)}")
+    kpi_card(row1[2], "📉 Taxa Marketplace", f"{format_currency(taxa_mktplace)} {pct(taxa_mktplace)}")
+    kpi_card(row1[3], "📦 CMV", f"{format_currency(cmv)} {pct(cmv)}")
+    kpi_card(row1[4], "💵 Margem Operacional", f"{format_currency(margem_operacional)} {pct(margem_operacional)}")
     
     # Bloco 2: Indicadores de Vendas
     st.markdown("### 📊 Indicadores de Vendas")
     row2 = st.columns(5)
     kpi_card(row2[0], "🧾 Vendas Realizadas", str(total_vendas))
     kpi_card(row2[1], "📦 Unidades Vendidas", str(int(total_itens)))
-    kpi_card(row2[2], "🎯 Ticket Médio p/ Venda", format_currency(ticket_venda))
-    kpi_card(row2[3], "🎯 Ticket Médio p/ Unid.", format_currency(ticket_unidade))
+    kpi_card(row2[2], "🎯 Tkt Médio p/ Venda", format_currency(ticket_venda))
+    kpi_card(row2[3], "🎯 Tkt Médio p/ Unid.", format_currency(ticket_unidade))
     kpi_card(row2[4], "❌ SKU Incompleto", str(sem_sku))
     
     import plotly.express as px
@@ -564,27 +569,31 @@ def mostrar_dashboard():
     # =================== Gráfico de Linha + Barra de Proporção ===================
     st.markdown("### 💵 Total Vendido por Período")
     
-    col1, col2 = st.columns([4, 1])  # Gráfico grande (4/5) + barra lateral (1/5)
+    # 🔘 Seletor de período + agrupamento lado a lado
+    colsel1, colsel2 = st.columns([1, 1])
     
-    with col1:
+    with colsel1:
+        st.markdown("**📆 Período**")
         tipo_visualizacao = st.radio(
-            "📆 Período",
-            ["Diário", "Semanal", "Quinzenal", "Mensal"],
+            label="",
+            options=["Diário", "Semanal", "Quinzenal", "Mensal"],
             horizontal=True,
             key="periodo"
         )
     
-    with col2:
+    with colsel2:
+        st.markdown("**👥 Agrupamento**")
         modo_agregacao = st.radio(
-            "👥 Agrupamento",
-            ["Por Conta", "Total Geral"],
+            label="",
+            options=["Por Conta", "Total Geral"],
             horizontal=True,
             key="modo_agregacao"
         )
+
     
     df_plot = df.copy()
     
-    # Define date_bucket
+    # Define bucket de datas
     if de == ate:
         df_plot["date_bucket"] = df_plot["date_adjusted"].dt.floor("H")
         periodo_label = "Hora"
@@ -613,13 +622,18 @@ def mostrar_dashboard():
             .reset_index(name="Valor Total")
         )
         color_dim = "nickname"
-        color_seq = px.colors.sequential.Agsunset
+    
         total_por_conta = (
             df_plot.groupby("nickname")["total_amount"]
             .sum()
             .reset_index(name="total")
             .sort_values("total", ascending=False)
         )
+    
+        color_palette = px.colors.sequential.Agsunset
+        nicknames = total_por_conta["nickname"].tolist()
+        color_map = {nick: color_palette[i % len(color_palette)] for i, nick in enumerate(nicknames)}
+    
     else:
         vendas_por_data = (
             df_plot.groupby("date_bucket")["total_amount"]
@@ -627,10 +641,17 @@ def mostrar_dashboard():
             .reset_index(name="Valor Total")
         )
         color_dim = None
-        color_seq = ["#27ae60"]
-        total_por_conta = None  # não mostra gráfico lateral nesse caso
+        color_map = None  # Não será usado
+        total_por_conta = None
     
-    # Gráfico de linha principal
+    # 🔢 Gráfico(s)
+    if modo_agregacao == "Por Conta":
+        col1, col2 = st.columns([4, 1])
+    else:
+        col1 = st.container()
+        col2 = None
+    
+    # 📈 Gráfico de Linha
     with col1:
         fig = px.line(
             vendas_por_data,
@@ -638,32 +659,53 @@ def mostrar_dashboard():
             y="Valor Total",
             color=color_dim,
             labels={"date_bucket": periodo_label, "Valor Total": "Valor Total", "nickname": "Conta"},
-            color_discrete_sequence=color_seq,
+            color_discrete_map=color_map,
         )
         fig.update_traces(mode="lines+markers", marker=dict(size=5))
-        fig.update_layout(margin=dict(t=20, b=20, l=40, r=10), showlegend=True)
-    
+        fig.update_layout(
+            margin=dict(t=20, b=20, l=40, r=10),
+            showlegend=True
+        )
         st.plotly_chart(fig, use_container_width=True)
     
-    # Gráfico de barra lateral proporcional por conta
-    with col2:
-        if modo_agregacao == "Por Conta" and not total_por_conta.empty:
-            fig_bar = px.bar(
-                total_por_conta,
-                x="total",
-                y="nickname",
-                orientation="h",
-                color="nickname",
-                color_discrete_sequence=color_seq,
-            )
-            fig_bar.update_layout(
-                xaxis=dict(visible=False),
-                yaxis=dict(title=None),
-                showlegend=False,
-                margin=dict(t=20, b=20, l=10, r=10),
-                height=fig.layout.height,
-            )
+    # 📊 Gráfico de barra proporcional (somente se Por Conta)
+    if modo_agregacao == "Por Conta" and not total_por_conta.empty:
+        total_por_conta["percentual"] = total_por_conta["total"] / total_por_conta["total"].sum()
+    
+        def formatar_reais(valor):
+            return f"R$ {valor:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")
+    
+        total_por_conta["texto"] = total_por_conta.apply(
+            lambda row: f"{row['percentual']:.0%} ({formatar_reais(row['total'])})", axis=1
+        )
+        total_por_conta["grupo"] = "Contas"
+    
+        fig_bar = px.bar(
+            total_por_conta,
+            x="grupo",
+            y="percentual",
+            color="nickname",
+            text="texto",
+            color_discrete_map=color_map,
+        )
+    
+        fig_bar.update_layout(
+            yaxis=dict(title=None, tickformat=".0%", range=[0, 1]),
+            xaxis=dict(title=None),
+            showlegend=False,
+            margin=dict(t=20, b=20, l=10, r=10),
+            height=400
+        )
+    
+        fig_bar.update_traces(
+            textposition="inside",
+            insidetextanchor="middle",
+            textfont=dict(color="white", size=12)
+        )
+    
+        with col2:
             st.plotly_chart(fig_bar, use_container_width=True)
+
 
 
 
@@ -703,80 +745,78 @@ def mostrar_dashboard():
 
 
 
-    # =================== Gráfico de Linha - Faturamento Acumulado por Hora ===================
-    st.markdown("### ⏰ Faturamento Acumulado por Hora do Dia (Média)")
-    
-    # Extrai hora e data
-    df["hora"] = df["date_adjusted"].dt.hour
-    df["data"] = df["date_adjusted"].dt.date
-    
-    # Soma o total vendido por hora e por dia
-    vendas_por_dia_e_hora = df.groupby(["data", "hora"])["total_amount"].sum().reset_index()
-    
-    # Garante que todas as horas estejam presentes para todos os dias
-    todos_dias = vendas_por_dia_e_hora["data"].unique()
-    todas_horas = list(range(0, 24))
-    malha_completa = pd.MultiIndex.from_product([todos_dias, todas_horas], names=["data", "hora"])
-    vendas_completa = vendas_por_dia_e_hora.set_index(["data", "hora"]).reindex(malha_completa, fill_value=0).reset_index()
-    
-    # Acumula por hora dentro de cada dia
-    vendas_completa["acumulado_dia"] = vendas_completa.groupby("data")["total_amount"].cumsum()
-    
-    # Agora calcula a média acumulada por hora (entre os dias)
-    media_acumulada_por_hora = (
-        vendas_completa
-        .groupby("hora")["acumulado_dia"]
-        .mean()
-        .reset_index(name="Valor Médio Acumulado")
-    )
-    
-    # Verifica se é filtro de hoje
-    hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
-    filtro_hoje = (de == ate) and (de == hoje)
-    
-    if filtro_hoje:
-        hora_atual = pd.Timestamp.now(tz="America/Sao_Paulo").hour
-        df_hoje = df[df["data"] == hoje]
-        vendas_hoje_por_hora = (
-            df_hoje.groupby("hora")["total_amount"].sum().reindex(range(24), fill_value=0)
-            .cumsum()
+        # =================== Gráfico de Linha - Faturamento Acumulado por Hora ===================
+        st.markdown("### ⏰ Faturamento Acumulado por Hora do Dia (Média)")
+        
+        # Extrai hora e data
+        df["hora"] = df["date_adjusted"].dt.hour
+        df["data"] = df["date_adjusted"].dt.date
+        
+        # Soma o total vendido por hora e por dia
+        vendas_por_dia_e_hora = df.groupby(["data", "hora"])["total_amount"].sum().reset_index()
+        
+        # Garante que todas as horas estejam presentes para todos os dias
+        todos_dias = vendas_por_dia_e_hora["data"].unique()
+        todas_horas = list(range(0, 24))
+        malha_completa = pd.MultiIndex.from_product([todos_dias, todas_horas], names=["data", "hora"])
+        vendas_completa = vendas_por_dia_e_hora.set_index(["data", "hora"]).reindex(malha_completa, fill_value=0).reset_index()
+        
+        # Acumula por hora dentro de cada dia
+        vendas_completa["acumulado_dia"] = vendas_completa.groupby("data")["total_amount"].cumsum()
+        
+        # Agora calcula a média acumulada por hora (entre os dias)
+        media_acumulada_por_hora = (
+            vendas_completa
+            .groupby("hora")["acumulado_dia"]
+            .mean()
             .reset_index(name="Valor Médio Acumulado")
-            .rename(columns={"index": "hora"})
         )
-        # Traz o ponto até hora atual
-        ponto_extra = pd.DataFrame([{
-            "hora": hora_atual,
-            "Valor Médio Acumulado": vendas_hoje_por_hora.loc[hora_atual, "Valor Médio Acumulado"]
-        }])
-        media_acumulada_por_hora = pd.concat([media_acumulada_por_hora, ponto_extra]).groupby("hora").last().reset_index()
-    
-    else:
-        # Para histórico, adiciona o ponto final às 23h com média total diária
-        media_final = df.groupby("data")["total_amount"].sum().mean()
-        ponto_final = pd.DataFrame([{
-            "hora": 23,
-            "Valor Médio Acumulado": media_final
-        }])
-        media_acumulada_por_hora = pd.concat([media_acumulada_por_hora, ponto_final]).groupby("hora").last().reset_index()
-    
-    # Plota o gráfico
-    fig_hora = px.line(
-        media_acumulada_por_hora,
-        x="hora",
-        y="Valor Médio Acumulado",
-        title="⏰ Faturamento Acumulado por Hora (Média por Dia)",
-        labels={
-            "hora": "Hora do Dia",
-            "Valor Médio Acumulado": "Valor Acumulado (R$)"
-        },
-        color_discrete_sequence=["#27ae60"],
-        markers=True
-    )
-    fig_hora.update_layout(xaxis=dict(dtick=1))
-    
-    st.plotly_chart(fig_hora, use_container_width=True)
-
-
+        
+        # Verifica se é filtro de hoje
+        hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
+        filtro_hoje = (de == ate) and (de == hoje)
+        
+        if filtro_hoje:
+            hora_atual = pd.Timestamp.now(tz="America/Sao_Paulo").hour
+            df_hoje = df[df["data"] == hoje]
+            vendas_hoje_por_hora = (
+                df_hoje.groupby("hora")["total_amount"].sum().reindex(range(24), fill_value=0)
+                .cumsum()
+                .reset_index(name="Valor Médio Acumulado")
+                .rename(columns={"index": "hora"})
+            )
+            # Traz o ponto até hora atual
+            ponto_extra = pd.DataFrame([{
+                "hora": hora_atual,
+                "Valor Médio Acumulado": vendas_hoje_por_hora.loc[hora_atual, "Valor Médio Acumulado"]
+            }])
+            media_acumulada_por_hora = pd.concat([media_acumulada_por_hora, ponto_extra]).groupby("hora").last().reset_index()
+        
+        else:
+            # Para histórico, adiciona o ponto final às 23h com média total diária
+            media_final = df.groupby("data")["total_amount"].sum().mean()
+            ponto_final = pd.DataFrame([{
+                "hora": 23,
+                "Valor Médio Acumulado": media_final
+            }])
+            media_acumulada_por_hora = pd.concat([media_acumulada_por_hora, ponto_final]).groupby("hora").last().reset_index()
+        
+        # Plota o gráfico
+        fig_hora = px.line(
+            media_acumulada_por_hora,
+            x="hora",
+            y="Valor Médio Acumulado",
+            title="⏰ Faturamento Acumulado por Hora (Média por Dia)",
+            labels={
+                "hora": "Hora do Dia",
+                "Valor Médio Acumulado": "Valor Acumulado (R$)"
+            },
+            color_discrete_sequence=["#27ae60"],
+            markers=True
+        )
+        fig_hora.update_layout(xaxis=dict(dtick=1))
+        
+        st.plotly_chart(fig_hora, use_container_width=True)
 
 
 def mostrar_contas_cadastradas():
