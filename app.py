@@ -539,7 +539,7 @@ def mostrar_dashboard():
     ticket_unidade   = total_valor / total_itens if total_itens else 0
     frete            = total_valor * 0.10
     taxa_mktplace    = df["ml_fee"].fillna(0).sum()
-    cmv              = (df["quantity_sku"] * df["custo_unitario"].fillna(0)).sum()
+    cmv              = (total_itens * df["custo_unitario"].fillna(0)).sum()
     margem_operacional = total_valor - frete - taxa_mktplace - cmv
     sem_sku          = df["quantity_sku"].isnull().sum()
     
