@@ -532,16 +532,17 @@ def mostrar_dashboard():
         """, unsafe_allow_html=True)
     
     # Cálculos (ajustado)
-    total_vendas     = len(df)
-    total_valor      = df["total_amount"].sum()
-    total_itens      = (df["quantity_sku"] * df["quantity"]).sum()
-    ticket_venda     = total_valor / total_vendas if total_vendas else 0
-    ticket_unidade   = total_valor / total_itens if total_itens else 0
-    frete            = total_valor * 0.10
-    taxa_mktplace    = df["ml_fee"].fillna(0).sum()
-    cmv = (df["total_itens"] * df["custo_unitario"].fillna(0)).sum()
-    margem_operacional = total_valor - frete - taxa_mktplace - cmv
-    sem_sku          = df["quantity_sku"].isnull().sum()
+    total_vendas        = len(df)
+    total_valor         = df["total_amount"].sum()
+    total_itens         = (df["quantity_sku"] * df["quantity"]).sum()
+    ticket_venda        = total_valor / total_vendas if total_vendas else 0
+    ticket_unidade      = total_valor / total_itens if total_itens else 0
+    frete               = total_valor * 0.10
+    taxa_mktplace       = df["ml_fee"].fillna(0).sum()
+    cmv                 = ((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
+    margem_operacional  = total_valor - frete - taxa_mktplace - cmv
+    sem_sku             = df["quantity_sku"].isnull().sum()
+
     
     pct = lambda val: f"<span style='font-size: 70%; color: #666; display: inline-block; margin-left: 6px;'>({val / total_valor * 100:.1f}%)</span>" if total_valor else "<span style='font-size: 70%'>(0%)</span>"
 
