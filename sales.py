@@ -113,7 +113,8 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
     from requests.exceptions import HTTPError
     import os
     from concurrent.futures import ThreadPoolExecutor
-    from main import buscar_ml_fee, engine, DATA_INICIO  # ajuste conforme onde estão definidos
+    from utils import buscar_ml_fee, engine, DATA_INICIO
+
 
     API_BASE = "https://api.mercadolibre.com/orders/search"
     FULL_PAGE_SIZE = 50

@@ -45,6 +45,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from textblob import TextBlob
 import io
+from datetime import datetime, timedelta
+from utils import engine, DATA_INICIO, buscar_ml_fee
+
 
 
 # 4) Configuração de locale
@@ -119,13 +122,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------- Banco de Dados -----------------
-engine = create_engine(
-    DB_URL,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30
-)
+
 
 # ----------------- OAuth Callback -----------------
 def ml_callback():
@@ -470,7 +467,7 @@ def mostrar_dashboard():
     with st.expander("🔍 Filtros Avançados", expanded=False):
         # Atualiza as opções com base nos dados filtrados até aqui
         level1_opcoes = sorted(df["level1"].dropna().unique().tolist())
-        st.markdown("**📂 Filtro: Level1**")
+        st.markdown("**📂 Hierarquia 1**")
         col_l1 = st.columns(4)
         level1_selecionados = []
         for i, op in enumerate(level1_opcoes):
@@ -481,7 +478,7 @@ def mostrar_dashboard():
     
         # Atualiza Level2 após Level1 aplicado
         level2_opcoes = sorted(df["level2"].dropna().unique().tolist())
-        st.markdown("**📁 Filtro: Level2**")
+        st.markdown("**📁 Hierarquia 2**")
         col_l2 = st.columns(4)
         level2_selecionados = []
         for i, op in enumerate(level2_opcoes):
@@ -783,6 +780,16 @@ def mostrar_dashboard():
 
 
 def mostrar_contas_cadastradas():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.header("🏷️ Contas Cadastradas")
     render_add_account_button()
 
@@ -894,6 +901,17 @@ def mostrar_contas_cadastradas():
                         )
 
 def mostrar_anuncios():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.header("🎯 Análise de Anúncios")
     df = carregar_vendas()
 
@@ -1040,6 +1058,18 @@ def mostrar_anuncios():
     )
 
 def mostrar_relatorios():
+    # Remove o espaçamento superior
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.header("📋 Relatórios de Vendas")
 
     df = carregar_vendas()
@@ -1050,15 +1080,26 @@ def mostrar_relatorios():
 
     df['date_adjusted'] = pd.to_datetime(df['date_adjusted'])
 
-    # Filtro de período
-    col1, col2 = st.columns(2)
-    with col1:
-        data_ini = st.date_input("De:", value=df['date_adjusted'].min().date())
-    with col2:
-        data_fim = st.date_input("Até:", value=df['date_adjusted'].max().date())
+    # === Filtro Rápido ===
+    col1, col2, col3 = st.columns(3)
+    hoje = datetime.now().date()
+    ultimos_7 = hoje - timedelta(days=6)
+    ultimos_30 = hoje - timedelta(days=29)
+
+    filtro_rapido = col1.selectbox("📅 Período rápido:", ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Personalizado"])
+
+    if filtro_rapido == "Hoje":
+        data_ini = data_fim = hoje
+    elif filtro_rapido == "Últimos 7 dias":
+        data_ini, data_fim = ultimos_7, hoje
+    elif filtro_rapido == "Últimos 30 dias":
+        data_ini, data_fim = ultimos_30, hoje
+    else:
+        data_ini = col2.date_input("De:", value=df['date_adjusted'].min().date())
+        data_fim = col3.date_input("Até:", value=df['date_adjusted'].max().date())
 
     df_filt = df.loc[
-        (df['date_adjusted'].dt.date >= data_ini) &
+        (df['date_adjusted'].dt.date >= data_ini) & 
         (df['date_adjusted'].dt.date <= data_fim)
     ]
 
@@ -1066,40 +1107,51 @@ def mostrar_relatorios():
         st.warning("Nenhuma venda no período selecionado.")
         return
 
-    # Adiciona coluna de link para o anúncio
+    # === Preparar dados para exibição ===
+    df_filt = df_filt.copy()
+    df_filt['Quantidade'] = df_filt['quantity'] * df_filt['quantity_sku'].fillna(1)
+
+    df_filt['Preço Unitário'] = df_filt['unit_price'].apply(
+        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    )
+    df_filt['Total da Venda'] = df_filt['total_amount'].apply(
+        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    )
+    df_filt['Data da Venda'] = df_filt['date_adjusted'].dt.strftime('%d/%m/%Y')
+
     df_filt['link'] = df_filt['item_id'].apply(
         lambda x: f"[🔗 Ver Anúncio](https://www.mercadolivre.com.br/anuncio/{x})"
     )
 
-    # Reorganiza e seleciona as colunas principais
-    colunas = [
-        'date_adjusted',
-        'item_id',
-        'item_title',
-        'quantity',
-        'unit_price',
-        'total_amount',
-        'order_id',
-        'buyer_nickname',
-        'ml_user_id',
-        'status',
-        'link'
-    ]
+    # Ordenar por data desc
+    df_filt = df_filt.sort_values("date_adjusted", ascending=False)
 
-    df_exibir = df_filt[colunas].copy()
-
-    # Formatação visual
-    df_exibir['unit_price'] = df_exibir['unit_price'].apply(
-        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    )
-    df_exibir['total_amount'] = df_exibir['total_amount'].apply(
-        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    )
+    # Reorganizar e renomear colunas
+    df_exibir = df_filt.rename(columns={
+        "order_id": "ID da Venda",
+        "item_id": "MLB",
+        "item_title": "Título do Anúncio"
+    })[[
+        "ID da Venda",
+        "Data da Venda",
+        "MLB",
+        "Título do Anúncio",
+        "Quantidade",
+        "Preço Unitário",
+        "Total da Venda",
+        "link"
+    ]]
 
     st.dataframe(df_exibir, use_container_width=True)
 
-    # Exportação CSV com dados crus
-    csv = df_filt[colunas].to_csv(index=False).encode('utf-8')
+    # Exportação CSV (valores crus, sem formatação)
+    df_exportar = df_filt[[
+        "order_id", "date_adjusted", "item_id", "item_title",
+        "quantity", "quantity_sku", "unit_price", "total_amount"
+    ]]
+    df_exportar["quantidade_total"] = df_exportar["quantity"] * df_exportar["quantity_sku"].fillna(1)
+
+    csv = df_exportar.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="⬇️ Exportar CSV das Vendas",
         data=csv,
@@ -1108,27 +1160,41 @@ def mostrar_relatorios():
     )
 
 
+
 def mostrar_gestao_sku():
+    st.markdown("""
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.header("📦 Gestão de SKU")
 
-    # 🔄 Botão de atualização
     if st.button("🔄 Recarregar Dados"):
         st.session_state["atualizar_gestao_sku"] = True
 
-    # Carregamento dos dados da base
+    # === Consulta de SKUs únicos ===
     if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
         df = pd.read_sql(text("""
-            SELECT DISTINCT ON (item_id)
-                item_id, seller_sku, level1, level2, custo_unitario, quantity_sku
+            SELECT
+                seller_sku,
+                MAX(level1) AS level1,
+                MAX(level2) AS level2,
+                MAX(custo_unitario) AS custo_unitario,
+                MAX(quantity_sku) AS quantity_sku,
+                COUNT(DISTINCT item_id) AS qtde_vendas
             FROM sales
-            ORDER BY item_id, date_closed DESC
+            WHERE seller_sku IS NOT NULL
+            GROUP BY seller_sku
         """), engine)
         st.session_state["df_gestao_sku"] = df
         st.session_state["atualizar_gestao_sku"] = False
     else:
         df = st.session_state["df_gestao_sku"]
 
-    # 🔢 Métricas
+    # === Métricas ===
     with engine.begin() as conn:
         vendas_sem_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NULL")).scalar()
         mlbs_sem_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE seller_sku IS NULL")).scalar()
@@ -1148,15 +1214,15 @@ def mostrar_gestao_sku():
     st.markdown("---")
     st.markdown("### 🔍 Filtros de Diagnóstico")
 
-    # Filtros
+    # === Filtros ===
     colf1, colf2, colf3, colf4, colf5 = st.columns([1.2, 1.2, 1.2, 1.2, 2])
     op_sku     = colf1.selectbox("Seller SKU", ["Todos", "Nulo", "Não Nulo"])
-    op_level1  = colf2.selectbox("Level1", ["Todos", "Nulo", "Não Nulo"])
-    op_level2  = colf3.selectbox("Level2", ["Todos", "Nulo", "Não Nulo"])
+    op_level1  = colf2.selectbox("Hierarquia 1", ["Todos", "Nulo", "Não Nulo"])
+    op_level2  = colf3.selectbox("Hierarquia ", ["Todos", "Nulo", "Não Nulo"])
     op_preco   = colf4.selectbox("Preço Unitário", ["Todos", "Nulo", "Não Nulo"])
-    filtro_txt = colf5.text_input("🔎 Pesquisa (MLB, Seller SKU, Level1, Level2)")
+    filtro_txt = colf5.text_input("🔎 Pesquisa (SKU, Hierarquias)")
 
-    # Aplicar filtros
+    # === Aplicar filtros ===
     if op_sku == "Nulo":
         df = df[df["seller_sku"].isna()]
     elif op_sku == "Não Nulo":
@@ -1175,17 +1241,15 @@ def mostrar_gestao_sku():
         df = df[df["custo_unitario"].notna()]
     if filtro_txt:
         filtro_txt = filtro_txt.lower()
-        df = df[df.apply(lambda row: filtro_txt in str(row["item_id"]).lower()
-                         or filtro_txt in str(row["seller_sku"]).lower()
+        df = df[df.apply(lambda row: filtro_txt in str(row["seller_sku"]).lower()
                          or filtro_txt in str(row["level1"]).lower()
                          or filtro_txt in str(row["level2"]).lower(), axis=1)]
 
-    # 🔄 Tabela editável
+    # === Tabela editável ===
     st.markdown("### 📝 Editar Cadastro de SKUs")
-    
-    # Permitir edição apenas nestas colunas
-    colunas_editaveis = ["seller_sku", "level1", "level2", "custo_unitario", "quantity_sku"]
-    
+
+    colunas_editaveis = ["level1", "level2", "custo_unitario", "quantity_sku"]
+
     df_editado = st.data_editor(
         df,
         use_container_width=True,
@@ -1193,8 +1257,8 @@ def mostrar_gestao_sku():
         num_rows="dynamic",
         key="editor_sku"
     )
-    
-    # Salvar alterações no banco
+
+    # === Salvar alterações ===
     if st.button("💾 Salvar Alterações"):
         try:
             with engine.begin() as conn:
@@ -1215,8 +1279,7 @@ def mostrar_gestao_sku():
                         "custo": row["custo_unitario"],
                         "quantidade": row["quantity_sku"]
                     })
-    
-                # Atualizar tabela de vendas com os dados mais recentes da SKU
+
                 conn.execute(text("""
                     UPDATE sales s
                     SET
@@ -1230,13 +1293,14 @@ def mostrar_gestao_sku():
                     ) sku
                     WHERE s.seller_sku = sku.sku
                 """))
-    
+
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
             st.rerun()
-    
+
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
+
 
 
     # 5️⃣ Atualização da base SKU via planilha
@@ -1313,14 +1377,44 @@ def mostrar_gestao_sku():
 
 
 def mostrar_expedicao_logistica():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.header("🚚 Expedição e Logística")
     st.info("Em breve...")
 
 def mostrar_gestao_despesas():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.header("💰 Gestão de Despesas")
     st.info("Em breve...")
 
 def mostrar_painel_metas():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     st.header("🎯 Painel de Metas")
     st.info("Em breve...")
     
