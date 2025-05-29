@@ -371,40 +371,13 @@ def mostrar_dashboard():
     contas_df = pd.read_sql(text("SELECT nickname FROM user_tokens ORDER BY nickname"), engine)
     contas_lst = contas_df["nickname"].astype(str).tolist()
     
-    st.markdown("""
-        <style>
-            input[type="checkbox"]:checked + div span {
-                background-color: #27ae60 !important;
-            }
-            .mini-toggle-button {
-                background-color: transparent;
-                color: #999;
-                border: 1px solid #444;
-                padding: 2px 8px;
-                font-size: 12px;
-                border-radius: 4px;
-                cursor: pointer;
-                margin-bottom: 4px;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-    
     st.markdown("**🧾 Contas Mercado Livre:**")
-    
+
+
     # Estado para controlar se todas estão selecionadas
     if "todas_contas_marcadas" not in st.session_state:
         st.session_state["todas_contas_marcadas"] = True
     
-    # Botão alternar seleção
-    col_btn, _ = st.columns([1, 7])
-    with col_btn:
-        label = "✅ Selecionar Todos" if not st.session_state["todas_contas_marcadas"] else "❌ Desmarcar Todos"
-        st.markdown(
-            f"<button class='mini-toggle-button'>{label}</button>",
-            unsafe_allow_html=True
-        )
-        if st.button(" ", key="alternar_todas", help="Alternar seleção de todas as contas"):
-            st.session_state["todas_contas_marcadas"] = not st.session_state["todas_contas_marcadas"]
     
     # Renderiza os checkboxes em colunas
     colunas_contas = st.columns(8)
@@ -412,14 +385,14 @@ def mostrar_dashboard():
     
     for i, conta in enumerate(contas_lst):
         key = f"conta_{conta}"
-        default = st.session_state["todas_contas_marcadas"]
-        if colunas_contas[i % 8].checkbox(conta, value=default, key=key):
+        if key not in st.session_state:
+            st.session_state[key] = st.session_state["todas_contas_marcadas"]
+        if colunas_contas[i % 8].checkbox(conta, key=key):
             selecionadas.append(conta)
     
     # Aplica filtro
     if selecionadas:
         df_full = df_full[df_full["nickname"].isin(selecionadas)]
-
 
 
     # --- Linha única de filtros: Rápido | De | Até | Status ---
@@ -575,7 +548,7 @@ def mostrar_dashboard():
     st.markdown("### 💼 Indicadores Financeiros")
     row1 = st.columns(5)
     kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
-    kpi_card(row1[1], "🚚 Frete Estimado (10%)", format_currency(frete))
+    kpi_card(row1[1], "🚚 Frete Estimado", format_currency(frete))
     kpi_card(row1[2], "📉 Taxa Marketplace", format_currency(taxa_mktplace))
     kpi_card(row1[3], "📦 CMV", format_currency(cmv))
     kpi_card(row1[4], "💵 Margem Operacional", format_currency(margem_operacional))
@@ -585,17 +558,16 @@ def mostrar_dashboard():
     row2 = st.columns(5)
     kpi_card(row2[0], "🧾 Vendas Realizadas", str(total_vendas))
     kpi_card(row2[1], "📦 Unidades Vendidas", str(int(total_itens)))
-    kpi_card(row2[2], "🎯 Ticket Médio por Venda", format_currency(ticket_venda))
-    kpi_card(row2[3], "🎯 Ticket Médio por Unidade", format_currency(ticket_unidade))
-    kpi_card(row2[4], "❌ Sem SKU Registrado", str(sem_sku))
+    kpi_card(row2[2], "🎯 Ticket Médio p/ Venda", format_currency(ticket_venda))
+    kpi_card(row2[3], "🎯 Ticket Médio p/ Unid.", format_currency(ticket_unidade))
+    kpi_card(row2[4], "❌ SKU Incompleto", str(sem_sku))
     
     import plotly.express as px
 
-    # =================== Gráfico de Linha - Total Vendido ===================
+    # =================== Gráfico de Linha + Barra de Proporção ===================
     st.markdown("### 💵 Total Vendido por Período")
     
-    # Cria colunas horizontais abaixo do título para os seletores
-    col1, col2 = st.columns([2, 2])
+    col1, col2 = st.columns([4, 1])  # Gráfico grande (4/5) + barra lateral (1/5)
     
     with col1:
         tipo_visualizacao = st.radio(
@@ -613,10 +585,9 @@ def mostrar_dashboard():
             key="modo_agregacao"
         )
     
-    # Prepara dados
     df_plot = df.copy()
     
-    # Define o eixo_x com base no tipo de período
+    # Define date_bucket
     if de == ate:
         df_plot["date_bucket"] = df_plot["date_adjusted"].dt.floor("H")
         periodo_label = "Hora"
@@ -637,43 +608,66 @@ def mostrar_dashboard():
             df_plot["date_bucket"] = df_plot["date_adjusted"].dt.to_period("M").astype(str)
             periodo_label = "Mês"
     
-    # Agrupamento por conta ou total
+    # Agrupamento e definição de cores
     if modo_agregacao == "Por Conta":
         vendas_por_data = (
-            df_plot
-            .groupby(["date_bucket", "nickname"])["total_amount"]
+            df_plot.groupby(["date_bucket", "nickname"])["total_amount"]
             .sum()
             .reset_index(name="Valor Total")
         )
         color_dim = "nickname"
         color_seq = px.colors.sequential.Agsunset
+        total_por_conta = (
+            df_plot.groupby("nickname")["total_amount"]
+            .sum()
+            .reset_index(name="total")
+            .sort_values("total", ascending=False)
+        )
     else:
         vendas_por_data = (
-            df_plot
-            .groupby("date_bucket")["total_amount"]
+            df_plot.groupby("date_bucket")["total_amount"]
             .sum()
             .reset_index(name="Valor Total")
         )
         color_dim = None
         color_seq = ["#27ae60"]
+        total_por_conta = None  # não mostra gráfico lateral nesse caso
     
-    # Gráfico final
-    fig = px.line(
-        vendas_por_data,
-        x="date_bucket",
-        y="Valor Total",
-        color=color_dim,
-        labels={"date_bucket": periodo_label, "Valor Total": "Valor Total", "nickname": "Conta"},
-        color_discrete_sequence=color_seq,
-    )
+    # Gráfico de linha principal
+    with col1:
+        fig = px.line(
+            vendas_por_data,
+            x="date_bucket",
+            y="Valor Total",
+            color=color_dim,
+            labels={"date_bucket": periodo_label, "Valor Total": "Valor Total", "nickname": "Conta"},
+            color_discrete_sequence=color_seq,
+        )
+        fig.update_traces(mode="lines+markers", marker=dict(size=5))
+        fig.update_layout(margin=dict(t=20, b=20, l=40, r=10), showlegend=True)
     
-    fig.update_traces(
-        mode="lines+markers",
-        marker=dict(size=5)
-    )
-    fig.update_layout(margin=dict(t=20, b=20, l=40, r=10))
+        st.plotly_chart(fig, use_container_width=True)
     
-    st.plotly_chart(fig, use_container_width=True)
+    # Gráfico de barra lateral proporcional por conta
+    with col2:
+        if modo_agregacao == "Por Conta" and not total_por_conta.empty:
+            fig_bar = px.bar(
+                total_por_conta,
+                x="total",
+                y="nickname",
+                orientation="h",
+                color="nickname",
+                color_discrete_sequence=color_seq,
+            )
+            fig_bar.update_layout(
+                xaxis=dict(visible=False),
+                yaxis=dict(title=None),
+                showlegend=False,
+                margin=dict(t=20, b=20, l=10, r=10),
+                height=fig.layout.height,
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+
 
 
     # === Gráfico de barras: Média por dia da semana ===
@@ -1117,53 +1111,52 @@ def mostrar_relatorios():
 def mostrar_gestao_sku():
     st.header("📦 Gestão de SKU")
 
-    # 🔄 Botão de atualização total (atualiza banco + recarrega dados)
-    if st.button("🔄 Atualizar Dados"):
-        atualizar_sales_com_sku(engine)
+    # 🔄 Botão de atualização
+    if st.button("🔄 Recarregar Dados"):
         st.session_state["atualizar_gestao_sku"] = True
 
-    # 🔁 Recarrega os dados do banco se necessário
+    # Carregamento dos dados da base
     if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
         df = pd.read_sql(text("""
-            SELECT s.item_id, s.seller_sku, s.level1, s.level2, s.custo_unitario, s.quantity_sku
-            FROM sales s
-            ORDER BY s.date_closed DESC
+            SELECT DISTINCT ON (item_id)
+                item_id, seller_sku, level1, level2, custo_unitario, quantity_sku
+            FROM sales
+            ORDER BY item_id, date_closed DESC
         """), engine)
         st.session_state["df_gestao_sku"] = df
         st.session_state["atualizar_gestao_sku"] = False
     else:
         df = st.session_state["df_gestao_sku"]
 
-    # 1️⃣ Métricas principais
+    # 🔢 Métricas
     with engine.begin() as conn:
-        total_com_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NOT NULL")).scalar()
-        total_sem_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NULL")).scalar()
-        total_sem_preco = conn.execute(text("""
-            SELECT COUNT(*) FROM sales
-            WHERE seller_sku IS NOT NULL AND custo_unitario IS NULL
+        vendas_sem_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NULL")).scalar()
+        mlbs_sem_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE seller_sku IS NULL")).scalar()
+        sku_incompleto = conn.execute(text("""
+            SELECT COUNT(DISTINCT seller_sku)
+            FROM sales
+            WHERE seller_sku IS NOT NULL AND (
+                level1 IS NULL OR level2 IS NULL OR custo_unitario IS NULL OR quantity_sku IS NULL
+            )
         """)).scalar()
-        mlb_com_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE seller_sku IS NOT NULL")).scalar()
-        mlb_sem_sku = conn.execute(text("SELECT COUNT(DISTINCT item_id) FROM sales WHERE seller_sku IS NULL")).scalar()
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("🔗 Vendas com SKU", total_com_sku)
-    col2.metric("🚫 Vendas sem SKU", total_sem_sku)
-    col3.metric("❌ SKUs sem Preço", total_sem_preco)
-    col4.metric("📦 MLBs com SKU", mlb_com_sku)
-    col5.metric("📦 MLBs sem SKU", mlb_sem_sku)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("🚫 Vendas sem SKU", vendas_sem_sku)
+    col2.metric("📦 MLBs sem SKU", mlbs_sem_sku)
+    col3.metric("⚠️ SKUs com Cadastro Incompleto", sku_incompleto)
 
     st.markdown("---")
     st.markdown("### 🔍 Filtros de Diagnóstico")
 
-
-    # 3️⃣ Filtros dinâmicos
+    # Filtros
     colf1, colf2, colf3, colf4, colf5 = st.columns([1.2, 1.2, 1.2, 1.2, 2])
     op_sku     = colf1.selectbox("Seller SKU", ["Todos", "Nulo", "Não Nulo"])
     op_level1  = colf2.selectbox("Level1", ["Todos", "Nulo", "Não Nulo"])
     op_level2  = colf3.selectbox("Level2", ["Todos", "Nulo", "Não Nulo"])
     op_preco   = colf4.selectbox("Preço Unitário", ["Todos", "Nulo", "Não Nulo"])
     filtro_txt = colf5.text_input("🔎 Pesquisa (MLB, Seller SKU, Level1, Level2)")
-    
+
+    # Aplicar filtros
     if op_sku == "Nulo":
         df = df[df["seller_sku"].isna()]
     elif op_sku == "Não Nulo":
@@ -1186,17 +1179,70 @@ def mostrar_gestao_sku():
                          or filtro_txt in str(row["seller_sku"]).lower()
                          or filtro_txt in str(row["level1"]).lower()
                          or filtro_txt in str(row["level2"]).lower(), axis=1)]
+
+    # 🔄 Tabela editável
+    st.markdown("### 📝 Editar Cadastro de SKUs")
     
-    # 4️⃣ Tabela de visualização
-    st.markdown("### 📊 Tabela de Vendas com SKUs")
-    if df.empty:
-        st.warning("⚠️ Nenhum dado encontrado com os filtros aplicados.")
-    else:
-        st.dataframe(df, use_container_width=True)
+    # Permitir edição apenas nestas colunas
+    colunas_editaveis = ["seller_sku", "level1", "level2", "custo_unitario", "quantity_sku"]
     
+    df_editado = st.data_editor(
+        df,
+        use_container_width=True,
+        disabled=[col for col in df.columns if col not in colunas_editaveis],
+        num_rows="dynamic",
+        key="editor_sku"
+    )
+    
+    # Salvar alterações no banco
+    if st.button("💾 Salvar Alterações"):
+        try:
+            with engine.begin() as conn:
+                for _, row in df_editado.iterrows():
+                    conn.execute(text("""
+                        INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
+                        VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW())
+                        ON CONFLICT (sku) DO UPDATE
+                        SET
+                            level1 = EXCLUDED.level1,
+                            level2 = EXCLUDED.level2,
+                            custo_unitario = EXCLUDED.custo_unitario,
+                            quantity = EXCLUDED.quantity
+                    """), {
+                        "sku": row["seller_sku"],
+                        "level1": row["level1"],
+                        "level2": row["level2"],
+                        "custo": row["custo_unitario"],
+                        "quantidade": row["quantity_sku"]
+                    })
+    
+                # Atualizar tabela de vendas com os dados mais recentes da SKU
+                conn.execute(text("""
+                    UPDATE sales s
+                    SET
+                        level1 = sku.level1,
+                        level2 = sku.level2,
+                        custo_unitario = sku.custo_unitario,
+                        quantity_sku = sku.quantity
+                    FROM (
+                        SELECT DISTINCT ON (sku) * FROM sku
+                        ORDER BY sku, date_created DESC
+                    ) sku
+                    WHERE s.seller_sku = sku.sku
+                """))
+    
+            st.success("✅ Alterações salvas com sucesso!")
+            st.session_state["atualizar_gestao_sku"] = True
+            st.rerun()
+    
+        except Exception as e:
+            st.error(f"❌ Erro ao salvar alterações: {e}")
+
+
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
     st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
+
     modelo = pd.DataFrame(columns=["seller_sku", "level1", "level2", "custo_unitario", "quantity"])
     buffer = io.BytesIO()
     modelo.to_excel(buffer, index=False, engine="openpyxl")
@@ -1221,7 +1267,7 @@ def mostrar_gestao_sku():
                     df_novo["seller_sku"] = df_novo["seller_sku"].astype(str).str.strip()
                     df_novo["level1"] = df_novo["level1"].astype(str).str.strip()
                     df_novo["level2"] = df_novo["level2"].astype(str).str.strip()
-    
+
                     with engine.begin() as conn:
                         for _, row in df_novo.iterrows():
                             row_dict = row.to_dict()
@@ -1234,15 +1280,37 @@ def mostrar_gestao_sku():
                                   AND quantity = :quantity
                                 LIMIT 1
                             """), row_dict).fetchone()
+
                             if result is None:
                                 conn.execute(text("""
                                     INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
                                     VALUES (:seller_sku, :level1, :level2, :custo_unitario, :quantity, NOW())
                                 """), row_dict)
-                    st.success("✅ Planilha importada com sucesso!")
+
+                        # Atualizar tabela de vendas
+                        conn.execute(text("""
+                            UPDATE sales s
+                            SET
+                                level1 = sku.level1,
+                                level2 = sku.level2,
+                                custo_unitario = sku.custo_unitario,
+                                quantity_sku = sku.quantity
+                            FROM (
+                                SELECT DISTINCT ON (sku) *
+                                FROM sku
+                                ORDER BY sku, date_created DESC
+                            ) sku
+                            WHERE s.seller_sku = sku.sku
+                        """))
+
+                    # Recarregar métricas e dados
+                    st.session_state["atualizar_gestao_sku"] = True
+                    st.success("✅ Planilha importada, vendas atualizadas, métricas e tabela recarregadas!")
                     st.rerun()
+
                 except Exception as e:
                     st.error(f"❌ Erro ao processar: {e}")
+
 
 def mostrar_expedicao_logistica():
     st.header("🚚 Expedição e Logística")
