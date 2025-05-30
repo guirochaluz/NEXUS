@@ -19,3 +19,5 @@ services:
         value: "https://nexusgroup.online"
       - key: WEB_PASSWORD
         value: "Giguisa*"
+      - key: COOKIE_SECRET
+        value: "lYXk6saqrn957gFS56qT-zlZdTdASs6_KKykWMYukJ8"
