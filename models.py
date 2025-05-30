@@ -29,14 +29,26 @@ class Sale(Base):
     shipping_id      = Column(String, nullable=True)
     seller_sku       = Column(String, nullable=True)
 
-
     # 🔽 Campos de SKU (mantidos)
     quantity_sku     = Column(Integer, nullable=True)
     custo_unitario   = Column(Numeric(10, 2), nullable=True)
     level1           = Column(String, nullable=True)
     level2           = Column(String, nullable=True)
 
-    # 🔽 Novos campos adicionados
+    # 🔽 Campos financeiros
     ads              = Column(Numeric(10, 2), nullable=True)
     ml_fee           = Column(Numeric(10, 2), nullable=True)
     payment_id       = Column(BigInteger, nullable=True)
+
+    # 🔽 Campos de envio (shipment)
+    shipment_status             = Column(String, nullable=True)
+    shipment_substatus          = Column(String, nullable=True)
+    shipment_last_updated       = Column(DateTime, nullable=True)
+    shipment_first_printed      = Column(DateTime, nullable=True)
+    shipment_mode               = Column(String, nullable=True)
+    shipment_logistic_type      = Column(String, nullable=True)
+    shipment_list_cost          = Column(Float, nullable=True)
+    shipment_delivery_type      = Column(String, nullable=True)
+    shipment_delivery_limit     = Column(DateTime, nullable=True)
+    shipment_delivery_final     = Column(DateTime, nullable=True)
+    shipment_receiver_name      = Column(String, nullable=True)
