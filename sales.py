@@ -640,3 +640,4 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
         db.close()
 
     return total_saved
+
