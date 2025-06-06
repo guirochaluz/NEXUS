@@ -1,17 +1,14 @@
-﻿fastapi==0.110.0
+fastapi==0.110.0
 uvicorn==0.29.0
 requests==2.31.0
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.29
 python-dateutil==2.9.0.post0
-
 streamlit>=1.24.1
 pandas>=2.0.0
 altair>=5.0.0
 Pillow>=9.0.0
-
-# Adicionados
 plotly>=5.0.0
 python-multipart>=0.0.5
 openpyxl
@@ -21,3 +18,7 @@ wordcloud
 altair
 scikit-learn
 textblob
+reportlab==4.0.9
+matplotlib==3.8.4
+seaborn==0.13.2
+kaleido>=0.2.1
