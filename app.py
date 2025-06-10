@@ -1661,7 +1661,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         elementos.append(Spacer(1, 12))
     
         # === Tabela principal ===
-        elementos.append(Paragraph("Tabela Principal", styles["Heading2"]))
+        elementos.append(Paragraph("", styles["Heading2"]))
         dados = [tabela_df.columns.tolist()] + tabela_df.values.tolist()
         tabela_pdf = Table(dados, repeatRows=1)
         tabela_pdf.setStyle(TableStyle([
