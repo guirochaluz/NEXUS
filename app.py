@@ -1500,38 +1500,45 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # === LINHA 1: Venda ===
     st.markdown("#### 🎯 Filtros por Venda")
     col1, col2, col3 = st.columns(3)
-
+    
     with col1:
         de_venda = st.date_input("Data da Venda (de):", value=data_min_venda, min_value=data_min_venda, max_value=data_max_venda)
     with col2:
         ate_venda = st.date_input("Data da Venda (até):", value=data_max_venda, min_value=data_min_venda, max_value=data_max_venda)
-    with col3:
-        status_options = df.loc[(df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda), "status"].dropna().unique().tolist()
-        status_opcoes = ["Todos"] + sorted(status_options)
-        index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
-        status = st.selectbox("Status:", status_opcoes, index=index_padrao)
-
+    
     # === LINHA 2: Expedição ===
     st.markdown("#### 🧭 Filtros por Expedição")
     col4, col5, col6, col7 = st.columns(4)
-
+    
     with col4:
         de_limite = st.date_input("Data Limite (de):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
     with col5:
         ate_limite = st.date_input("Data Limite (até):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
+    
+    # === APLICAR DATA TEMPORARIAMENTE PARA OPÇÕES DE FILTRO ===
+    df_datas = df[(df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
+                  (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)]
+    
     with col6:
-        hierarquia1 = st.selectbox("Hierarquia 1:", ["Todos"] + sorted(df["level1"].dropna().unique().tolist()))
+        hierarquia1 = st.selectbox("Hierarquia 1:", ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist()))
     with col7:
-        hierarquia2 = st.selectbox("Hierarquia 2:", ["Todos"] + sorted(df["level2"].dropna().unique().tolist()))
-
+        hierarquia2 = st.selectbox("Hierarquia 2:", ["Todos"] + sorted(df_datas["level2"].dropna().unique().tolist()))
+    
     col8, col9 = st.columns(2)
     
     with col8:
-        tipo_envio = st.selectbox("Tipo de Envio:", ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist()))
+        tipo_envio = st.selectbox("Tipo de Envio:", ["Todos"] + sorted(df_datas["Tipo de Envio"].dropna().unique().tolist()))
     
     with col9:
-        contas_disponiveis = df["nickname"].dropna().unique().tolist()
+        contas_disponiveis = df_datas["nickname"].dropna().unique().tolist()
         conta = st.selectbox("Conta:", ["Todos"] + sorted(contas_disponiveis))
+    
+    with st.container():
+        status_options = df_datas["status"].dropna().unique().tolist()
+        status_opcoes = ["Todos"] + sorted(status_options)
+        index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
+        status = st.selectbox("Status:", status_opcoes, index=index_padrao)
+
 
     # === FILTROS GERAIS ===
     df = df[(df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda)]
@@ -1561,7 +1568,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df["Data Limite do Envio"] = "—"
 
     tabela = df[[
-        "Canal de Venda",     
         "order_id",                  
         "shipment_receiver_name",    
         "nickname",                  
@@ -1570,7 +1576,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         "level1",                    
         "Data Limite do Envio"     
     ]].rename(columns={
-        "Canal de Venda": "MARKETPLACE",
         "order_id": "ID VENDA",
         "shipment_receiver_name": "NOME CLIENTE",
         "nickname": "CONTA",
@@ -1579,7 +1584,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         "level1": "PRODUTO [HIERARQUIA 1]",
         "Data Limite do Envio": "DATA DE ENVIO"
     })
-
 
     
     # Ordenar pela quantidade em ordem decrescente
@@ -1653,11 +1657,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             elementos.append(Paragraph("[Logo não encontrada: favicon.png]", styles["Normal"]))
     
         elementos.append(Spacer(1, 12))
-        elementos.append(Paragraph("📦 Relatório de Expedição e Logística", styles["Title"]))
+        elementos.append(Paragraph("Relatório de Expedição e Logística", styles["Title"]))
         elementos.append(Spacer(1, 12))
     
         # === Tabela principal ===
-        elementos.append(Paragraph("📋 Tabela Principal", styles["Heading2"]))
+        elementos.append(Paragraph("Tabela Principal", styles["Heading2"]))
         dados = [tabela_df.columns.tolist()] + tabela_df.values.tolist()
         tabela_pdf = Table(dados, repeatRows=1)
         tabela_pdf.setStyle(TableStyle([
@@ -1671,8 +1675,9 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         ]))
         elementos.append(tabela_pdf)
         elementos.append(Spacer(1, 20))
-    
-        # === Tabelas laterais agrupadas lado a lado ===
+        
+        from reportlab.platypus import KeepTogether
+        
         def montar_tabela(df, titulo):
             dados = [df.columns.tolist()] + df.values.tolist()
             tab = Table(dados, repeatRows=1)
@@ -1685,18 +1690,30 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
                 ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
             ]))
-            return [Paragraph(titulo, styles["Heading3"]), Spacer(1, 4), tab]
-    
-        # Montar cada célula com um "mini flowable" contendo título + tabela
-        col1 = montar_tabela(df_h1, "📊 Hierarquia 1")
-        col2 = montar_tabela(df_h2, "📊 Hierarquia 2")
-        col3 = montar_tabela(df_tipo, "📊 Tipo de Envio")
-    
-        # Colocar as três colunas lado a lado
+            return KeepTogether([
+                Paragraph(f'<b>{titulo}</b>', styles["Heading3"]),
+                Spacer(1, 6),
+                tab
+            ])
+        
+        # Ordenar antes de montar
+        df_h1 = df_h1.sort_values(by="Quantidade", ascending=False)
+        df_h2 = df_h2.sort_values(by="Quantidade", ascending=False)
+        df_tipo = df_tipo.sort_values(by="Quantidade", ascending=False)
+        
+        # Montar colunas
+        col1 = montar_tabela(df_h1, "Hierarquia 1")
+        col2 = montar_tabela(df_h2, "Hierarquia 2")
+        col3 = montar_tabela(df_tipo, "Tipo de Envio")
+        
+        # Agrupar lado a lado com larguras balanceadas
         tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[170, 170, 170])
         tabela_lado_a_lado.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP')
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6)
         ]))
+
     
         elementos.append(Spacer(1, 12))
         elementos.append(tabela_lado_a_lado)
