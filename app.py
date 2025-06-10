@@ -1708,8 +1708,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         return href
 
 
-botao_pdf = gerar_relatorio_pdf(tabela, df_h1, df_h2, df_tipo)
-st.markdown(botao_pdf, unsafe_allow_html=True)
+    botao_pdf = gerar_relatorio_pdf(tabela, df_h1, df_h2, df_tipo)
+    st.markdown(botao_pdf, unsafe_allow_html=True)
 
 
 
