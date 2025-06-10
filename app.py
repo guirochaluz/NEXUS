@@ -591,8 +591,9 @@ def mostrar_dashboard():
     # =================== Gráfico de Linha + Barra de Proporção ===================
     st.markdown("### 💵 Total Vendido por Período")
     
-    # 🔘 Seletor de período + agrupamento lado a lado
-    colsel1, colsel2 = st.columns([1, 1])
+    # 🔘 Seletor de período + agrupamento + métrica lado a lado
+    colsel1, colsel2, colsel3 = st.columns([1.2, 1.2, 1.6])
+
     
     with colsel1:
         st.markdown("**📆 Período**")
@@ -611,6 +612,16 @@ def mostrar_dashboard():
             horizontal=True,
             key="modo_agregacao"
         )
+
+    with colsel3:
+        st.markdown("**📏 Métrica da Barra**")
+        metrica_barra = st.radio(
+            "Métrica",
+            ["Faturamento", "Qtd. Vendas", "Qtd. Unidades"],
+            horizontal=True,
+            key="metrica_barra"
+        )
+
 
     
     df_plot = df.copy()
@@ -692,18 +703,46 @@ def mostrar_dashboard():
     
     # 📊 Gráfico de barra proporcional (somente se Por Conta)
     if modo_agregacao == "Por Conta" and not total_por_conta.empty:
-        total_por_conta["percentual"] = total_por_conta["total"] / total_por_conta["total"].sum()
+
     
-        def formatar_reais(valor):
-            return f"R$ {valor:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")
+        if metrica_barra == "Faturamento":
+            base = (
+                df_plot.groupby("nickname")["total_amount"]
+                .sum()
+                .reset_index(name="valor")
+            )
+        elif metrica_barra == "Qtd. Vendas":
+            base = (
+                df_plot.groupby("nickname")
+                .size()
+                .reset_index(name="valor")
+            )
+        else:  # Qtd. Unidades
+            base = (
+                df_plot.groupby("nickname")
+                .apply(lambda x: (x["quantity_sku"] * x["quantity"]).sum())
+                .reset_index(name="valor")
+            )
     
-        total_por_conta["texto"] = total_por_conta.apply(
-            lambda row: f"{row['percentual']:.0%} ({formatar_reais(row['total'])})", axis=1
+        base = base.sort_values("valor", ascending=False)
+        base["percentual"] = base["valor"] / base["valor"].sum()
+    
+        # 🏷️ Texto das barras
+        def formatar_valor(v):
+            if metrica_barra == "Faturamento":
+                return f"R$ {v:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")
+            elif metrica_barra == "Qtd. Vendas":
+                return f"{int(v)} vendas"
+            else:
+                return f"{int(v)} unid."
+    
+        base["texto"] = base.apply(
+            lambda row: f"{row['percentual']:.0%} ({formatar_valor(row['valor'])})", axis=1
         )
-        total_por_conta["grupo"] = "Contas"
+        base["grupo"] = "Contas"
     
         fig_bar = px.bar(
-            total_por_conta,
+            base,
             x="grupo",
             y="percentual",
             color="nickname",
