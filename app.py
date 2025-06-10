@@ -1590,42 +1590,74 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     df_grouped = df.groupby("level1", as_index=False).agg({"quantidade": "sum"})
     df_grouped = df_grouped.rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
-
+    
+    # Ordenar do maior para o menor
+    df_grouped = df_grouped.sort_values(by="Quantidade", ascending=False)
+    
     fig_bar = px.bar(
         df_grouped,
         x="Hierarquia 1",
         y="Quantidade",
+        text="Quantidade",  # Adiciona o rótulo
         barmode="group",
         height=400,
         color_discrete_sequence=["green"]
     )
+    
+    # Ajustar posição dos rótulos (em cima)
+    fig_bar.update_traces(textposition="outside")
+    
+    # Ajustar layout para não cortar os rótulos
+    fig_bar.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', margin=dict(t=40, b=40))
+    
     st.plotly_chart(fig_bar, use_container_width=True)
 
 
-    def gerar_relatorio_pdf(tabela_df: pd.DataFrame, grafico_plotly):
+    # === TABELAS LADO A LADO ===
+    st.markdown("### 📊 Resumo por Agrupamento")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # Tabela 1: Hierarquia 1
+    with col1:
+        df_h1 = df.groupby("level1", as_index=False)["quantidade"].sum().rename(columns={
+            "level1": "Hierarquia 1", "quantidade": "Quantidade"
+        })
+        st.dataframe(df_h1, use_container_width=True, hide_index=True)
+    
+    # Tabela 2: Hierarquia 2
+    with col2:
+        df_h2 = df.groupby("level2", as_index=False)["quantidade"].sum().rename(columns={
+            "level2": "Hierarquia 2", "quantidade": "Quantidade"
+        })
+        st.dataframe(df_h2, use_container_width=True, hide_index=True)
+    
+    # Tabela 3: Tipo de Envio
+    with col3:
+        df_tipo = df.groupby("Tipo de Envio", as_index=False)["quantidade"].sum().rename(columns={
+            "Tipo de Envio": "Tipo de Envio", "quantidade": "Quantidade"
+        })
+        st.dataframe(df_tipo, use_container_width=True, hide_index=True)
+
+
+    def gerar_relatorio_pdf(tabela_df: pd.DataFrame, df_h1: pd.DataFrame, df_h2: pd.DataFrame, df_tipo: pd.DataFrame):
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
         styles = getSampleStyleSheet()
         elementos = []
-
+    
         try:
             logo = Image("favicon.png", width=60, height=60)
             elementos.append(logo)
         except:
             elementos.append(Paragraph("[Logo não encontrada: favicon.png]", styles["Normal"]))
-
+    
         elementos.append(Spacer(1, 12))
         elementos.append(Paragraph("📦 Relatório de Expedição e Logística", styles["Title"]))
         elementos.append(Spacer(1, 12))
-
-        try:
-            img_bytes = to_image(grafico_plotly, format="png", width=700, height=400, scale=2)
-            img_buffer = BytesIO(img_bytes)
-            elementos.append(Image(img_buffer, width=480, height=270))
-            elementos.append(Spacer(1, 12))
-        except Exception as e:
-            elementos.append(Paragraph(f"[Erro ao gerar gráfico: {str(e)}]", styles["Normal"]))
-
+    
+        # === Tabela principal ===
+        elementos.append(Paragraph("📋 Tabela Principal", styles["Heading2"]))
         dados = [tabela_df.columns.tolist()] + tabela_df.values.tolist()
         tabela_pdf = Table(dados, repeatRows=1)
         tabela_pdf.setStyle(TableStyle([
@@ -1633,20 +1665,51 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
             ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
         elementos.append(tabela_pdf)
+        elementos.append(Spacer(1, 20))
+    
+        # === Tabelas laterais agrupadas lado a lado ===
+        def montar_tabela(df, titulo):
+            dados = [df.columns.tolist()] + df.values.tolist()
+            tab = Table(dados, repeatRows=1)
+            tab.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            return [Paragraph(titulo, styles["Heading3"]), Spacer(1, 4), tab]
+    
+        # Montar cada célula com um "mini flowable" contendo título + tabela
+        col1 = montar_tabela(df_h1, "📊 Hierarquia 1")
+        col2 = montar_tabela(df_h2, "📊 Hierarquia 2")
+        col3 = montar_tabela(df_tipo, "📊 Tipo de Envio")
+    
+        # Colocar as três colunas lado a lado
+        tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[170, 170, 170])
+        tabela_lado_a_lado.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP')
+        ]))
+    
+        elementos.append(Spacer(1, 12))
+        elementos.append(tabela_lado_a_lado)
+    
         doc.build(elementos)
-
+    
         pdf_base64 = base64.b64encode(buffer.getvalue()).decode()
         href = f'<a href="data:application/pdf;base64,{pdf_base64}" download="relatorio_expedicao.pdf">📄 Baixar Relatório em PDF</a>'
         return href
 
-    botao_pdf = gerar_relatorio_pdf(df_grouped, fig_bar)
-    st.markdown(botao_pdf, unsafe_allow_html=True)
 
+botao_pdf = gerar_relatorio_pdf(tabela, df_h1, df_h2, df_tipo)
+st.markdown(botao_pdf, unsafe_allow_html=True)
 
 
 
