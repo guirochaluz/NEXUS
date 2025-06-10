@@ -1690,30 +1690,18 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
                 ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
             ]))
-            return KeepTogether([
-                Paragraph(f'<b>{titulo}</b>', styles["Heading3"]),
-                Spacer(1, 6),
-                tab
-            ])
-        
-        # Ordenar antes de montar
-        df_h1 = df_h1.sort_values(by="Quantidade", ascending=False)
-        df_h2 = df_h2.sort_values(by="Quantidade", ascending=False)
-        df_tipo = df_tipo.sort_values(by="Quantidade", ascending=False)
-        
-        # Montar colunas
+            return [Paragraph(titulo, styles["Heading3"]), Spacer(1, 4), tab]
+    
+        # Montar cada célula com um "mini flowable" contendo título + tabela
         col1 = montar_tabela(df_h1, "Hierarquia 1")
         col2 = montar_tabela(df_h2, "Hierarquia 2")
         col3 = montar_tabela(df_tipo, "Tipo de Envio")
-        
-        # Agrupar lado a lado com larguras balanceadas
+    
+        # Colocar as três colunas lado a lado
         tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[170, 170, 170])
         tabela_lado_a_lado.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 6),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 6)
+            ('VALIGN', (0, 0), (-1, -1), 'TOP')
         ]))
-
     
         elementos.append(Spacer(1, 12))
         elementos.append(tabela_lado_a_lado)
