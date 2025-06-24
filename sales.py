@@ -210,6 +210,9 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
 
             full_order = full_resp.json()
             nova_venda = _order_to_sale(full_order, ml_user_id, access_token, db)
+            buffering_info = nova_venda.shipment_buffering_date.isoformat() if nova_venda.shipment_buffering_date else "None"
+            print(f"📦 shipment_buffering_date para {oid}: {buffering_info}")
+
             print(f"📦 Incremental - ordem {oid} processada | ml_fee: {nova_venda.ml_fee}")
 
             if not existing_sale:
