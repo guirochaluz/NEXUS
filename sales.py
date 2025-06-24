@@ -56,6 +56,25 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
         item_inf = item.get("item", {}) or {}
         ship = order.get("shipping") or {}
 
+        shipment_data = {}
+        shipment_buffering_date = None
+        
+        shipment_id = ship.get("id")
+        if shipment_id:
+            try:
+                shipment_resp = requests.get(
+                    f"https://api.mercadolibre.com/shipments/{shipment_id}?access_token={access_token}"
+                )
+                shipment_resp.raise_for_status()
+                shipment_data = shipment_resp.json()
+                buffering_raw = shipment_data.get("shipping_option", {}).get("buffering", {}).get("date")
+                shipment_buffering_date = parser.isoparse(buffering_raw) if buffering_raw else None
+                print(f"📦 Buffering: {shipment_buffering_date} para order {order_id}")
+            except Exception as e:
+                print(f"⚠️ Erro ao buscar shipment {shipment_id}: {e}")
+
+        
+
         seller_sku = item_inf.get("seller_sku")
         quantity_sku = custo_unitario = level1 = level2 = None
 
@@ -96,6 +115,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             level1=level1,
             level2=level2,
             ml_fee=marketplace_fee,
+            shipment_buffering_date=shipment_buffering_date,
             payment_id=payment_id,
         )
 
