@@ -52,3 +52,5 @@ class Sale(Base):
     shipment_delivery_limit     = Column(DateTime, nullable=True)
     shipment_delivery_final     = Column(DateTime, nullable=True)
     shipment_receiver_name      = Column(String, nullable=True)
+    shipment_buffering_date = Column(DateTime, nullable=True)
+
