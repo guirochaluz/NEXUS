@@ -1526,10 +1526,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # === PREPARE DATAS ===
     hoje = pd.Timestamp.now().date()
     df["data_venda"] = df["date_adjusted"].dt.date
-    if "shipment_delivery_limit" in df.columns:
-        df["data_limite"] = df["shipment_delivery_limit"].dt.tz_localize("UTC").dt.tz_convert("America/Sao_Paulo").dt.date
+    if "shipment_buffering_date" in df.columns:
+        df["data_limite"] = df["shipment_buffering_date"].dt.tz_localize("UTC").dt.tz_convert("America/Sao_Paulo").dt.date
     else:
         df["data_limite"] = pd.NaT
+
 
     data_min_venda = df["data_venda"].dropna().min()
     data_max_venda = df["data_venda"].dropna().max()
@@ -1601,10 +1602,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     df["Canal de Venda"] = "MERCADO LIVRE"
 
-    if "shipment_delivery_limit" in df.columns:
-        df["Data Limite do Envio"] = df["shipment_delivery_limit"].dt.tz_localize("UTC").dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y")
+    if "shipment_buffering_date" in df.columns:
+        df["Data Limite do Envio"] = df["shipment_buffering_date"].dt.tz_localize("UTC").dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y")
     else:
         df["Data Limite do Envio"] = "—"
+
 
     tabela = df[[
         "order_id",                  
