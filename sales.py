@@ -518,10 +518,14 @@ from typing import Optional
 def traduzir_status(status_original: Optional[str]) -> str:
     if not status_original:
         return "Desconhecido"
+    
     s = status_original.lower()
-    if s in ("paid", "partially_refunded"):
+
+    if s == "paid":
         return "Pago"
+    elif s == "partially_refunded":
+        return "Parcialmente pago"
     elif s in ("cancelled", "canceled"):
         return "Cancelado"
+    
     return status_original
-
