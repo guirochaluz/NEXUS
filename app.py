@@ -910,14 +910,25 @@ def mostrar_contas_cadastradas():
     with col_b:
         if st.button("♻️ Reprocessar Histórico de Vendas", use_container_width=True):
             with st.spinner("♻️ Atualizando histórico de todas as vendas..."):
-                for row in df.itertuples(index=False):
+                total = len(df)
+                progresso = st.progress(0, text="🔁 Iniciando reprocessamento...")
+                
+                for i, row in enumerate(df.itertuples(index=False)):
                     ml_user_id = str(row.ml_user_id)
                     access_token = row.access_token
                     nickname = row.nickname
-
-                    st.subheader(f"🔗 Conta: {nickname}")
+                
+                    st.write(f"▶️ Processando conta {nickname}...")
                     atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
-                    st.info(f"♻️ {atualizadas} vendas atualizadas com dados mais recentes.")
+                    st.info(f"♻️ {atualizadas} vendas atualizadas para a conta {nickname}.")
+                    st.write(f"✅ Conta {nickname} finalizada.\n---")
+                    
+                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas processadas...")
+                    time.sleep(0.1)
+                
+                st.success("✅ Reprocessamento completo!")
+                progresso.empty()
+
 
 
                 st.success("✅ Todos os status foram padronizados com sucesso.")
@@ -925,14 +936,26 @@ def mostrar_contas_cadastradas():
     with col_c:
         if st.button("📜 Procurar novas vendas históricas", use_container_width=True):
             with st.spinner("📜 Reprocessando histórico completo..."):
-                for row in df.itertuples(index=False):
+                total = len(df)
+                progresso_geral = st.progress(0, text="🔁 Iniciando reprocessamento...")
+            
+                for i, row in enumerate(df.itertuples(index=False)):
                     ml_user_id = str(row.ml_user_id)
                     access_token = row.access_token
                     nickname = row.nickname
-
+            
                     st.subheader(f"🔗 Conta: {nickname}")
                     novas = get_full_sales(ml_user_id, access_token)
+                    atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
+            
                     st.success(f"✅ {novas} vendas históricas importadas.")
+                    st.info(f"♻️ {atualizadas} vendas com status alterados.")
+            
+                    progresso_geral.progress((i + 1) / total, text=f"⏳ Progresso: {i+1}/{total} contas processadas")
+            
+                st.success("✅ Reprocessamento completo.")
+                progresso_geral.empty()
+
 
     # --- Seção por conta individual ---
     for row in df.itertuples(index=False):
@@ -972,14 +995,19 @@ def mostrar_contas_cadastradas():
             with col3:
                 if st.button("📜 Histórico Completo", key=f"historico_{ml_user_id}"):
                     progresso = st.progress(0, text="🔁 Iniciando reprocessamento...")
+                
                     with st.spinner("📜 Importando histórico completo..."):
                         novas = get_full_sales(ml_user_id, access_token)
+                        progresso.progress(50, text="📦 Importação finalizada. Atualizando status...")
+                
                         atualizadas, alteracoes = revisar_status_historico(ml_user_id, access_token, return_changes=True)
                         progresso.progress(100, text="✅ Concluído!")
+                
                         st.success(f"✅ {novas} vendas históricas importadas.")
                         st.info(f"♻️ {atualizadas} vendas com status alterados.")
                         st.cache_data.clear()
                     progresso.empty()
+
 
                     if alteracoes:
                         df_alt = pd.DataFrame(alteracoes, columns=["order_id", "status_antigo", "status_novo"])
