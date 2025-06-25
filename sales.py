@@ -22,107 +22,6 @@ BACKEND_URL = os.getenv("BACKEND_URL")
 API_BASE = "https://api.mercadolibre.com/orders/search"
 FULL_PAGE_SIZE = 50
 
-def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional[SessionLocal] = None) -> Sale:
-    internal_session = False
-    if db is None:
-        db = SessionLocal()
-        internal_session = True
-
-    try:
-        order_id = order.get("id")
-
-        try:
-            resp = requests.get(f"https://api.mercadolibre.com/orders/{order_id}?access_token={access_token}")
-            resp.raise_for_status()
-            order = resp.json()
-            print(f"✅ Order {order_id} complementada com dados completos")
-        except Exception as e:
-            print(f"⚠️ Erro ao complementar order {order_id}: {e}")
-
-        payments = order.get("payments")
-        if not payments:
-            try:
-                pay_resp = requests.get(f"https://api.mercadolibre.com/orders/{order_id}/payments?access_token={access_token}")
-                pay_resp.raise_for_status()
-                payments = pay_resp.json()
-                if isinstance(payments, list) and payments:
-                    print(f"✅ Payments recuperados separadamente para {order_id}")
-                    order["payments"] = payments
-            except Exception as e:
-                print(f"❌ Erro ao buscar payments separadamente: {e}")
-
-        buyer = order.get("buyer", {}) or {}
-        item = (order.get("order_items") or [{}])[0]
-        item_inf = item.get("item", {}) or {}
-        ship = order.get("shipping") or {}
-
-        shipment_data = {}
-        shipment_buffering_date = None
-        
-        shipment_id = ship.get("id")
-        if shipment_id:
-            try:
-                shipment_resp = requests.get(
-                    f"https://api.mercadolibre.com/shipments/{shipment_id}?access_token={access_token}"
-                )
-                shipment_resp.raise_for_status()
-                shipment_data = shipment_resp.json()
-                buffering_raw = shipment_data.get("shipping_option", {}).get("buffering", {}).get("date")
-                shipment_buffering_date = parser.isoparse(buffering_raw) if buffering_raw else None
-                print(f"📦 Buffering: {shipment_buffering_date} para order {order_id}")
-            except Exception as e:
-                print(f"⚠️ Erro ao buscar shipment {shipment_id}: {e}")
-
-        
-
-        seller_sku = item_inf.get("seller_sku")
-        quantity_sku = custo_unitario = level1 = level2 = None
-
-        if seller_sku:
-            sku_info = db.execute(text("""
-                SELECT quantity, custo_unitario, level1, level2
-                FROM sku
-                WHERE sku = :sku
-                ORDER BY date_created DESC
-                LIMIT 1
-            """), {"sku": seller_sku}).fetchone()
-
-            if sku_info:
-                quantity_sku, custo_unitario, level1, level2 = sku_info
-
-        payment_info = (order.get("payments") or [{}])[0]
-        payment_id = payment_info.get("id")
-        marketplace_fee = payment_info.get("marketplace_fee")
-
-        print(f"📦 Finalizando order {order_id} | ml_fee: {marketplace_fee}")
-
-        return Sale(
-            order_id=str(order.get("id")),
-            ml_user_id=int(ml_user_id),
-            buyer_id=buyer.get("id"),
-            buyer_nickname=buyer.get("nickname"),
-            total_amount=order.get("total_amount"),
-            status=order.get("status"),
-            date_closed=parser.isoparse(order.get("date_closed")),
-            item_id=item_inf.get("id"),
-            item_title=item_inf.get("title"),
-            quantity=item.get("quantity"),
-            unit_price=item.get("unit_price"),
-            shipping_id=ship.get("id"),
-            seller_sku=seller_sku,
-            quantity_sku=quantity_sku,
-            custo_unitario=custo_unitario,
-            level1=level1,
-            level2=level2,
-            ml_fee=marketplace_fee,
-            shipment_buffering_date=shipment_buffering_date,
-            payment_id=payment_id,
-        )
-
-    finally:
-        if internal_session:
-            db.close()
-
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
     from db import SessionLocal
     from models import Sale
@@ -352,6 +251,13 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             except Exception as e:
                 print(f"⚠️ Falha ao buscar shipment {shipment_id}: {e}")
 
+        shipment_buffering_date = to_sp_datetime(
+            shipment_data.get("shipping_option", {})
+                         .get("buffering", {})
+                         .get("date")
+        )
+
+
         return Sale(
             order_id         = str(order_id),
             ml_user_id       = int(ml_user_id),
@@ -372,6 +278,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             level2           = level2,
             ml_fee           = marketplace_fee,
             payment_id       = payment_id,
+            
 
             # 🆕 Dados de envio
             shipment_status             = shipment_data.get("status"),
@@ -385,6 +292,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             shipment_delivery_limit     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_limit", {}).get("date")),
             shipment_delivery_final     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_final", {}).get("date")),
             shipment_receiver_name      = shipment_data.get("receiver_address", {}).get("receiver_name"),
+            shipment_buffering_date = shipment_buffering_date,
         )
 
     finally:
@@ -467,6 +375,7 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
 
                     full_order = full_resp.json()
                     nova_venda = _order_to_sale(full_order, ml_user_id, access_token, db)
+
                     print(f"🔄 Atualizando venda {oid} | status: {old_status} → {nova_venda.status} | ml_fee: {nova_venda.ml_fee}")
 
                     for attr, value in nova_venda.__dict__.items():
