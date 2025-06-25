@@ -513,3 +513,15 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
     return total_saved
 
+from typing import Optional
+
+def traduzir_status(status_original: Optional[str]) -> str:
+    if not status_original:
+        return "Desconhecido"
+    s = status_original.lower()
+    if s in ("paid", "partially_refunded"):
+        return "Pago"
+    elif s in ("cancelled", "canceled"):
+        return "Cancelado"
+    return status_original
+
