@@ -363,7 +363,10 @@ def mostrar_dashboard():
     if df_full.empty:
         st.warning("Nenhuma venda cadastrada.")
         return
-    
+        
+    # ✅ TRADUZ STATUS AQUI
+    from sales import traduzir_status
+    df_full["status"] = df_full["status"].map(traduzir_status)
 
     # --- CSS para compactar inputs e remover espaços ---
     st.markdown(
@@ -436,7 +439,7 @@ def mostrar_dashboard():
     hoje = pd.Timestamp.now().date()
     data_min = df_full["date_adjusted"].dt.date.min()
     data_max = df_full["date_adjusted"].dt.date.max()
-
+    
     if filtro_rapido == "Hoje":
         de = ate = min(hoje, data_max)
     elif filtro_rapido == "Ontem":
@@ -451,39 +454,29 @@ def mostrar_dashboard():
         de, ate = hoje.replace(month=1, day=1), hoje
     else:
         de, ate = data_min, data_max
-
+    
     custom = (filtro_rapido == "Período Personalizado")
-
+    
     with col2:
-        de = st.date_input(
-            "De", value=de,
-            min_value=data_min, max_value=data_max,
-            disabled=not custom,
-            key="de_q"
-        )
-
+        de = st.date_input("De", value=de, min_value=data_min, max_value=data_max, disabled=not custom, key="de_q")
+    
     with col3:
-        ate = st.date_input(
-            "Até", value=ate,
-            min_value=data_min, max_value=data_max,
-            disabled=not custom,
-            key="ate_q"
-        )
-
+        ate = st.date_input("Até", value=ate, min_value=data_min, max_value=data_max, disabled=not custom, key="ate_q")
+    
     with col4:
         status_options = df_full["status"].dropna().unique().tolist()
         status_opcoes = ["Todos"] + status_options
         index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
-        
         status_selecionado = st.selectbox("Status", status_opcoes, index=index_padrao)
-
-        # --- Filtro de datas e status ---
+    
+    # Aplica filtros finais
     df = df_full[
         (df_full["date_adjusted"].dt.date >= de) &
         (df_full["date_adjusted"].dt.date <= ate)
     ]
     if status_selecionado != "Todos":
         df = df[df["status"] == status_selecionado]
+
     
     # --- Filtros Avançados com checkbox dentro de Expander ---
     with st.expander("🔍 Filtros Avançados", expanded=False):
