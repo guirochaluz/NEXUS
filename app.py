@@ -350,7 +350,6 @@ def mostrar_dashboard():
     if "vendas_sincronizadas" not in st.session_state:
         with st.spinner("🔄 Sincronizando vendas..."):
             count = sync_all_accounts()
-            padronizar_status_sales(engine)  # 👈 Aqui entra a padronização após sincronizar
             st.cache_data.clear()
         placeholder = st.empty()
         with placeholder:
@@ -927,8 +926,7 @@ def mostrar_contas_cadastradas():
                     atualizadas, _ = revisar_status_historico(ml_user_id, access_token, return_changes=False)
                     st.info(f"♻️ {atualizadas} vendas atualizadas com dados mais recentes.")
 
-                # ✅ Executa padronização depois de todas as contas
-                padronizar_status_sales(engine)
+
                 st.success("✅ Todos os status foram padronizados com sucesso.")
                     
     with col_c:
