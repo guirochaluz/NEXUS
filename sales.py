@@ -9,6 +9,7 @@ from dateutil.tz import tzutc
 from requests.exceptions import HTTPError
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, List, Tuple
 import time
 
 # Carrega variáveis de ambiente
