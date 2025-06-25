@@ -1,16 +1,12 @@
 import os
-import sys
 import requests
 from dateutil import parser
 from db import SessionLocal
 from models import Sale
 from sqlalchemy import func, text, create_engine
-from typing import Optional, Tuple, List
 from dotenv import load_dotenv
 from dateutil.tz import tzutc
 from requests.exceptions import HTTPError
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import time
@@ -23,13 +19,7 @@ API_BASE = "https://api.mercadolibre.com/orders/search"
 FULL_PAGE_SIZE = 50
 
 def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
-    from db import SessionLocal
-    from models import Sale
-    from sqlalchemy import func, text
     from sales import get_full_sales, _order_to_sale
-    from dateutil.tz import tzutc
-    import requests
-    from requests.exceptions import HTTPError
     import os
     from concurrent.futures import ThreadPoolExecutor
     from utils import buscar_ml_fee, engine, DATA_INICIO
@@ -166,12 +156,8 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
 
 
 def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional[SessionLocal] = None) -> Sale:
-    from models import Sale
-    from db import SessionLocal
     from sqlalchemy import text
     from dateutil import parser, tz
-    import requests
-
     def to_sp_datetime(value: Optional[str]):
         if not value:
             return None
@@ -257,14 +243,13 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                          .get("date")
         )
 
-
         return Sale(
             order_id         = str(order_id),
             ml_user_id       = int(ml_user_id),
             buyer_id         = buyer.get("id"),
             buyer_nickname   = buyer.get("nickname"),
             total_amount     = order.get("total_amount"),
-            status           = order.get("status"),
+            status = order.get("status"),
             date_closed      = to_sp_datetime(order.get("date_closed")),
             item_id          = item_inf.get("id"),
             item_title       = item_inf.get("title"),
@@ -300,16 +285,11 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             db.close()
 
 
-
 def revisar_status_historico(ml_user_id: str, access_token: str, return_changes: bool = False) -> Tuple[int, List[Tuple[str, str, str]]]:
     from datetime import datetime, timedelta
     from dateutil.relativedelta import relativedelta
-    from dateutil.tz import tzutc
-    from db import SessionLocal
-    from models import Sale
     from sales import _order_to_sale
     from sqlalchemy import func
-    import requests
 
     print(f"🔁 Iniciando revisão histórica para usuário {ml_user_id}")
 
@@ -406,48 +386,11 @@ def revisar_status_historico(ml_user_id: str, access_token: str, return_changes:
     return (atualizadas, alteracoes) if return_changes else (atualizadas, [])
 
 
-
-def padronizar_status_sales(engine):
-    """
-    Padroniza os status da tabela 'sales':
-    - Converte todas as variações de 'paid' para 'Pago'
-    - Todos os demais status serão definidos como 'Cancelado'
-    """
-    from sqlalchemy import text
-
-    print("🔧 Iniciando padronização dos status de vendas...")
-
-    try:
-        with engine.begin() as conn:
-            # Atualiza para 'Pago' onde for 'paid' (ignorando maiúsculas/minúsculas)
-            result_pago = conn.execute(text("""
-                UPDATE sales
-                SET status = 'Pago'
-                WHERE LOWER(status) = 'paid'
-            """))
-            print(f"✅ Linhas atualizadas para 'Pago': {result_pago.rowcount}")
-
-            # Define como 'Cancelado' tudo que não for 'Pago'
-            result_cancelado = conn.execute(text("""
-                UPDATE sales
-                SET status = 'Cancelado'
-                WHERE status != 'Pago'
-            """))
-            print(f"✅ Linhas atualizadas para 'Cancelado': {result_cancelado.rowcount}")
-
-        print("🎯 Padronização finalizada com sucesso.")
-
-    except Exception as e:
-        print(f"❌ Erro ao padronizar status: {e}")
-        raise
-
-
 def sync_all_accounts() -> int:
     """
     Sincroniza todas as contas cadastradas na tabela user_tokens,
     utilizando a função incremental para buscar novas vendas.
     """
-    from db import SessionLocal
     from sqlalchemy import text
     from sales import get_incremental_sales
 
@@ -478,12 +421,8 @@ def sync_all_accounts() -> int:
 def get_full_sales(ml_user_id: str, access_token: str) -> int:
     from datetime import datetime, timedelta
     from dateutil.relativedelta import relativedelta
-    from dateutil.tz import tzutc
     from sales import _order_to_sale
-    from db import SessionLocal
-    from models import Sale
     from sqlalchemy import func
-    import requests
 
     API_BASE = "https://api.mercadolibre.com/orders/search"
     FULL_PAGE_SIZE = 50
