@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 # 3) Depois de set_page_config, importe tudo o mais que precisar
-from sales import sync_all_accounts, get_full_sales, revisar_status_historico, get_incremental_sales, padronizar_status_sales
+from sales import sync_all_accounts, get_full_sales, revisar_status_historico, get_incremental_sales
 from streamlit_cookies_manager import EncryptedCookieManager
 import pandas as pd
 import plotly.express as px
