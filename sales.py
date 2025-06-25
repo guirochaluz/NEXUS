@@ -286,7 +286,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             db.close()
 
 
-def revisar_status_historico_v2(ml_user_id: str, access_token: str) -> dict:
+def revisar_banco_de_dados(ml_user_id: str, access_token: str) -> dict:
     from datetime import timedelta
     from dateutil.relativedelta import relativedelta
     from sales import _order_to_sale
