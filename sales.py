@@ -227,6 +227,8 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
         # 📦 Shipment enrichment
         shipment_id = ship.get("id")
         shipment_data = {}
+        shipment_delivery_sla = None          # 👈  garante que a variável existe
+
         if shipment_id:
             try:
                 shipment_resp = requests.get(
