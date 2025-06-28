@@ -237,8 +237,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                 shipment_resp.raise_for_status()
                 shipment_data = shipment_resp.json()
                 print(f"📮 Dados logísticos carregados para order {order_id}")
-                # ✅ NOVO BLOCO: busca SLA do envio
-                shipment_delivery_sla = None
+
                 try:
                     sla_resp = requests.get(
                         f"https://api.mercadolibre.com/shipments/{shipment_id}/sla",
@@ -261,7 +260,8 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                          .get("buffering", {})
                          .get("date")
         )
-
+        
+        print(f"✅ shipment_delivery_sla final: {shipment_delivery_sla} | convertido: {to_sp_datetime(shipment_delivery_sla)}")
         return Sale(
             order_id         = str(order_id),
             ml_user_id       = int(ml_user_id),
