@@ -1533,6 +1533,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         de_venda = st.date_input("Data da Venda (de):", value=data_min_venda, min_value=data_min_venda, max_value=data_max_venda)
     with col2:
         ate_venda = st.date_input("Data da Venda (até):", value=data_max_venda, min_value=data_min_venda, max_value=data_max_venda)
+    de_venda = pd.Timestamp(de_venda)
+    ate_venda = pd.Timestamp(ate_venda)
     
     # === LINHA 2: Expedição ===
     st.markdown("#### 🧭 Filtros por Expedição")
@@ -1542,6 +1544,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         de_limite = st.date_input("Data Limite (de):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
     with col5:
         ate_limite = st.date_input("Data Limite (até):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
+    de_limite = pd.Timestamp(de_limite)
+    ate_limite = pd.Timestamp(ate_limite)
     
     df_datas = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
