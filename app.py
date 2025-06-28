@@ -1501,14 +1501,14 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     # === PREPARE DATAS ===
     hoje = pd.Timestamp.now().date()
-    df["data_venda"] = df["date_adjusted"].dt.date
+    df["data_venda"] = pd.to_datetime(df["date_adjusted"]).dt.normalize()
     
     def _to_sp_date(x):
         if pd.isna(x):
             return pd.NaT
         if x.tzinfo is None:
             x = x.tz_localize("UTC")
-        return x.tz_convert("America/Sao_Paulo").date()
+        return x.tz_convert("America/Sao_Paulo").normalize()
     
     df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
 
