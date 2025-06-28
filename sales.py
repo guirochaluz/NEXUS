@@ -297,8 +297,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             shipment_delivery_final     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_final", {}).get("date")),
             shipment_receiver_name      = shipment_data.get("receiver_address", {}).get("receiver_name"),
             shipment_buffering_date = shipment_buffering_date,
-            shipment_delivery_sla = to_sp_datetime(shipment_delivery_sla),
-
+            shipment_delivery_sla = to_sp_datetime(shipment_delivery_sla)
         )
 
     finally:
