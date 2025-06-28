@@ -1484,6 +1484,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     df["Tipo de Envio"] = df["shipment_logistic_type"].apply(mapear_tipo)
 
+    # Garantir que 'shipment_delivery_sla' esteja em formato datetime
+    if "shipment_delivery_sla" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["shipment_delivery_sla"]):
+        df["shipment_delivery_sla"] = pd.to_datetime(df["shipment_delivery_sla"], errors="coerce")
+
+
     if "quantity" in df.columns and "quantity_sku" in df.columns:
         df["quantidade"] = df["quantity"] * df["quantity_sku"]
     else:
@@ -1497,16 +1502,28 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # === PREPARE DATAS ===
     hoje = pd.Timestamp.now().date()
     df["data_venda"] = df["date_adjusted"].dt.date
-    if "shipment_delivery_sla" in df.columns:
-        df["data_limite"] = df["shipment_delivery_sla"].dt.tz_localize("UTC").dt.tz_convert("America/Sao_Paulo").dt.date
-    else:
-        df["data_limite"] = pd.NaT
+    
+    def _to_sp_date(x):
+        if pd.isna(x):
+            return pd.NaT
+        if x.tzinfo is None:
+            x = x.tz_localize("UTC")
+        return x.tz_convert("America/Sao_Paulo").date()
+    
+    df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
+
 
 
     data_min_venda = df["data_venda"].dropna().min()
     data_max_venda = df["data_venda"].dropna().max()
+
     data_min_limite = df["data_limite"].dropna().min()
+    if pd.isna(data_min_limite):
+        data_min_limite = hoje
+    
     data_max_limite = df["data_limite"].dropna().max()
+    if pd.isna(data_max_limite):
+        data_max_limite = hoje
 
     # === LINHA 1: Venda ===
     st.markdown("#### 🎯 Filtros por Venda")
@@ -1526,9 +1543,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     with col5:
         ate_limite = st.date_input("Data Limite (até):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
     
-    # === APLICAR DATA TEMPORARIAMENTE PARA OPÇÕES DE FILTRO ===
-    df_datas = df[(df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
-                  (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)]
+    df_datas = df[
+        (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
+        (df["data_limite"].notna()) &
+        (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)
+    ]
     
     with col6:
         hierarquia1 = st.selectbox("Hierarquia 1:", ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist()))
@@ -1551,9 +1570,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         status = st.selectbox("Status:", status_opcoes, index=index_padrao)
 
 
-    # === FILTROS GERAIS ===
-    df = df[(df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda)]
-    df = df[(df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)]
+    df = df[
+        (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
+        (df["data_limite"].notna()) &
+        (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)
+    ]
 
     if status != "Todos":
         df = df[df["status"] == status]
@@ -1574,7 +1595,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     df["Canal de Venda"] = "MERCADO LIVRE"
 
     if "shipment_delivery_sla" in df.columns:
-        df["Data Limite do Envio"] = df["shipment_delivery_sla"].dt.tz_localize("UTC").dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y")
+        df["Data Limite do Envio"] = df["shipment_delivery_sla"].apply(_to_sp_date).apply(lambda x: x.strftime("%d/%m/%Y") if not pd.isna(x) else "—")
     else:
         df["Data Limite do Envio"] = "—"
 
