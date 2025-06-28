@@ -235,6 +235,22 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                 shipment_resp.raise_for_status()
                 shipment_data = shipment_resp.json()
                 print(f"📮 Dados logísticos carregados para order {order_id}")
+                # ✅ NOVO BLOCO: busca SLA do envio
+                shipment_delivery_sla = None
+                try:
+                    sla_resp = requests.get(
+                        f"https://api.mercadolibre.com/shipments/{shipment_id}/sla",
+                        headers={"Authorization": f"Bearer {access_token}"}
+                    )
+                    if sla_resp.ok:
+                        sla_data = sla_resp.json()
+                        shipment_delivery_sla = sla_data.get("estimated_delivery_time", {}).get("date")
+                        print(f"📅 SLA recuperado para shipment {shipment_id}")
+                    else:
+                        print(f"⚠️ SLA não disponível para shipment {shipment_id}: {sla_resp.status_code}")
+                except Exception as e:
+                    print(f"❌ Erro ao buscar SLA de shipment {shipment_id}: {e}")
+
             except Exception as e:
                 print(f"⚠️ Falha ao buscar shipment {shipment_id}: {e}")
 
@@ -279,6 +295,8 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             shipment_delivery_final     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_final", {}).get("date")),
             shipment_receiver_name      = shipment_data.get("receiver_address", {}).get("receiver_name"),
             shipment_buffering_date = shipment_buffering_date,
+            shipment_delivery_sla = to_sp_datetime(shipment_delivery_sla),
+
         )
 
     finally:
