@@ -245,12 +245,15 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                     )
                     if sla_resp.ok:
                         sla_data = sla_resp.json()
-                        shipment_delivery_sla = sla_data.get("estimated_delivery_time", {}).get("date")
-                        print(f"📅 SLA recuperado para shipment {shipment_id}")
+                        shipment_delivery_sla_raw = sla_data.get("expected_date")
+                        print(f"📦 SLA bruto retornado: {sla_data}")
+                        print(f"📅 SLA estimado: {shipment_delivery_sla_raw}")
+                        shipment_delivery_sla = to_sp_datetime(shipment_delivery_sla_raw)
                     else:
                         print(f"⚠️ SLA não disponível para shipment {shipment_id}: {sla_resp.status_code}")
                 except Exception as e:
                     print(f"❌ Erro ao buscar SLA de shipment {shipment_id}: {e}")
+
 
             except Exception as e:
                 print(f"⚠️ Falha ao buscar shipment {shipment_id}: {e}")
@@ -261,7 +264,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                          .get("date")
         )
         
-        print(f"✅ shipment_delivery_sla final: {shipment_delivery_sla} | convertido: {to_sp_datetime(shipment_delivery_sla)}")
+        print(f"✅ shipment_delivery_sla final (já convertido): {shipment_delivery_sla}")
         return Sale(
             order_id         = str(order_id),
             ml_user_id       = int(ml_user_id),
@@ -297,7 +300,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             shipment_delivery_final     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_final", {}).get("date")),
             shipment_receiver_name      = shipment_data.get("receiver_address", {}).get("receiver_name"),
             shipment_buffering_date = shipment_buffering_date,
-            shipment_delivery_sla = to_sp_datetime(shipment_delivery_sla)
+            shipment_delivery_sla = shipment_delivery_sla
         )
 
     finally:
