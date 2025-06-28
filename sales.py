@@ -333,9 +333,9 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str, return_changes: b
         if data_max.tzinfo is None:
             data_max = data_max.replace(tzinfo=tzutc())
 
-        current_start = data_min.replace(day=1)
+        current_start = data_max.replace(day=1)
 
-        while current_start <= data_max:
+        while current_start >= data_min:
             current_end = (current_start + relativedelta(months=1)) - timedelta(seconds=1)
             print(f"📅 Revisando intervalo: {current_start.date()} → {current_end.date()}")
             offset = 0
@@ -402,7 +402,7 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str, return_changes: b
                     break
                 offset += 50
 
-            current_start += relativedelta(months=1)
+            current_start -= relativedelta(months=1)
 
     except Exception as e:
         db.rollback()
@@ -474,9 +474,9 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
         if data_max.tzinfo is None:
             data_max = data_max.replace(tzinfo=tzutc())
 
-        current_start = data_min.replace(day=1)
+        current_start = data_max.replace(day=1)
 
-        while current_start <= data_max:
+        while current_start >= data_min:
             current_end = (current_start + relativedelta(months=1)) - timedelta(seconds=1)
             offset = 0
 
@@ -532,7 +532,7 @@ def get_full_sales(ml_user_id: str, access_token: str) -> int:
 
                 offset += FULL_PAGE_SIZE
 
-            current_start += relativedelta(months=1)
+            current_start -= relativedelta(months=1)
 
     except Exception as e:
         db.rollback()
