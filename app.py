@@ -1532,92 +1532,76 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     if pd.isna(data_max_limite) or data_max_limite < data_min_limite:
         data_max_limite = data_min_limite + pd.Timedelta(days=7)
 
-    # === LINHA 1: Data de Venda & Filtro Rápido ===
-    st.markdown("#### 🎯 Filtros por Venda e Filtro Rápido")
-    col1, col2, col3 = st.columns(3)
+    # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro Rápido ===
+    st.markdown("#### 📅 Datas e Busca Rápida")
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         de_venda = st.date_input(
-            "Data da Venda (de):",
+            "Venda ⏲️ de:",
             value=data_min_venda,
             min_value=data_min_venda,
             max_value=data_max_venda
         )
     with col2:
         ate_venda = st.date_input(
-            "Data da Venda (até):",
+            "Venda ⏲️ até:",
             value=data_max_venda,
             min_value=data_min_venda,
             max_value=data_max_venda
         )
     with col3:
-        filtro_rapido_venda = st.text_input("Filtro Rápido", placeholder="...", key="filtro_venda")
-
-    # === LINHA 2: Data de Expedição & Filtro Rápido ===
-    st.markdown("#### 🧭 Filtros por Expedição e Filtro Rápido")
-    col4, col5, col6 = st.columns(3)
-    with col4:
         de_limite = st.date_input(
-            "Data Limite (de):",
+            "Expedição ⏲️ de:",
             value=data_min_limite,
             min_value=data_min_limite,
             max_value=data_max_limite
         )
-    with col5:
+    with col4:
         ate_limite = st.date_input(
-            "Data Limite (até):",
+            "Expedição ⏲️ até:",
             value=data_max_limite,
             min_value=data_min_limite,
             max_value=data_max_limite
         )
+    with col5:
+        filtro_geral = st.text_input(
+            "🔍 Filtro Rápido",
+            placeholder="…",
+            key="filtro_geral"
+        )
+    
+    # === UNIFICADO 2: Seletores Principais ===
+    st.markdown("#### ⚙️ Filtros Principais")
+    col6, col7, col8, col9, col10, col11 = st.columns(6)
     with col6:
-        filtro_rapido_expedicao = st.text_input("Filtro Rápido", placeholder="...", key="filtro_expedicao")
-
-    # Preparar para filtros adicionais
-    df = df.copy()
-    df["status"] = df["status"].apply(traduzir_status)
-    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.normalize()
-    de_limite = pd.to_datetime(de_limite)
-    ate_limite = pd.to_datetime(ate_limite)
-    df_datas = df.copy()
-
-    # === LINHA 3: Conta, Status, Status da Data de Envio ===
-    st.markdown("#### ⚙️ Filtros Adicionais")
-    col7, col8, col9 = st.columns(3)
+        contas = df_datas["nickname"].dropna().unique().tolist()
+        conta = st.selectbox("Conta", ["Todos"] + sorted(contas))
     with col7:
-        contas_disponiveis = df_datas["nickname"].dropna().unique().tolist()
-        conta = st.selectbox("Conta:", ["Todos"] + sorted(contas_disponiveis))
+        status_opts = df["status"].dropna().unique().tolist()
+        status = st.selectbox("Status", ["Todos"] + sorted(status_opts),
+                              index=status_opts.index("Pago") + 1 if "Pago" in status_opts else 0)
     with col8:
-        status_options = df["status"].dropna().unique().tolist()
-        status_opcoes = ["Todos"] + sorted(status_options)
-        index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
-        status = st.selectbox("Status:", status_opcoes, index=index_padrao)
-    with col9:
         status_data_envio = st.selectbox(
-            "Status da Data de Envio:",
+            "Status Envio",
             ["Todos", "Com Data de Envio", "Sem Data de Envio"],
             index=1
         )
-
-    # === LINHA 4: Hierarquia 1, Hierarquia 2 e Tipo de Envio ===
-    st.markdown("#### 🔍 Hierarquia e Tipo de Envio")
-    col10, col11, col12 = st.columns(3)
-    with col10:
+    with col9:
         hierarquia1 = st.selectbox(
-            "Hierarquia 1:",
-            ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist()),
-            key="h1"
+            "Hierarquia 1",
+            ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist())
+        )
+    with col10:
+        hierarquia2 = st.selectbox(
+            "Hierarquia 2",
+            ["Todos"] + sorted(df_datas["level2"].dropna().unique().tolist())
         )
     with col11:
-        hierarquia2 = st.selectbox(
-            "Hierarquia 2:",
-            ["Todos"] + sorted(df_datas["level2"].dropna().unique().tolist()),
-            key="h2"
-        )
-    with col12:
         tipo_envio = st.selectbox(
-            "Tipo de Envio:",
+            "Tipo de Envio",
             ["Todos"] + sorted(df_datas["Tipo de Envio"].dropna().unique().tolist())
         )
+
 
     # === Aplicar filtros no DataFrame ===
     df_filtrado = df[
