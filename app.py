@@ -1457,7 +1457,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib import colors
-    from plotly.io import to_image
     import base64
 
     st.markdown("""
@@ -1471,6 +1470,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     if df.empty:
         st.warning("Nenhum dado encontrado.")
         return
+
 
     def mapear_tipo(valor):
         match valor:
@@ -1503,12 +1503,14 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     hoje = pd.Timestamp.now().date()
     df["data_venda"] = pd.to_datetime(df["date_adjusted"]).dt.date
     
+    import pytz  # Adicione no topo do arquivo se ainda não tiver
+    
     def _to_sp_date(x):
         if pd.isna(x):
             return pd.NaT
         if x.tzinfo is None:
             x = x.tz_localize("UTC")
-        return x.tz_convert("America/Sao_Paulo").date()
+        return x.astimezone(pytz.timezone("America/Sao_Paulo")).date()
     
     df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
 
@@ -1539,9 +1541,14 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     col4, col5, col6, col7 = st.columns(4)
     
     with col4:
-        de_limite = st.date_input("Data Limite (de):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
+        de_limite = st.date_input("Data Limite (de):", value=data_min_limite, min_value=data_min_limite, max_value=data_max_limite)
     with col5:
-        ate_limite = st.date_input("Data Limite (até):", value=hoje, min_value=data_min_limite, max_value=data_max_limite)
+        ate_limite = st.date_input("Data Limite (até):", value=data_max_limite, min_value=data_min_limite, max_value=data_max_limite)
+
+
+    df = df.copy()
+    df["data_limite"] = pd.to_datetime(df["data_limite"]).dt.date
+
     
     df_datas = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
@@ -1570,37 +1577,41 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         status = st.selectbox("Status:", status_opcoes, index=index_padrao)
 
 
-    df = df[
+    df_filtrado = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
         (df["data_limite"].notna()) &
         (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)
     ]
-
+    
     if status != "Todos":
-        df = df[df["status"] == status]
+        df_filtrado = df_filtrado[df_filtrado["status"] == status]
     if hierarquia1 != "Todos":
-        df = df[df["level1"] == hierarquia1]
+        df_filtrado = df_filtrado[df_filtrado["level1"] == hierarquia1]
     if hierarquia2 != "Todos":
-        df = df[df["level2"] == hierarquia2]
+        df_filtrado = df_filtrado[df_filtrado["level2"] == hierarquia2]
     if tipo_envio != "Todos":
-        df = df[df["Tipo de Envio"] == tipo_envio]
+        df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
     if conta != "Todos":
-        df = df[df["nickname"] == conta]
+        df_filtrado = df_filtrado[df_filtrado["nickname"] == conta]
 
 
-    if df.empty:
+
+    if df_filtrado.empty:
         st.warning("Nenhum dado encontrado com os filtros aplicados.")
         return
 
-    df["Canal de Venda"] = "MERCADO LIVRE"
-
-    if "shipment_delivery_sla" in df.columns:
-        df["Data Limite do Envio"] = df["shipment_delivery_sla"].apply(_to_sp_date).apply(lambda x: x.strftime("%d/%m/%Y") if not pd.isna(x) else "—")
+    df_filtrado = df_filtrado.copy()
+    df_filtrado["Canal de Venda"] = "MERCADO LIVRE"
+    
+    if "shipment_delivery_sla" in df_filtrado.columns:
+        df_filtrado["Data Limite do Envio"] = df_filtrado["shipment_delivery_sla"].apply(_to_sp_date).apply(
+            lambda x: x.strftime("%d/%m/%Y") if not pd.isna(x) else "—"
+        )
     else:
-        df["Data Limite do Envio"] = "—"
+        df_filtrado["Data Limite do Envio"] = "—"
 
 
-    tabela = df[[
+    tabela = df_filtrado[[
         "order_id",                  
         "shipment_receiver_name",    
         "nickname",                  
@@ -1625,7 +1636,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     st.markdown("### 📋 Tabela de Expedição por Venda")
     st.dataframe(tabela, use_container_width=True, height=500)
 
-    df_grouped = df.groupby("level1", as_index=False).agg({"quantidade": "sum"})
+    df_grouped = df_filtrado.groupby("level1", as_index=False).agg({"quantidade": "sum"})
     df_grouped = df_grouped.rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
     
     # Ordenar do maior para o menor
@@ -1638,7 +1649,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         text="Quantidade",  # Adiciona o rótulo
         barmode="group",
         height=400,
-        color_discrete_sequence=["green"]
+        color_discrete_sequence=["#2ECC71"]
     )
     
     # Ajustar posição dos rótulos (em cima)
@@ -1653,25 +1664,26 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # === TABELAS LADO A LADO ===
     st.markdown("### 📊 Resumo por Agrupamento")
     
-    col1, col2, col3 = st.columns(3)
+    col_r1, col_r2, col_r3 = st.columns(3)
+
     
     # Tabela 1: Hierarquia 1
-    with col1:
-        df_h1 = df.groupby("level1", as_index=False)["quantidade"].sum().rename(columns={
+    with col_r1:
+        df_h1 = df_filtrado.groupby("level1", as_index=False)["quantidade"].sum().rename(columns={
             "level1": "Hierarquia 1", "quantidade": "Quantidade"
         })
         st.dataframe(df_h1, use_container_width=True, hide_index=True)
     
     # Tabela 2: Hierarquia 2
-    with col2:
-        df_h2 = df.groupby("level2", as_index=False)["quantidade"].sum().rename(columns={
+    with col_r2:
+        df_h2 = df_filtrado.groupby("level2", as_index=False)["quantidade"].sum().rename(columns={
             "level2": "Hierarquia 2", "quantidade": "Quantidade"
         })
         st.dataframe(df_h2, use_container_width=True, hide_index=True)
     
     # Tabela 3: Tipo de Envio
-    with col3:
-        df_tipo = df.groupby("Tipo de Envio", as_index=False)["quantidade"].sum().rename(columns={
+    with col_r3:
+        df_tipo = df_filtrado.groupby("Tipo de Envio", as_index=False)["quantidade"].sum().rename(columns={
             "Tipo de Envio": "Tipo de Envio", "quantidade": "Quantidade"
         })
         st.dataframe(df_tipo, use_container_width=True, hide_index=True)
@@ -1731,7 +1743,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         col3 = montar_tabela(df_tipo, "Tipo de Envio")
     
         # Colocar as três colunas lado a lado
-        tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[170, 170, 170])
+        tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[160, 160, 160])
         tabela_lado_a_lado.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP')
         ]))
