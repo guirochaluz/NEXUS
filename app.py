@@ -1497,6 +1497,10 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         lambda x: x.tz_convert("America/Sao_Paulo").date() if pd.notnull(x) else pd.NaT
     )
 
+    # --- Sanear coluna data_limite para garantir somente datas ---
+    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce")  # força datetime
+    df["data_limite"] = df["data_limite"].dt.date                            # guarda só a parte "date"
+
     # ―――― Datas mín/max ―――――――――――――――――――――――――――――――――――――――――――――――――
     hoje = pd.Timestamp.now().date()
     data_min_v, data_max_v = df["data_venda"].min(), df["data_venda"].max()
