@@ -1450,7 +1450,6 @@ def mostrar_gestao_sku():
                 except Exception as e:
                     st.error(f"❌ Erro ao processar: {e}")
 
-
 def mostrar_expedicao_logistica(df: pd.DataFrame):
     import streamlit as st
     import plotly.express as px
@@ -1461,319 +1460,347 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib import colors
     import base64
+    import pytz
 
-    # ―――― Estilo básico ―――――――――――――――――――――――――――――――――――――――――――――――――――――
-    st.markdown(
+    # Estilo
+    st.markdown(  
         """
-        <style>.block-container{padding-top:0rem;}</style>
-        """,
-        unsafe_allow_html=True,
+        <style>
+        .block-container { padding-top: 0rem; }
+        </style>
+        """, unsafe_allow_html=True
     )
     st.header("🚚 Expedição e Logística")
 
-    # ―――― Validação de DF ――――――――――――――――――――――――――――――――――――――――――――――――
     if df.empty:
         st.warning("Nenhum dado encontrado.")
         return
 
-    # ―――― Pré-processamento de colunas ―――――――――――――――――――――――――――――――――――
-    def mapear_tipo(v):
-        return {
-            "fulfillment": "FULL",
-            "self_service": "FLEX",
-            "drop_off": "Correios",
-            "xd_drop_off": "Agência",
-            "cross_docking": "Coleta",
-            "me2": "Envio Padrão",
-        }.get(v, "outros")
+    # === Mapeamentos e cálculos iniciais ===
+    def mapear_tipo(valor):
+        match valor:
+            case 'fulfillment': return 'FULL'
+            case 'self_service': return 'FLEX'
+            case 'drop_off': return 'Correios'
+            case 'xd_drop_off': return 'Agência'
+            case 'cross_docking': return 'Coleta'
+            case 'me2': return 'Envio Padrão'
+            case _: return 'outros'
 
     df["Tipo de Envio"] = df["shipment_logistic_type"].apply(mapear_tipo)
-    df["quantidade"] = df["quantity"] * df["quantity_sku"]
+
+    # Garantir que 'shipment_delivery_sla' esteja em datetime
+    if "shipment_delivery_sla" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["shipment_delivery_sla"]):
+        df["shipment_delivery_sla"] = pd.to_datetime(df["shipment_delivery_sla"], errors="coerce")
+
+    # Cálculo de quantidade
+    if "quantity" in df.columns and "quantity_sku" in df.columns:
+        df["quantidade"] = df["quantity"] * df["quantity_sku"]
+    else:
+        st.error("Colunas 'quantity' e/ou 'quantity_sku' não encontradas.")
+        st.stop()
+
+    # Data da venda
+    if "date_adjusted" not in df.columns:
+        st.error("Coluna 'date_adjusted' não encontrada.")
+        st.stop()
     df["data_venda"] = pd.to_datetime(df["date_adjusted"]).dt.date
-    df["shipment_delivery_sla"] = pd.to_datetime(
-        df["shipment_delivery_sla"], utc=True, errors="coerce"
-    )
-    df["data_limite"] = df["shipment_delivery_sla"].apply(
-        lambda x: x.tz_convert("America/Sao_Paulo").date() if pd.notnull(x) else pd.NaT
-    )
 
-    # --- Sanear coluna data_limite para garantir somente datas ---
-    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce")  # força datetime
-    df["data_limite"] = df["data_limite"].dt.date                            # guarda só a parte "date"
+    # Conversão para fuso de SP
+    def _to_sp_date(x):
+        if pd.isna(x):
+            return pd.NaT
+        ts = pd.to_datetime(x, utc=True)
+        return ts.tz_convert("America/Sao_Paulo").date()
 
-    # ―――― Datas mín/max ―――――――――――――――――――――――――――――――――――――――――――――――――
+    if "shipment_delivery_sla" in df.columns:
+        df["shipment_delivery_sla"] = pd.to_datetime(df["shipment_delivery_sla"], utc=True, errors="coerce")
+        df["data_limite"] = df["shipment_delivery_sla"].apply(
+            lambda x: x.tz_convert("America/Sao_Paulo").date() if pd.notnull(x) else pd.NaT
+        )
+    else:
+        df["data_limite"] = pd.NaT
+
     hoje = pd.Timestamp.now().date()
-    data_min_v, data_max_v = df["data_venda"].min(), df["data_venda"].max()
+    data_min_venda = df["data_venda"].dropna().min()
+    data_max_venda = df["data_venda"].dropna().max()
 
-    # Força conversão da data_limite para datetime.date (descarta inválidos)
-    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.date
-    datas_validas = df["data_limite"].dropna()
+    data_min_limite = df["data_limite"].dropna().min()
+    data_max_limite = df["data_limite"].dropna().max()
+    if pd.isna(data_min_limite):
+        data_min_limite = hoje
+    if pd.isna(data_max_limite) or data_max_limite < data_min_limite:
+        data_max_limite = data_min_limite + pd.Timedelta(days=7)
 
-    if not datas_validas.empty:
-        data_min_l = datas_validas.min()
-        data_max_l = datas_validas.max()
-    else:
-        data_min_l = hoje
-        data_max_l = hoje + pd.Timedelta(days=7)
+    # === LINHA 1: Data de Venda & Filtro Rápido ===
+    st.markdown("#### 🎯 Filtros por Venda e Filtro Rápido")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        de_venda = st.date_input(
+            "Data da Venda (de):",
+            value=data_min_venda,
+            min_value=data_min_venda,
+            max_value=data_max_venda
+        )
+    with col2:
+        ate_venda = st.date_input(
+            "Data da Venda (até):",
+            value=data_max_venda,
+            min_value=data_min_venda,
+            max_value=data_max_venda
+        )
+    with col3:
+        filtro_rapido_venda = st.text_input("Filtro Rápido", placeholder="...", key="filtro_venda")
 
+    # === LINHA 2: Data de Expedição & Filtro Rápido ===
+    st.markdown("#### 🧭 Filtros por Expedição e Filtro Rápido")
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        de_limite = st.date_input(
+            "Data Limite (de):",
+            value=data_min_limite,
+            min_value=data_min_limite,
+            max_value=data_max_limite
+        )
+    with col5:
+        ate_limite = st.date_input(
+            "Data Limite (até):",
+            value=data_max_limite,
+            min_value=data_min_limite,
+            max_value=data_max_limite
+        )
+    with col6:
+        filtro_rapido_expedicao = st.text_input("Filtro Rápido", placeholder="...", key="filtro_expedicao")
 
-    # ―――― FILTROS ─ 4 linhas ――――――――――――――――――――――――――――――――――――――――――――――
-    # LINHA 1 · Período da VENDA
-    st.markdown("#### 🎯 Filtros por Venda")
-    col_v1, col_v2, col_v3 = st.columns([1.5, 1.2, 1.2])
-    with col_v1:
-        filtro_v = st.selectbox(
-            "Período (Venda)",
-            [
-                "Período Personalizado",
-                "Hoje",
-                "Ontem",
-                "Últimos 7 Dias",
-                "Este Mês",
-                "Últimos 30 Dias",
-                "Este Ano",
-            ],
-            index=1,
-            key="filt_venda",
-        )
-    if filtro_v == "Hoje":
-        de_v, ate_v = hoje, hoje
-    elif filtro_v == "Ontem":
-        de_v = ate_v = hoje - pd.Timedelta(days=1)
-    elif filtro_v == "Últimos 7 Dias":
-        de_v, ate_v = hoje - pd.Timedelta(days=7), hoje
-    elif filtro_v == "Últimos 30 Dias":
-        de_v, ate_v = hoje - pd.Timedelta(days=30), hoje
-    elif filtro_v == "Este Mês":
-        de_v, ate_v = hoje.replace(day=1), hoje
-    elif filtro_v == "Este Ano":
-        de_v, ate_v = hoje.replace(month=1, day=1), hoje
-    else:
-        de_v, ate_v = data_min_v, data_max_v
-    custom_v = filtro_v == "Período Personalizado"
-    with col_v2:
-        de_v = st.date_input(
-            "Data Venda (de)", de_v, data_min_v, data_max_v, disabled=not custom_v
-        )
-    with col_v3:
-        ate_v = st.date_input(
-            "Data Venda (até)", ate_v, data_min_v, data_max_v, disabled=not custom_v
-        )
-
-    # LINHA 2 · Período da EXPEDIÇÃO
-    st.markdown("#### 🧭 Filtros por Expedição")
-    col_e1, col_e2, col_e3 = st.columns([1.5, 1.2, 1.2])
-    with col_e1:
-        filtro_e = st.selectbox(
-            "Período (Envio)",
-            [
-                "Período Personalizado",
-                "Hoje",
-                "Amanhã",
-                "Próximos 7 Dias",
-                "Este Mês",
-                "Próximos 30 Dias",
-                "Este Ano",
-            ],
-            index=0,
-            key="filt_envio",
-        )
-    if filtro_e == "Hoje":
-        de_l = ate_l = hoje
-    elif filtro_e == "Amanhã":
-        de_l = ate_l = hoje + pd.Timedelta(days=1)
-    elif filtro_e == "Próximos 7 Dias":
-        de_l, ate_l = hoje, hoje + pd.Timedelta(days=7)
-    elif filtro_e == "Próximos 30 Dias":
-        de_l, ate_l = hoje, hoje + pd.Timedelta(days=30)
-    elif filtro_e == "Este Mês":
-        de_l = hoje.replace(day=1)
-        ate_l = (de_l + pd.offsets.MonthEnd(1)).date()
-    elif filtro_e == "Este Ano":
-        de_l = hoje.replace(month=1, day=1)
-        ate_l = hoje.replace(month=12, day=31)
-    else:
-        de_l, ate_l = data_min_l, data_max_l
-    custom_e = filtro_e == "Período Personalizado"
-    with col_e2:
-        de_l = st.date_input(
-            "Data Limite (de)", de_l, data_min_l, data_max_l, disabled=not custom_e
-        )
-    with col_e3:
-        ate_l = st.date_input(
-            "Data Limite (até)", ate_l, data_min_l, data_max_l, disabled=not custom_e
-        )
-
-    # LINHA 3 · Conta, Status
+    # Preparar para filtros adicionais
+    df = df.copy()
     df["status"] = df["status"].apply(traduzir_status)
-    col_c1, col_c2, col_c3 = st.columns(3)
-    with col_c1:
-        conta = st.selectbox(
-            "Conta",
-            ["Todos"] + sorted(df["nickname"].dropna().unique()),
-            key="filt_conta",
-        )
-    with col_c2:
-        status_opts = ["Todos"] + sorted(df["status"].dropna().unique())
-        idx_def = status_opts.index("Pago") if "Pago" in status_opts else 0
-        status = st.selectbox("Status", status_opts, index=idx_def, key="filt_status")
-    with col_c3:
-        status_data = st.selectbox(
-            "Status da Data de Envio",
+    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.normalize()
+    de_limite = pd.to_datetime(de_limite)
+    ate_limite = pd.to_datetime(ate_limite)
+    df_datas = df.copy()
+
+    # === LINHA 3: Conta, Status, Status da Data de Envio ===
+    st.markdown("#### ⚙️ Filtros Adicionais")
+    col7, col8, col9 = st.columns(3)
+    with col7:
+        contas_disponiveis = df_datas["nickname"].dropna().unique().tolist()
+        conta = st.selectbox("Conta:", ["Todos"] + sorted(contas_disponiveis))
+    with col8:
+        status_options = df["status"].dropna().unique().tolist()
+        status_opcoes = ["Todos"] + sorted(status_options)
+        index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
+        status = st.selectbox("Status:", status_opcoes, index=index_padrao)
+    with col9:
+        status_data_envio = st.selectbox(
+            "Status da Data de Envio:",
             ["Todos", "Com Data de Envio", "Sem Data de Envio"],
-            index=1,
-            key="filt_status_envio",
+            index=1
         )
 
-    # LINHA 4 · Hierarquias, Tipo
-    col_h1, col_h2, col_h3 = st.columns(3)
-    with col_h1:
-        h1 = st.selectbox(
-            "Hierarquia 1",
-            ["Todos"] + sorted(df["level1"].dropna().unique()),
-            key="filt_h1",
+    # === LINHA 4: Hierarquia 1, Hierarquia 2 e Tipo de Envio ===
+    st.markdown("#### 🔍 Hierarquia e Tipo de Envio")
+    col10, col11, col12 = st.columns(3)
+    with col10:
+        hierarquia1 = st.selectbox(
+            "Hierarquia 1:",
+            ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist()),
+            key="h1"
         )
-    with col_h2:
-        h2 = st.selectbox(
-            "Hierarquia 2",
-            ["Todos"] + sorted(df["level2"].dropna().unique()),
-            key="filt_h2",
+    with col11:
+        hierarquia2 = st.selectbox(
+            "Hierarquia 2:",
+            ["Todos"] + sorted(df_datas["level2"].dropna().unique().tolist()),
+            key="h2"
         )
-    with col_h3:
-        tipo = st.selectbox(
-            "Tipo de Envio",
-            ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique()),
-            key="filt_tipo",
+    with col12:
+        tipo_envio = st.selectbox(
+            "Tipo de Envio:",
+            ["Todos"] + sorted(df_datas["Tipo de Envio"].dropna().unique().tolist())
         )
 
-    # ―――― Aplicar Filtros ―――――――――――――――――――――――――――――――――――――――――――――――
-    df_f = df[
-        (df["data_venda"].between(de_v, ate_v))
-        & (
-            df["data_limite"].isna()
-            | df["data_limite"].between(pd.to_datetime(de_l), pd.to_datetime(ate_l))
-        )
+    # === Aplicar filtros no DataFrame ===
+    df_filtrado = df[
+        (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
+        (df["data_limite"].isna() |
+         ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)))
     ]
-    if status != "Todos":
-        df_f = df_f[df_f["status"] == status]
-    if h1 != "Todos":
-        df_f = df_f[df_f["level1"] == h1]
-    if h2 != "Todos":
-        df_f = df_f[df_f["level2"] == h2]
-    if tipo != "Todos":
-        df_f = df_f[df_f["Tipo de Envio"] == tipo]
     if conta != "Todos":
-        df_f = df_f[df_f["nickname"] == conta]
-    if status_data == "Com Data de Envio":
-        df_f = df_f[df_f["data_limite"].notna()]
-    elif status_data == "Sem Data de Envio":
-        df_f = df_f[df_f["data_limite"].isna()]
+        df_filtrado = df_filtrado[df_filtrado["nickname"] == conta]
+    if status != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["status"] == status]
+    if status_data_envio == "Com Data de Envio":
+        df_filtrado = df_filtrado[df_filtrado["data_limite"].notna()]
+    elif status_data_envio == "Sem Data de Envio":
+        df_filtrado = df_filtrado[df_filtrado["data_limite"].isna()]
+    if hierarquia1 != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["level1"] == hierarquia1]
+    if hierarquia2 != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["level2"] == hierarquia2]
+    if tipo_envio != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
 
-    if df_f.empty:
+    if df_filtrado.empty:
         st.warning("Nenhum dado encontrado com os filtros aplicados.")
         return
 
-    # ―――― Exibição da Tabela Principal ―――――――――――――――――――――――――――――――――
-    df_f["Data Limite do Envio"] = df_f["data_limite"].apply(
+    df_filtrado = df_filtrado.copy()
+    df_filtrado["Canal de Venda"] = "MERCADO LIVRE"
+    
+    df_filtrado["Data Limite do Envio"] = df_filtrado["data_limite"].apply(
         lambda d: d.strftime("%d/%m/%Y") if pd.notna(d) else "—"
     )
-    tabela = df_f[
-        [
-            "order_id",
-            "shipment_receiver_name",
-            "nickname",
-            "Tipo de Envio",
-            "quantidade",
-            "level1",
-            "Data Limite do Envio",
-        ]
-    ].rename(
-        columns={
-            "order_id": "ID VENDA",
-            "shipment_receiver_name": "NOME CLIENTE",
-            "nickname": "CONTA",
-            "Tipo de Envio": "TIPO DE ENVIO",
-            "quantidade": "QUANTIDADE",
-            "level1": "PRODUTO [HIERARQUIA 1]",
-            "Data Limite do Envio": "DATA DE ENVIO",
-        }
-    )
-    tabela = tabela.sort_values("QUANTIDADE", ascending=False)
+
+
+    tabela = df_filtrado[[
+        "order_id",                  
+        "shipment_receiver_name",    
+        "nickname",                  
+        "Tipo de Envio",            
+        "quantidade",              
+        "level1",                    
+        "Data Limite do Envio"     
+    ]].rename(columns={
+        "order_id": "ID VENDA",
+        "shipment_receiver_name": "NOME CLIENTE",
+        "nickname": "CONTA",
+        "Tipo de Envio": "TIPO DE ENVIO",
+        "quantidade": "QUANTIDADE",
+        "level1": "PRODUTO [HIERARQUIA 1]",
+        "Data Limite do Envio": "DATA DE ENVIO"
+    })
+
+    
+    # Ordenar pela quantidade em ordem decrescente
+    tabela = tabela.sort_values(by="QUANTIDADE", ascending=False)
+
     st.markdown("### 📋 Tabela de Expedição por Venda")
     st.dataframe(tabela, use_container_width=True, height=500)
 
-    # ―――― Gráfico de barras (Hierarquia 1) ――――――――――――――――――――――――――――――――
-    df_grp = df_f.groupby("level1", as_index=False)["quantidade"].sum()
-    fig = px.bar(
-        df_grp.sort_values("quantidade", ascending=False),
-        x="level1",
-        y="quantidade",
-        text="quantidade",
+    df_grouped = df_filtrado.groupby("level1", as_index=False).agg({"quantidade": "sum"})
+    df_grouped = df_grouped.rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
+    
+    # Ordenar do maior para o menor
+    df_grouped = df_grouped.sort_values(by="Quantidade", ascending=False)
+    
+    fig_bar = px.bar(
+        df_grouped,
+        x="Hierarquia 1",
+        y="Quantidade",
+        text="Quantidade",  # Adiciona o rótulo
+        barmode="group",
         height=400,
-        color_discrete_sequence=["#2ECC71"],
+        color_discrete_sequence=["#2ECC71"]
     )
-    fig.update_traces(textposition="outside")
-    fig.update_layout(margin=dict(t=40, b=40))
-    st.plotly_chart(fig, use_container_width=True)
+    
+    # Ajustar posição dos rótulos (em cima)
+    fig_bar.update_traces(textposition="outside")
+    
+    # Ajustar layout para não cortar os rótulos
+    fig_bar.update_layout(uniformtext_minsize=8, uniformtext_mode='hide', margin=dict(t=40, b=40))
+    
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-    # ―――― Tabelas resumidas ―――――――――――――――――――――――――――――――――――――――――――――
+
+    # === TABELAS LADO A LADO ===
     st.markdown("### 📊 Resumo por Agrupamento")
+    
     col_r1, col_r2, col_r3 = st.columns(3)
+
+    
+    # Tabela 1: Hierarquia 1
     with col_r1:
-        st.dataframe(
-            df_f.groupby("level1", as_index=False)["quantidade"]
-            .sum()
-            .rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"}),
-            use_container_width=True,
-            hide_index=True,
-        )
+        df_h1 = df_filtrado.groupby("level1", as_index=False)["quantidade"].sum().rename(columns={
+            "level1": "Hierarquia 1", "quantidade": "Quantidade"
+        })
+        st.dataframe(df_h1, use_container_width=True, hide_index=True)
+    
+    # Tabela 2: Hierarquia 2
     with col_r2:
-        st.dataframe(
-            df_f.groupby("level2", as_index=False)["quantidade"]
-            .sum()
-            .rename(columns={"level2": "Hierarquia 2", "quantidade": "Quantidade"}),
-            use_container_width=True,
-            hide_index=True,
-        )
+        df_h2 = df_filtrado.groupby("level2", as_index=False)["quantidade"].sum().rename(columns={
+            "level2": "Hierarquia 2", "quantidade": "Quantidade"
+        })
+        st.dataframe(df_h2, use_container_width=True, hide_index=True)
+    
+    # Tabela 3: Tipo de Envio
     with col_r3:
-        st.dataframe(
-            df_f.groupby("Tipo de Envio", as_index=False)["quantidade"]
-            .sum()
-            .rename(columns={"quantidade": "Quantidade"}),
-            use_container_width=True,
-            hide_index=True,
-        )
+        df_tipo = df_filtrado.groupby("Tipo de Envio", as_index=False)["quantidade"].sum().rename(columns={
+            "Tipo de Envio": "Tipo de Envio", "quantidade": "Quantidade"
+        })
+        st.dataframe(df_tipo, use_container_width=True, hide_index=True)
 
-    # ―――― Geração de PDF (opcional) ――――――――――――――――――――――――――――――――――――――
-    def gerar_pdf(tabela_df, df_h1, df_h2, df_tipo):
+
+    def gerar_relatorio_pdf(tabela_df: pd.DataFrame, df_h1: pd.DataFrame, df_h2: pd.DataFrame, df_tipo: pd.DataFrame):
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36)
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
         styles = getSampleStyleSheet()
-        elems = [Paragraph("Relatório de Expedição e Logística", styles["Title"]), Spacer(1, 12)]
-
-        # Tabela principal
+        elementos = []
+    
+        try:
+            logo = Image("favicon.png", width=60, height=60)
+            elementos.append(logo)
+        except:
+            elementos.append(Paragraph("[Logo não encontrada: favicon.png]", styles["Normal"]))
+    
+        elementos.append(Spacer(1, 12))
+        elementos.append(Paragraph("Relatório de Expedição e Logística", styles["Title"]))
+        elementos.append(Spacer(1, 12))
+    
+        # === Tabela principal ===
+        elementos.append(Paragraph("", styles["Heading2"]))
         dados = [tabela_df.columns.tolist()] + tabela_df.values.tolist()
-        tab_princ = Table(dados, repeatRows=1)
-        tab_princ.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-                    ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 7),
-                ]
-            )
-        )
-        elems.append(tab_princ)
-        doc.build(elems)
-        return base64.b64encode(buffer.getvalue()).decode()
+        tabela_pdf = Table(dados, repeatRows=1)
+        tabela_pdf.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+        ]))
+        elementos.append(tabela_pdf)
+        elementos.append(Spacer(1, 20))
+        
+        from reportlab.platypus import KeepTogether
+        
+        def montar_tabela(df, titulo):
+            dados = [df.columns.tolist()] + df.values.tolist()
+            tab = Table(dados, repeatRows=1)
+            tab.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
+                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+            ]))
+            return [Paragraph(titulo, styles["Heading3"]), Spacer(1, 4), tab]
+    
+        # Montar cada célula com um "mini flowable" contendo título + tabela
+        col1 = montar_tabela(df_h1, "Hierarquia 1")
+        col2 = montar_tabela(df_h2, "Hierarquia 2")
+        col3 = montar_tabela(df_tipo, "Tipo de Envio")
+    
+        # Colocar as três colunas lado a lado
+        tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[160, 160, 160])
+        tabela_lado_a_lado.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP')
+        ]))
+    
+        elementos.append(Spacer(1, 12))
+        elementos.append(tabela_lado_a_lado)
+    
+        doc.build(elementos)
+    
+        pdf_base64 = base64.b64encode(buffer.getvalue()).decode()
+        href = f'<a href="data:application/pdf;base64,{pdf_base64}" download="relatorio_expedicao.pdf">📄 Baixar Relatório em PDF</a>'
+        return href
 
-    pdf64 = gerar_pdf(tabela, df_grp, None, None)
-    st.markdown(
-        f'<a href="data:application/pdf;base64,{pdf64}" download="relatorio_expedicao.pdf">📄 Baixar Relatório em PDF</a>',
-        unsafe_allow_html=True,
-    )
 
+    botao_pdf = gerar_relatorio_pdf(tabela, df_h1, df_h2, df_tipo)
+    st.markdown(botao_pdf, unsafe_allow_html=True)
 
 def mostrar_gestao_despesas():
     st.markdown(
