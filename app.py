@@ -1564,11 +1564,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     de_limite = pd.to_datetime(de_limite)
     ate_limite = pd.to_datetime(ate_limite)
     
-    df_datas = df[
-        (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
-        (df["data_limite"].notna()) &
-        (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)
-    ]
+    df_datas = df.copy()
     
     with col6:
         hierarquia1 = st.selectbox("Hierarquia 1:", ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist()))
