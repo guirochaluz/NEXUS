@@ -1567,6 +1567,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
 
     df = df.copy()
+    df["status"] = df["status"].apply(traduzir_status)
+
     
     # Normalizar datas para evitar erro de comparação
     df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.normalize()
@@ -1590,7 +1592,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         conta = st.selectbox("Conta:", ["Todos"] + sorted(contas_disponiveis))
     
     with st.container():
-        status_options = df_datas["status"].dropna().unique().tolist()
+        status_options = df["status"].dropna().unique().tolist()
         status_opcoes = ["Todos"] + sorted(status_options)
         index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
         status = st.selectbox("Status:", status_opcoes, index=index_padrao)
