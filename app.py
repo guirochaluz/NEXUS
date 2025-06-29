@@ -1510,12 +1510,15 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             return pd.NaT
         ts = pd.to_datetime(x, utc=True)            # garante Timestamp com tz=UTC
         return ts.tz_convert("America/Sao_Paulo").date()
-    
-    df["data_limite"] = (
-        pd.to_datetime(df["shipment_delivery_sla"], utc=True, errors="coerce")
-          .dt.tz_convert("America/Sao_Paulo")
-          .dt.date
-    )
+        
+    if "shipment_delivery_sla" in df.columns:
+        df["data_limite"] = (
+            pd.to_datetime(df["shipment_delivery_sla"], utc=True, errors="coerce")
+              .dt.tz_convert("America/Sao_Paulo")
+              .dt.date
+        )
+    else:
+        df["data_limite"] = pd.NaT  # preenche com data ausente
 
 
     data_min_venda = df["data_venda"].dropna().min()
