@@ -1513,7 +1513,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         return x.astimezone(pytz.timezone("America/Sao_Paulo")).date()
     
     df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
-    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.date
 
     data_min_venda = df["data_venda"].dropna().min()
     data_max_venda = df["data_venda"].dropna().max()
@@ -1591,11 +1590,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
         status = st.selectbox("Status:", status_opcoes, index=index_padrao)
     
-    # Normalizar datas para evitar erro de comparação
-    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.normalize()
-    de_limite = pd.to_datetime(de_limite)
-    ate_limite = pd.to_datetime(ate_limite)
-
 
     df_filtrado = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
