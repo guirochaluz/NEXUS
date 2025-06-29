@@ -1535,30 +1535,31 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro Rápido ===
     st.markdown("#### 📅 Datas e Busca Rápida")
     col1, col2, col3, col4, col5 = st.columns(5)
+    
     with col1:
         de_venda = st.date_input(
-            "Venda ⏲️ de:",
+            "Venda de:",
             value=data_min_venda,
             min_value=data_min_venda,
             max_value=data_max_venda
         )
     with col2:
         ate_venda = st.date_input(
-            "Venda ⏲️ até:",
+            "Venda até:",
             value=data_max_venda,
             min_value=data_min_venda,
             max_value=data_max_venda
         )
     with col3:
         de_limite = st.date_input(
-            "Expedição ⏲️ de:",
+            "Despacho Limite de:",
             value=data_min_limite,
             min_value=data_min_limite,
             max_value=data_max_limite
         )
     with col4:
         ate_limite = st.date_input(
-            "Expedição ⏲️ até:",
+            "Despacho Limite até:",
             value=data_max_limite,
             min_value=data_min_limite,
             max_value=data_max_limite
@@ -1573,33 +1574,40 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # === UNIFICADO 2: Seletores Principais ===
     st.markdown("#### ⚙️ Filtros Principais")
     col6, col7, col8, col9, col10, col11 = st.columns(6)
+    
     with col6:
-        contas = df_datas["nickname"].dropna().unique().tolist()
+        contas = df["nickname"].dropna().unique().tolist()
         conta = st.selectbox("Conta", ["Todos"] + sorted(contas))
+    
     with col7:
         status_opts = df["status"].dropna().unique().tolist()
-        status = st.selectbox("Status", ["Todos"] + sorted(status_opts),
-                              index=status_opts.index("Pago") + 1 if "Pago" in status_opts else 0)
+        status_ops = ["Todos"] + sorted(status_opts)
+        index_padrao = status_ops.index("Pago") if "Pago" in status_opts else 0
+        status = st.selectbox("Status", status_ops, index=index_padrao)
+    
     with col8:
         status_data_envio = st.selectbox(
             "Status Envio",
             ["Todos", "Com Data de Envio", "Sem Data de Envio"],
             index=1
         )
+    
     with col9:
         hierarquia1 = st.selectbox(
             "Hierarquia 1",
-            ["Todos"] + sorted(df_datas["level1"].dropna().unique().tolist())
+            ["Todos"] + sorted(df["level1"].dropna().unique().tolist())
         )
+    
     with col10:
         hierarquia2 = st.selectbox(
             "Hierarquia 2",
-            ["Todos"] + sorted(df_datas["level2"].dropna().unique().tolist())
+            ["Todos"] + sorted(df["level2"].dropna().unique().tolist())
         )
+    
     with col11:
         tipo_envio = st.selectbox(
             "Tipo de Envio",
-            ["Todos"] + sorted(df_datas["Tipo de Envio"].dropna().unique().tolist())
+            ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
         )
 
 
