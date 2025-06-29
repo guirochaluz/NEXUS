@@ -1768,8 +1768,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     ):
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=A4,
-                                leftMargin=20,rightMargin=20,
-                                topMargin=20,bottomMargin=20)
+                                leftMargin=20, rightMargin=20,
+                                topMargin=20, bottomMargin=20)
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             name="CenteredTitle",
@@ -1786,15 +1786,15 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         except:
             logo = Paragraph("", normal)
         titulo = Paragraph("Relatório de Expedição e Logística", title_style)
-        header = Table([[logo, titulo]], colWidths=[60,460])
+        header = Table([[logo, titulo]], colWidths=[60, 460])
         header.setStyle(TableStyle([
-            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-            ("ALIGN",(1,0),(1,0),"CENTER"),
-            ("LEFTPADDING",(0,0),(-1,-1),0),
-            ("RIGHTPADDING",(0,0),(-1,-1),0),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN",  (1, 0), (1, 0), "CENTER"),
+            ("LEFTPADDING",  (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 0),
         ]))
         elems.append(header)
-        elems.append(Spacer(1,8))
+        elems.append(Spacer(1, 8))
 
         # períodos
         txt = (
@@ -1802,20 +1802,20 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             f"<b>Expedição:</b> {periodo_expedicao[0].strftime('%d/%m/%Y')} ↔ {periodo_expedicao[1].strftime('%d/%m/%Y')}"
         )
         elems.append(Paragraph(txt, normal))
-        elems.append(Spacer(1,12))
+        elems.append(Spacer(1, 12))
 
         # tabela principal
         main = tabela_df.copy()
         main["QUANTIDADE"] = main["QUANTIDADE"].astype(int)
-        data = [main.columns.tolist()]+ main.values.tolist()
+        data = [main.columns.tolist()] + main.values.tolist()
         tab = Table(data, repeatRows=1, splitByRow=1)
         tab.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
-            ("TEXTCOLOR",(0,0),(-1,0),colors.black),
-            ("ALIGN",(0,0),(-1,-1),"CENTER"),
-            ("FONTSIZE",(0,0),(-1,-1),8),
-            ("BOTTOMPADDING",(0,0),(-1,0),6),
-            ("GRID",(0,0),(-1,-1),0.25,colors.grey),
+            ("BACKGROUND",   (0, 0), (-1, 0), colors.lightgrey),
+            ("TEXTCOLOR",    (0, 0), (-1, 0), colors.black),
+            ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
+            ("FONTSIZE",     (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING",(0, 0), (-1, 0), 6),
+            ("GRID",         (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
         elems.append(tab)
         elems.append(PageBreak())
@@ -1824,20 +1824,33 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         def resume(df, title):
             d = df.copy()
             d["Quantidade"] = d["Quantidade"].astype(int)
-            t = Table([d.columns.tolist()]+d.values.tolist(), repeatRows=1)
+            t = Table([d.columns.tolist()] + d.values.tolist(), repeatRows=1)
             t.setStyle(TableStyle([
-                ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
-                ("ALIGN",(0,0),(-1,-1),"CENTER"),
-                ("FONTSIZE",(0,0),(-1,-1),8),
-                ("GRID",(0,0),(-1,-1),0.25,colors.grey),
+                ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
+                ("ALIGN",      (0,0), (-1,-1), "CENTER"),
+                ("FONTSIZE",   (0,0), (-1,-1), 8),
+                ("GRID",       (0,0), (-1,-1), 0.25, colors.grey),
             ]))
-            return [Paragraph(title, styles["Heading3"]), Spacer(1,4), t]
+            return [Paragraph(title, styles["Heading3"]), Spacer(1, 4), t]
 
         e1 = resume(df_h1, "Hierarquia 1")
         e2 = resume(df_h2, "Hierarquia 2")
         e3 = resume(df_tipo, "Tipo de Envio")
-        sum_table = Table([[e1,e2,e3]], colWidths=[180,180,180])
-        sum_table.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP")]))
+
+        # --- Ajuste dinâmico de largura para não sobrepor ---
+        page_w, _ = A4
+        usable_w = page_w - doc.leftMargin - doc.rightMargin
+        col_w = usable_w / 3
+
+        sum_table = Table(
+            [[e1, e2, e3]],
+            colWidths=[col_w, col_w, col_w]
+        )
+        sum_table.setStyle(TableStyle([
+            ("VALIGN",      (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",(0, 0), (-1, -1), 4),
+        ]))
         elems.append(sum_table)
 
         doc.build(elems)
@@ -1865,14 +1878,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
         return href_pdf + href_xlsx
 
-    # chamada única dos downloads
-    periodo_venda     = (de_venda, ate_venda)
-    periodo_expedicao = (de_limite, ate_limite)
-    botoes = gerar_relatorio_pdf(
-        tabela, df_h1, df_h2, df_tipo,
-        periodo_venda, periodo_expedicao
-    )
-    st.markdown(botoes, unsafe_allow_html=True)
 
 def mostrar_gestao_despesas():
     st.markdown(
