@@ -1878,6 +1878,14 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
         return href_pdf + href_xlsx
 
+    # chamada única dos downloads
+    periodo_venda     = (de_venda, ate_venda)
+    periodo_expedicao = (de_limite, ate_limite)
+    botoes = gerar_relatorio_pdf(
+        tabela, df_h1, df_h2, df_tipo,
+        periodo_venda, periodo_expedicao
+    )
+    st.markdown(botoes, unsafe_allow_html=True)
 
 def mostrar_gestao_despesas():
     st.markdown(
