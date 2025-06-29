@@ -1585,14 +1585,18 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         status_opcoes = ["Todos"] + sorted(status_options)
         index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
         status = st.selectbox("Status:", status_opcoes, index=index_padrao)
+        status_data_envio = st.selectbox(
+            "Status da Data de Envio:",
+            ["Todos", "Com Data de Envio", "Sem Data de Envio"],
+            index=1      # ← deixa “Com Data de Envio” como padrão
+        )
+
     
 
     df_filtrado = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
-        (
-            df["data_limite"].isna() |
-            ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite))
-        )
+        (df["data_limite"].isna() |                        # permite NaT
+         ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)))
     ]
     
     if status != "Todos":
@@ -1605,6 +1609,12 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
     if conta != "Todos":
         df_filtrado = df_filtrado[df_filtrado["nickname"] == conta]
+    # ➜ Ajuste conforme o novo filtro de Data de Envio
+    if status_data_envio == "Com Data de Envio":
+        df_filtrado = df_filtrado[df_filtrado["data_limite"].notna()]
+    elif status_data_envio == "Sem Data de Envio":
+        df_filtrado = df_filtrado[df_filtrado["data_limite"].isna()]
+    # se "Todos", não faz nada
 
 
 
