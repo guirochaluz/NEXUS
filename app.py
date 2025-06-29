@@ -1455,12 +1455,17 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     import plotly.express as px
     import pandas as pd
     from io import BytesIO
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.lib import colors
     import base64
+    from datetime import datetime
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
+    )
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib import colors
     import pytz
+    from sales import traduzir_status
 
     # Estilo
     st.markdown(  
@@ -1757,77 +1762,117 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         st.dataframe(df_tipo, use_container_width=True, hide_index=True)
 
 
-    def gerar_relatorio_pdf(tabela_df: pd.DataFrame, df_h1: pd.DataFrame, df_h2: pd.DataFrame, df_tipo: pd.DataFrame):
+    def gerar_relatorio_pdf(
+        tabela_df, df_h1, df_h2, df_tipo,
+        periodo_venda, periodo_expedicao
+    ):
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+                                leftMargin=20,rightMargin=20,
+                                topMargin=20,bottomMargin=20)
         styles = getSampleStyleSheet()
-        elementos = []
-    
+        title_style = ParagraphStyle(
+            name="CenteredTitle",
+            parent=styles["Title"],
+            alignment=TA_CENTER,
+            fontSize=16
+        )
+        normal = styles["Normal"]
+        elems = []
+
+        # cabeçalho
         try:
-            logo = Image("favicon.png", width=60, height=60)
-            elementos.append(logo)
+            logo = Image("favicon.png", width=50, height=50)
         except:
-            elementos.append(Paragraph("[Logo não encontrada: favicon.png]", styles["Normal"]))
-    
-        elementos.append(Spacer(1, 12))
-        elementos.append(Paragraph("Relatório de Expedição e Logística", styles["Title"]))
-        elementos.append(Spacer(1, 12))
-    
-        # === Tabela principal ===
-        elementos.append(Paragraph("", styles["Heading2"]))
-        dados = [tabela_df.columns.tolist()] + tabela_df.values.tolist()
-        tabela_pdf = Table(dados, repeatRows=1)
-        tabela_pdf.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, -1), 7),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+            logo = Paragraph("", normal)
+        titulo = Paragraph("Relatório de Expedição e Logística", title_style)
+        header = Table([[logo, titulo]], colWidths=[60,460])
+        header.setStyle(TableStyle([
+            ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+            ("ALIGN",(1,0),(1,0),"CENTER"),
+            ("LEFTPADDING",(0,0),(-1,-1),0),
+            ("RIGHTPADDING",(0,0),(-1,-1),0),
         ]))
-        elementos.append(tabela_pdf)
-        elementos.append(Spacer(1, 20))
-        
-        from reportlab.platypus import KeepTogether
-        
-        def montar_tabela(df, titulo):
-            dados = [df.columns.tolist()] + df.values.tolist()
-            tab = Table(dados, repeatRows=1)
-            tab.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 7),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 5),
-                ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
+        elems.append(header)
+        elems.append(Spacer(1,8))
+
+        # períodos
+        txt = (
+            f"<b>Venda:</b> {periodo_venda[0].strftime('%d/%m/%Y')} ↔ {periodo_venda[1].strftime('%d/%m/%Y')}<br/>"
+            f"<b>Expedição:</b> {periodo_expedicao[0].strftime('%d/%m/%Y')} ↔ {periodo_expedicao[1].strftime('%d/%m/%Y')}"
+        )
+        elems.append(Paragraph(txt, normal))
+        elems.append(Spacer(1,12))
+
+        # tabela principal
+        main = tabela_df.copy()
+        main["QUANTIDADE"] = main["QUANTIDADE"].astype(int)
+        data = [main.columns.tolist()]+ main.values.tolist()
+        tab = Table(data, repeatRows=1, splitByRow=1)
+        tab.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
+            ("TEXTCOLOR",(0,0),(-1,0),colors.black),
+            ("ALIGN",(0,0),(-1,-1),"CENTER"),
+            ("FONTSIZE",(0,0),(-1,-1),8),
+            ("BOTTOMPADDING",(0,0),(-1,0),6),
+            ("GRID",(0,0),(-1,-1),0.25,colors.grey),
+        ]))
+        elems.append(tab)
+        elems.append(PageBreak())
+
+        # resumos
+        def resume(df, title):
+            d = df.copy()
+            d["Quantidade"] = d["Quantidade"].astype(int)
+            t = Table([d.columns.tolist()]+d.values.tolist(), repeatRows=1)
+            t.setStyle(TableStyle([
+                ("BACKGROUND",(0,0),(-1,0),colors.lightgrey),
+                ("ALIGN",(0,0),(-1,-1),"CENTER"),
+                ("FONTSIZE",(0,0),(-1,-1),8),
+                ("GRID",(0,0),(-1,-1),0.25,colors.grey),
             ]))
-            return [Paragraph(titulo, styles["Heading3"]), Spacer(1, 4), tab]
-    
-        # Montar cada célula com um "mini flowable" contendo título + tabela
-        col1 = montar_tabela(df_h1, "Hierarquia 1")
-        col2 = montar_tabela(df_h2, "Hierarquia 2")
-        col3 = montar_tabela(df_tipo, "Tipo de Envio")
-    
-        # Colocar as três colunas lado a lado
-        tabela_lado_a_lado = Table([[col1, col2, col3]], colWidths=[160, 160, 160])
-        tabela_lado_a_lado.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP')
-        ]))
-    
-        elementos.append(Spacer(1, 12))
-        elementos.append(tabela_lado_a_lado)
-    
-        doc.build(elementos)
-    
-        pdf_base64 = base64.b64encode(buffer.getvalue()).decode()
-        href = f'<a href="data:application/pdf;base64,{pdf_base64}" download="relatorio_expedicao.pdf">📄 Baixar Relatório em PDF</a>'
-        return href
+            return [Paragraph(title, styles["Heading3"]), Spacer(1,4), t]
 
+        e1 = resume(df_h1, "Hierarquia 1")
+        e2 = resume(df_h2, "Hierarquia 2")
+        e3 = resume(df_tipo, "Tipo de Envio")
+        sum_table = Table([[e1,e2,e3]], colWidths=[180,180,180])
+        sum_table.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"TOP")]))
+        elems.append(sum_table)
 
-    botao_pdf = gerar_relatorio_pdf(tabela, df_h1, df_h2, df_tipo)
-    st.markdown(botao_pdf, unsafe_allow_html=True)
+        doc.build(elems)
+
+        # PDF link
+        pdf_b64 = base64.b64encode(buffer.getvalue()).decode()
+        href_pdf = (
+            f'<a style="margin-right:20px;" '
+            f'href="data:application/pdf;base64,{pdf_b64}" '
+            f'download="relatorio_expedicao.pdf">📄 Baixar PDF</a>'
+        )
+
+        # XLSX link
+        xlsx_buf = BytesIO()
+        with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as w:
+            main.to_excel(w, index=False, sheet_name="Dados")
+            df_h1.to_excel(w, index=False, sheet_name="Hierarquia_1")
+            df_h2.to_excel(w, index=False, sheet_name="Hierarquia_2")
+            df_tipo.to_excel(w, index=False, sheet_name="Tipo_Envio")
+        xlsx_b64 = base64.b64encode(xlsx_buf.getvalue()).decode()
+        href_xlsx = (
+            f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{xlsx_b64}" '
+            f'download="relatorio_expedicao.xlsx">⬇️ Baixar Excel</a>'
+        )
+
+        return href_pdf + href_xlsx
+
+    # chamada única dos downloads
+    periodo_venda     = (de_venda, ate_venda)
+    periodo_expedicao = (de_limite, ate_limite)
+    botoes = gerar_relatorio_pdf(
+        tabela, df_h1, df_h2, df_tipo,
+        periodo_venda, periodo_expedicao
+    )
+    st.markdown(botoes, unsafe_allow_html=True)
 
 def mostrar_gestao_despesas():
     st.markdown(
