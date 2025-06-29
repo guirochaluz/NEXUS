@@ -1504,15 +1504,19 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     df["data_venda"] = pd.to_datetime(df["date_adjusted"]).dt.date
     
     import pytz  # Adicione no topo do arquivo se ainda não tiver
-    
+        
     def _to_sp_date(x):
         if pd.isna(x):
             return pd.NaT
-        if x.tzinfo is None:
-            x = x.tz_localize("UTC")
-        return x.astimezone(pytz.timezone("America/Sao_Paulo")).date()
+        ts = pd.to_datetime(x, utc=True)            # garante Timestamp com tz=UTC
+        return ts.tz_convert("America/Sao_Paulo").date()
     
-    df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
+    df["data_limite"] = (
+        pd.to_datetime(df["shipment_delivery_sla"], utc=True, errors="coerce")
+          .dt.tz_convert("America/Sao_Paulo")
+          .dt.date
+    )
+
 
     data_min_venda = df["data_venda"].dropna().min()
     data_max_venda = df["data_venda"].dropna().max()
@@ -1625,12 +1629,9 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     df_filtrado = df_filtrado.copy()
     df_filtrado["Canal de Venda"] = "MERCADO LIVRE"
     
-    if "shipment_delivery_sla" in df_filtrado.columns:
-        df_filtrado["Data Limite do Envio"] = df_filtrado["shipment_delivery_sla"].apply(_to_sp_date).apply(
-            lambda x: x.strftime("%d/%m/%Y") if not pd.isna(x) else "—"
-        )
-    else:
-        df_filtrado["Data Limite do Envio"] = "—"
+    df_filtrado["Data Limite do Envio"] = df_filtrado["data_limite"].apply(
+        lambda d: d.strftime("%d/%m/%Y") if pd.notna(d) else "—"
+    )
 
 
     tabela = df_filtrado[[
