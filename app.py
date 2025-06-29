@@ -1589,8 +1589,10 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     df_filtrado = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
-        (df["data_limite"].notna()) &
-        (df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)
+        (
+            df["data_limite"].isna() |
+            ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite))
+        )
     ]
     
     if status != "Todos":
