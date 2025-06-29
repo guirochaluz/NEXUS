@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 # 3) Depois de set_page_config, importe tudo o mais que precisar
-from sales import sync_all_accounts, get_full_sales, revisar_banco_de_dados, get_incremental_sales
+from sales import sync_all_accounts, get_full_sales, revisar_banco_de_dados, get_incremental_sales, traduzir_status
 from streamlit_cookies_manager import EncryptedCookieManager
 import pandas as pd
 import plotly.express as px
@@ -48,6 +48,7 @@ import io
 from datetime import datetime, timedelta
 from utils import engine, DATA_INICIO, buscar_ml_fee
 import time
+
 
 
 
