@@ -624,7 +624,7 @@ def mostrar_dashboard():
     
     # Define bucket de datas
     if de == ate:
-        df_plot["date_bucket"] = df_plot["date_adjusted"].dt.floor("H")
+        df_plot["date_bucket"] = df_plot["date_adjusted"].dt.floor("h")
         periodo_label = "Hora"
     else:
         if tipo_visualizacao == "Diário":
@@ -1490,7 +1490,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     if "shipment_delivery_sla" in df.columns and not pd.api.types.is_datetime64_any_dtype(df["shipment_delivery_sla"]):
         df["shipment_delivery_sla"] = pd.to_datetime(df["shipment_delivery_sla"], errors="coerce")
 
-
     if "quantity" in df.columns and "quantity_sku" in df.columns:
         df["quantidade"] = df["quantity"] * df["quantity_sku"]
     else:
@@ -1513,14 +1512,15 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         ts = pd.to_datetime(x, utc=True)            # garante Timestamp com tz=UTC
         return ts.tz_convert("America/Sao_Paulo").date()
         
+    # Garante conversão segura e exibe data apenas se houver valor
     if "shipment_delivery_sla" in df.columns:
-        df["data_limite"] = (
-            pd.to_datetime(df["shipment_delivery_sla"], utc=True, errors="coerce")
-              .dt.tz_convert("America/Sao_Paulo")
-              .dt.date
+        df["shipment_delivery_sla"] = pd.to_datetime(df["shipment_delivery_sla"], utc=True, errors="coerce")
+        df["data_limite"] = df["shipment_delivery_sla"].apply(
+            lambda x: x.tz_convert("America/Sao_Paulo").date() if pd.notnull(x) else pd.NaT
         )
     else:
-        df["data_limite"] = pd.NaT  # preenche com data ausente
+        df["data_limite"] = pd.NaT
+
 
 
     data_min_venda = df["data_venda"].dropna().min()
