@@ -1513,6 +1513,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         return x.astimezone(pytz.timezone("America/Sao_Paulo")).date()
     
     df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
+    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.date
+
 
 
 
