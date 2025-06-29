@@ -1575,32 +1575,32 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             "Venda de:",
             value=de_venda_default,
             min_value=data_min_venda,
-            max_value=data_max_venda
+            max_value=ate_venda_default
         )
     with col2:
         ate_venda = st.date_input(
             "Venda até:",
             value=ate_venda_default,
             min_value=data_min_venda,
-            max_value=data_max_venda
+            max_value=ate_venda_default
         )
     with col3:
         de_limite = st.date_input(
             "Despacho Limite de:",
             value=de_limite_default,
             min_value=data_min_limite,
-            max_value=data_max_limite
+            max_value=ate_limite_default
         )
     with col4:
         ate_limite = st.date_input(
             "Despacho Limite até:",
             value=ate_limite_default,
             min_value=data_min_limite,
-            max_value=data_max_limite
+            max_value=ate_limite_default
         )
-
     
     # Traduz todos os status antes de gerar os selects
+    from sales import traduzir_status
     df["status"] = df["status"].map(traduzir_status)
     
     # === UNIFICADO 2: Seletores Principais ===
