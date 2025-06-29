@@ -1532,58 +1532,62 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     if pd.isna(data_max_limite) or data_max_limite < data_min_limite:
         data_max_limite = data_min_limite + pd.Timedelta(days=7)
 
-    # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro de Período ===
-    st.markdown("#### 📅 Datas e Filtro de Período")
+    # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro de Período (só Expedição) ===
     
-    # 1) Dropdown de período
+    # 1) Dropdown de período — vai filtrar apenas expedição
     periodo = st.selectbox(
-        "Filtrar Período",
-        ["Hoje", "Amanhã", "Ontem", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias", "Este Ano"],
+        "Filtrar Período de Expedição",
+        ["Hoje", "Amanhã", "Ontem", "Próximos 7 Dias", "Este Mês", "Próximos 30 Dias", "Este Ano"],
         index=0,
-        key="filtro_periodo"
+        key="filtro_expedicao_periodo"
     )
     
-    # 2) Mapeamento para defaults
+    # 2) Mapeamento só para despacho
     hoje = pd.Timestamp.now().date()
     match periodo:
         case "Hoje":
-            de_venda_default = ate_venda_default = min(hoje, data_max_venda)
+            de_limite_default = ate_limite_default = hoje
         case "Amanhã":
-            de_venda_default = ate_venda_default = hoje + pd.Timedelta(days=1)
+            de_limite_default = ate_limite_default = hoje + pd.Timedelta(days=1)
         case "Ontem":
-            de_venda_default = ate_venda_default = hoje - pd.Timedelta(days=1)
-        case "Últimos 7 Dias":
-            de_venda_default, ate_venda_default = hoje - pd.Timedelta(days=6), hoje
+            de_limite_default = ate_limite_default = hoje - pd.Timedelta(days=1)
+        case "Próximos 7 Dias":
+            de_limite_default = hoje
+            ate_limite_default = hoje + pd.Timedelta(days=6)
+        case "Próximos 30 Dias":
+            de_limite_default = hoje
+            ate_limite_default = hoje + pd.Timedelta(days=29)
         case "Este Mês":
-            de_venda_default, ate_venda_default = hoje.replace(day=1), hoje
-        case "Últimos 30 Dias":
-            de_venda_default, ate_venda_default = hoje - pd.Timedelta(days=29), hoje
+            de_limite_default = hoje.replace(day=1)
+            ate_limite_default = hoje
         case "Este Ano":
-            de_venda_default, ate_venda_default = hoje.replace(month=1, day=1), hoje
+            de_limite_default = hoje.replace(month=1, day=1)
+            ate_limite_default = hoje
         case _:
-            de_venda_default, ate_venda_default = data_min_venda, data_max_venda
+            de_limite_default = data_min_limite
+            ate_limite_default = data_max_limite
+
     
-    # Usamos os mesmos defaults para despacho
-    de_limite_default = de_venda_default
-    ate_limite_default = ate_venda_default
-    
-    # 3) Inputs de data já pré-preenchidos
+    # 3) Inputs de data:
     col1, col2, col3, col4 = st.columns(4)
     
+    # — Data de Venda continua com limites da base, sem dropdown
     with col1:
         de_venda = st.date_input(
             "Venda de:",
-            value=de_venda_default,
+            value=data_min_venda,
             min_value=data_min_venda,
-            max_value=ate_venda_default
+            max_value=data_max_venda
         )
     with col2:
         ate_venda = st.date_input(
             "Venda até:",
-            value=ate_venda_default,
+            value=data_max_venda,
             min_value=data_min_venda,
-            max_value=ate_venda_default
+            max_value=data_max_venda
         )
+    
+    # — Despacho Limite agora usa o filtro rápido
     with col3:
         de_limite = st.date_input(
             "Despacho Limite de:",
@@ -1598,13 +1602,13 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             min_value=data_min_limite,
             max_value=ate_limite_default
         )
+
     
     # Traduz todos os status antes de gerar os selects
     from sales import traduzir_status
     df["status"] = df["status"].map(traduzir_status)
     
     # === UNIFICADO 2: Seletores Principais ===
-    st.markdown("#### ⚙️ Filtros Principais")
     col6, col7, col8, col9, col10, col11 = st.columns(6)
     
     with col6:
