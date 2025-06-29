@@ -1515,19 +1515,18 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     df["data_limite"] = df["shipment_delivery_sla"].apply(_to_sp_date) if "shipment_delivery_sla" in df.columns else pd.NaT
     df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.date
 
-
-
-
     data_min_venda = df["data_venda"].dropna().min()
     data_max_venda = df["data_venda"].dropna().max()
 
     data_min_limite = df["data_limite"].dropna().min()
+    data_max_limite = df["data_limite"].dropna().max()
+    
+    # Garantir valores válidos
     if pd.isna(data_min_limite):
         data_min_limite = hoje
-    
-    data_max_limite = df["data_limite"].dropna().max()
-    if pd.isna(data_max_limite):
-        data_max_limite = hoje
+    if pd.isna(data_max_limite) or data_max_limite < data_min_limite:
+        data_max_limite = data_min_limite + pd.Timedelta(days=7)
+
 
     # === LINHA 1: Venda ===
     st.markdown("#### 🎯 Filtros por Venda")
@@ -1543,13 +1542,23 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     col4, col5, col6, col7 = st.columns(4)
     
     with col4:
-        de_limite = st.date_input("Data Limite (de):", value=data_min_limite, min_value=data_min_limite, max_value=data_max_limite)
+        de_limite = st.date_input(
+            "Data Limite (de):",
+            value=data_min_limite,
+            min_value=data_min_limite,
+            max_value=data_max_limite
+        )
+    
     with col5:
-        ate_limite = st.date_input("Data Limite (até):", value=data_max_limite, min_value=data_min_limite, max_value=data_max_limite)
+        ate_limite = st.date_input(
+            "Data Limite (até):",
+            value=data_max_limite,
+            min_value=data_min_limite,
+            max_value=data_max_limite
+        )
 
 
     df = df.copy()
-    df["data_limite"] = pd.to_datetime(df["data_limite"]).dt.date
     
     # Normalizar datas para evitar erro de comparação
     df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.normalize()
@@ -1586,6 +1595,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.normalize()
     de_limite = pd.to_datetime(de_limite)
     ate_limite = pd.to_datetime(ate_limite)
+
 
     df_filtrado = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
