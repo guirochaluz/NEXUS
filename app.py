@@ -1504,11 +1504,18 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # ―――― Datas mín/max ―――――――――――――――――――――――――――――――――――――――――――――――――
     hoje = pd.Timestamp.now().date()
     data_min_v, data_max_v = df["data_venda"].min(), df["data_venda"].max()
-    data_min_l, data_max_l = df["data_limite"].min(), df["data_limite"].max()
-    if pd.isna(data_min_l):
+
+    # Força conversão da data_limite para datetime.date (descarta inválidos)
+    df["data_limite"] = pd.to_datetime(df["data_limite"], errors="coerce").dt.date
+    datas_validas = df["data_limite"].dropna()
+
+    if not datas_validas.empty:
+        data_min_l = datas_validas.min()
+        data_max_l = datas_validas.max()
+    else:
         data_min_l = hoje
-    if pd.isna(data_max_l) or data_max_l < data_min_l:
-        data_max_l = data_min_l + pd.Timedelta(days=7)
+        data_max_l = hoje + pd.Timedelta(days=7)
+
 
     # ―――― FILTROS ─ 4 linhas ――――――――――――――――――――――――――――――――――――――――――――――
     # LINHA 1 · Período da VENDA
