@@ -1532,44 +1532,76 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     if pd.isna(data_max_limite) or data_max_limite < data_min_limite:
         data_max_limite = data_min_limite + pd.Timedelta(days=7)
 
-    # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro Rápido ===
-    st.markdown("#### 📅 Datas e Busca Rápida")
-    col1, col2, col3, col4, col5 = st.columns(5)
+    # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro de Período ===
+    st.markdown("#### 📅 Datas e Filtro de Período")
+    
+    # 1) Dropdown de período
+    periodo = st.selectbox(
+        "Filtrar Período",
+        ["Hoje", "Amanhã", "Ontem", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias", "Este Ano"],
+        index=0,
+        key="filtro_periodo"
+    )
+    
+    # 2) Mapeamento para defaults
+    hoje = pd.Timestamp.now().date()
+    match periodo:
+        case "Hoje":
+            de_venda_default = ate_venda_default = min(hoje, data_max_venda)
+        case "Amanhã":
+            de_venda_default = ate_venda_default = hoje + pd.Timedelta(days=1)
+        case "Ontem":
+            de_venda_default = ate_venda_default = hoje - pd.Timedelta(days=1)
+        case "Últimos 7 Dias":
+            de_venda_default, ate_venda_default = hoje - pd.Timedelta(days=6), hoje
+        case "Este Mês":
+            de_venda_default, ate_venda_default = hoje.replace(day=1), hoje
+        case "Últimos 30 Dias":
+            de_venda_default, ate_venda_default = hoje - pd.Timedelta(days=29), hoje
+        case "Este Ano":
+            de_venda_default, ate_venda_default = hoje.replace(month=1, day=1), hoje
+        case _:
+            de_venda_default, ate_venda_default = data_min_venda, data_max_venda
+    
+    # Usamos os mesmos defaults para despacho
+    de_limite_default = de_venda_default
+    ate_limite_default = ate_venda_default
+    
+    # 3) Inputs de data já pré-preenchidos
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         de_venda = st.date_input(
             "Venda de:",
-            value=data_min_venda,
+            value=de_venda_default,
             min_value=data_min_venda,
             max_value=data_max_venda
         )
     with col2:
         ate_venda = st.date_input(
             "Venda até:",
-            value=data_max_venda,
+            value=ate_venda_default,
             min_value=data_min_venda,
             max_value=data_max_venda
         )
     with col3:
         de_limite = st.date_input(
             "Despacho Limite de:",
-            value=data_min_limite,
+            value=de_limite_default,
             min_value=data_min_limite,
             max_value=data_max_limite
         )
     with col4:
         ate_limite = st.date_input(
             "Despacho Limite até:",
-            value=data_max_limite,
+            value=ate_limite_default,
             min_value=data_min_limite,
             max_value=data_max_limite
         )
-    with col5:
-        filtro_geral = st.text_input(
-            "🔍 Filtro Rápido",
-            placeholder="…",
-            key="filtro_geral"
-        )
+
+    
+    # Traduz todos os status antes de gerar os selects
+    df["status"] = df["status"].map(traduzir_status)
     
     # === UNIFICADO 2: Seletores Principais ===
     st.markdown("#### ⚙️ Filtros Principais")
@@ -1580,10 +1612,10 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         conta = st.selectbox("Conta", ["Todos"] + sorted(contas))
     
     with col7:
-        status_opts = df["status"].dropna().unique().tolist()
-        status_ops = ["Todos"] + sorted(status_opts)
-        index_padrao = status_ops.index("Pago") if "Pago" in status_opts else 0
-        status = st.selectbox("Status", status_ops, index=index_padrao)
+        status_traduzido = sorted(df["status"].dropna().unique().tolist())
+        status_ops      = ["Todos"] + status_traduzido
+        index_padrao    = status_ops.index("Pago") if "Pago" in status_ops else 0
+        status          = st.selectbox("Status", status_ops, index=index_padrao)
     
     with col8:
         status_data_envio = st.selectbox(
@@ -1609,7 +1641,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             "Tipo de Envio",
             ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
         )
-
 
     # === Aplicar filtros no DataFrame ===
     df_filtrado = df[
