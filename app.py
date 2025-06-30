@@ -1813,7 +1813,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             ("BACKGROUND",   (0, 0), (-1, 0), colors.lightgrey),
             ("TEXTCOLOR",    (0, 0), (-1, 0), colors.black),
             ("ALIGN",        (0, 0), (-1, -1), "CENTER"),
-            ("FONTSIZE",     (0, 0), (-1, -1), 8),
+            ("FONTSIZE",     (0, 0), (-1, -1), 6),
             ("BOTTOMPADDING",(0, 0), (-1, 0), 6),
             ("GRID",         (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
@@ -1828,7 +1828,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             t.setStyle(TableStyle([
                 ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
                 ("ALIGN",      (0,0), (-1,-1), "CENTER"),
-                ("FONTSIZE",   (0,0), (-1,-1), 8),
+                ("FONTSIZE",   (0,0), (-1,-1), 6),
                 ("GRID",       (0,0), (-1,-1), 0.25, colors.grey),
             ]))
             return [Paragraph(title, styles["Heading3"]), Spacer(1, 4), t]
