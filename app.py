@@ -1627,6 +1627,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         (df["data_limite"].isna() |
          ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)))
     ]
+
+    df_filtrado = df.copy()
     
     # --- Linha 3: Conta, Status, Status Envio, Tipo de Envio ---
     col6, col7, col8, col11 = st.columns(4)
@@ -1648,8 +1650,25 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             index=1
         )
     
+    with col11:
+        tipo_envio = st.selectbox(
+            "Tipo de Envio",
+            ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
+        )
+
+    # --- Aplicar filtros restantes ---
+
+    if conta != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["nickname"] == conta]
+    if status != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["status"] == status]
+    if status_data_envio == "Com Data de Envio":
+        df_filtrado = df_filtrado[df_filtrado["data_limite"].notna()]
+    elif status_data_envio == "Sem Data de Envio":
+        df_filtrado = df_filtrado[df_filtrado["data_limite"].isna()]
     if tipo_envio != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
+    
     
     # Aqui entra o bloco com os filtros de hierarquia
     with st.expander("🔍 Filtros Avançados por Hierarquia", expanded=False):
@@ -1674,25 +1693,9 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
                 level2_selecionados.append(op)
         if level2_selecionados:
             df_filtrado = df_filtrado[df_filtrado["level2"].isin(level2_selecionados)]
-    
+
+
     # Verificação final
-    if df_filtrado.empty:
-        st.warning("Nenhum dado encontrado com os filtros aplicados.")
-        return
-    
-    # --- Aplicar filtros restantes ---
-    df_filtrado = df.copy()
-    if conta != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["nickname"] == conta]
-    if status != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["status"] == status]
-    if status_data_envio == "Com Data de Envio":
-        df_filtrado = df_filtrado[df_filtrado["data_limite"].notna()]
-    elif status_data_envio == "Sem Data de Envio":
-        df_filtrado = df_filtrado[df_filtrado["data_limite"].isna()]
-    if tipo_envio != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
-    
     if df_filtrado.empty:
         st.warning("Nenhum dado encontrado com os filtros aplicados.")
         return
