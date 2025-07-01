@@ -1698,7 +1698,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     if tipo_envio != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
     
-    if df_filtrado.empty():
+    if df_filtrado.empty:
         st.warning("Nenhum dado encontrado com os filtros aplicados.")
         return
 
