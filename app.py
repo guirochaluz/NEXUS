@@ -1539,92 +1539,118 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro de Período (só Expedição) ===
     
-    # 1) Dropdown de período — vai filtrar apenas expedição
-    periodo = st.selectbox(
-        "Filtrar Período de Expedição",
-        ["Hoje", "Amanhã", "Ontem", "Próximos 7 Dias", "Este Mês", "Próximos 30 Dias", "Este Ano"],
-        index=0,
-        key="filtro_expedicao_periodo"
-    )
+    # --- Período com opção personalizada ---
+    col_v1, col_v2, col_v3, col_v4 = st.columns(4)
     
-    # 2) Mapeamento só para despacho
+    with col_v1:
+        periodo = st.selectbox(
+            "Filtrar Período de Expedição",
+            [
+                "Período Personalizado",
+                "Hoje",
+                "Amanhã",
+                "Ontem",
+                "Próximos 7 Dias",
+                "Este Mês",
+                "Próximos 30 Dias",
+                "Este Ano"
+            ],
+            index=1,
+            key="filtro_expedicao_periodo"
+        )
+    
+    # Define intervalo padrão com base no filtro
     hoje = pd.Timestamp.now().date()
-    match periodo:
-        case "Hoje":
-            de_limite_default = ate_limite_default = hoje
-        case "Amanhã":
-            de_limite_default = ate_limite_default = hoje + pd.Timedelta(days=1)
-        case "Ontem":
-            de_limite_default = ate_limite_default = hoje - pd.Timedelta(days=1)
-        case "Próximos 7 Dias":
-            de_limite_default = hoje
-            ate_limite_default = hoje + pd.Timedelta(days=6)
-        case "Próximos 30 Dias":
-            de_limite_default = hoje
-            ate_limite_default = hoje + pd.Timedelta(days=29)
-        case "Este Mês":
-            de_limite_default = hoje.replace(day=1)
-            ate_limite_default = hoje
-        case "Este Ano":
-            de_limite_default = hoje.replace(month=1, day=1)
-            ate_limite_default = hoje
-        case _:
-            de_limite_default = data_min_limite
-            ate_limite_default = data_max_limite
+    if periodo == "Hoje":
+        de_limite_default = ate_limite_default = min(hoje, data_max_limite)
+    elif periodo == "Amanhã":
+        de_limite_default = ate_limite_default = hoje + pd.Timedelta(days=1)
+    elif periodo == "Ontem":
+        de_limite_default = ate_limite_default = hoje - pd.Timedelta(days=1)
+    elif periodo == "Próximos 7 Dias":
+        de_limite_default, ate_limite_default = hoje, hoje + pd.Timedelta(days=6)
+    elif periodo == "Próximos 30 Dias":
+        de_limite_default, ate_limite_default = hoje, hoje + pd.Timedelta(days=29)
+    elif periodo == "Este Mês":
+        de_limite_default, ate_limite_default = hoje.replace(day=1), hoje
+    elif periodo == "Este Ano":
+        de_limite_default, ate_limite_default = hoje.replace(month=1, day=1), hoje
+    else:
+        de_limite_default, ate_limite_default = data_min_limite, data_max_limite
+    
+    modo_personalizado = (periodo == "Período Personalizado")
+    
+    # --- Inputs de data agora respeitam o modo selecionado ---
+    with col_v2:
+        de_limite = st.date_input(
+            "Despacho Limite de:",
+            value=de_limite_default,
+            min_value=data_min_limite,
+            max_value=data_max_limite,
+            disabled=not modo_personalizado
+        )
+    with col_v3:
+        ate_limite = st.date_input(
+            "Despacho Limite até:",
+            value=ate_limite_default,
+            min_value=data_min_limite,
+            max_value=data_max_limite,
+            disabled=not modo_personalizado
+        )
+    
+    # Corrige caso o modo não seja personalizado
+    if not modo_personalizado:
+        de_limite = de_limite_default
+        ate_limite = ate_limite_default
+
 
     
-    # 3) Inputs de data:
-    col1, col2, col3, col4 = st.columns(4)
+    # 3) Inputs de data de VENDA
+    col1, col2 = st.columns(2)
     
-    # — Data de Venda continua com limites da base, sem dropdown
     with col1:
         de_venda = st.date_input(
             "Venda de:",
             value=data_min_venda,
             min_value=data_min_venda,
-            max_value=data_max_venda
+            max_value=data_max_venda,
+            key="data_venda_de"
         )
     with col2:
         ate_venda = st.date_input(
             "Venda até:",
             value=data_max_venda,
             min_value=data_min_venda,
-            max_value=data_max_venda
+            max_value=data_max_venda,
+            key="data_venda_ate"
         )
-    
-    # — Despacho Limite agora usa o filtro rápido
-    with col3:
-        de_limite = st.date_input(
-            "Despacho Limite de:",
-            value=de_limite_default,
-            min_value=data_min_limite,
-            max_value=ate_limite_default
-        )
-    with col4:
-        ate_limite = st.date_input(
-            "Despacho Limite até:",
-            value=ate_limite_default,
-            min_value=data_min_limite,
-            max_value=ate_limite_default
-        )
+
 
     
     # Traduz todos os status antes de gerar os selects
     from sales import traduzir_status
     df["status"] = df["status"].map(traduzir_status)
     
-    # === UNIFICADO 2: Seletores Principais ===
+    # === APLICAR FILTRO DE DATAS ANTES DE MONTAR FILTROS ===
+    df = df[
+        (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
+        (df["data_limite"].isna() |
+         ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)))
+    ]
+    
+    # Agora criamos as colunas para os demais filtros
     col6, col7, col8, col9, col10, col11 = st.columns(6)
     
+    # --- Filtros principais baseados no df já reduzido às datas ---
     with col6:
         contas = df["nickname"].dropna().unique().tolist()
         conta = st.selectbox("Conta", ["Todos"] + sorted(contas))
     
     with col7:
         status_traduzido = sorted(df["status"].dropna().unique().tolist())
-        status_ops      = ["Todos"] + status_traduzido
-        index_padrao    = status_ops.index("Pago") if "Pago" in status_ops else 0
-        status          = st.selectbox("Status", status_ops, index=index_padrao)
+        status_ops   = ["Todos"] + status_traduzido
+        index_padrao = status_ops.index("Pago") if "Pago" in status_ops else 0
+        status       = st.selectbox("Status", status_ops, index=index_padrao)
     
     with col8:
         status_data_envio = st.selectbox(
@@ -1633,30 +1659,34 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             index=1
         )
     
-    with col9:
-        hierarquia1 = st.selectbox(
-            "Hierarquia 1",
-            ["Todos"] + sorted(df["level1"].dropna().unique().tolist())
-        )
+    # --- Filtros Avançados por Hierarquia (checkbox) ---
+    with st.expander("🔍 Filtros Avançados por Hierarquia", expanded=False):
+        # Hierarquia 1
+        level1_opcoes = sorted(df["level1"].dropna().unique().tolist())
+        st.markdown("**📂 Hierarquia 1**")
+        col_l1 = st.columns(4)
+        level1_selecionados = [op for i, op in enumerate(level1_opcoes)
+                               if col_l1[i % 4].checkbox(op, key=f"level1_{op}")]
+        if level1_selecionados:
+            df = df[df["level1"].isin(level1_selecionados)]
     
-    with col10:
-        hierarquia2 = st.selectbox(
-            "Hierarquia 2",
-            ["Todos"] + sorted(df["level2"].dropna().unique().tolist())
-        )
+        # Hierarquia 2 (já considerando level1)
+        level2_opcoes = sorted(df["level2"].dropna().unique().tolist())
+        st.markdown("**📁 Hierarquia 2**")
+        col_l2 = st.columns(4)
+        level2_selecionados = [op for i, op in enumerate(level2_opcoes)
+                               if col_l2[i % 4].checkbox(op, key=f"level2_{op}")]
+        if level2_selecionados:
+            df = df[df["level2"].isin(level2_selecionados)]
     
     with col11:
         tipo_envio = st.selectbox(
             "Tipo de Envio",
             ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
         )
-
-    # === Aplicar filtros no DataFrame ===
-    df_filtrado = df[
-        (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
-        (df["data_limite"].isna() |
-         ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)))
-    ]
+    
+    # --- Aplicar filtros restantes ---
+    df_filtrado = df.copy()
     if conta != "Todos":
         df_filtrado = df_filtrado[df_filtrado["nickname"] == conta]
     if status != "Todos":
@@ -1665,16 +1695,13 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df_filtrado = df_filtrado[df_filtrado["data_limite"].notna()]
     elif status_data_envio == "Sem Data de Envio":
         df_filtrado = df_filtrado[df_filtrado["data_limite"].isna()]
-    if hierarquia1 != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["level1"] == hierarquia1]
-    if hierarquia2 != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["level2"] == hierarquia2]
     if tipo_envio != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
-
-    if df_filtrado.empty:
+    
+    if df_filtrado.empty():
         st.warning("Nenhum dado encontrado com os filtros aplicados.")
         return
+
 
     df_filtrado = df_filtrado.copy()
     df_filtrado["Canal de Venda"] = "MERCADO LIVRE"
