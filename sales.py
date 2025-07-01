@@ -201,12 +201,43 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                 print(f"❌ Erro ao buscar payments em fallback: {e}")
 
         buyer = order.get("buyer", {}) or {}
-        item = (order.get("order_items") or [{}])[0]
-        item_inf = item.get("item", {}) or {}
         ship = order.get("shipping") or {}
-
-        seller_sku = item_inf.get("seller_sku")
+        
+        # Novo tratamento para order_items com múltiplos formatos e seller_sku
+        order_items = order.get("order_items", [])
+        seller_sku = None
+        item_inf = {}
+        quantity = None
+        unit_price = None
+        
+        for it in order_items:
+            itm = it.get("item", {}) or {}
+        
+            # tenta pegar o SKU direto
+            sku = itm.get("seller_sku")
+        
+            # se não tiver, tenta buscar dentro de variation_attributes
+            if not sku:
+                for attr in it.get("variation_attributes", []):
+                    if attr.get("name", "").upper() in {"SELLER_SKU", "SELLER_CUSTOM_FIELD"}:
+                        sku = attr.get("value") or attr.get("value_name")
+                        break
+        
+            if sku:
+                seller_sku = sku
+                item_inf = itm
+                quantity = it.get("quantity")
+                unit_price = it.get("unit_price")
+                break  # achou → sai do loop
+        
+        # fallback: se não achou nenhum item com SKU, tenta o primeiro
+        if not item_inf and order_items:
+            item_inf = order_items[0].get("item", {})
+            quantity = order_items[0].get("quantity")
+            unit_price = order_items[0].get("unit_price")
+        
         quantity_sku = custo_unitario = level1 = level2 = None
+
 
         if seller_sku:
             sku_info = db.execute(text("""
