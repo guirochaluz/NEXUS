@@ -1539,10 +1539,10 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
     # === UNIFICADO 1: Datas (Venda + Expedição) + Filtro de Período (só Expedição) ===
     
-    # --- Período com opção personalizada ---
-    col_v1, col_v2, col_v3, col_v4 = st.columns(4)
+    # --- Linha 1: Período + Despacho Limite ---
+    col1, col2, col3 = st.columns([1.5, 1.2, 1.2])
     
-    with col_v1:
+    with col1:
         periodo = st.selectbox(
             "Filtrar Período de Expedição",
             [
@@ -1580,8 +1580,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     modo_personalizado = (periodo == "Período Personalizado")
     
-    # --- Inputs de data agora respeitam o modo selecionado ---
-    with col_v2:
+    with col2:
         de_limite = st.date_input(
             "Despacho Limite de:",
             value=de_limite_default,
@@ -1589,7 +1588,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             max_value=data_max_limite,
             disabled=not modo_personalizado
         )
-    with col_v3:
+    with col3:
         ate_limite = st.date_input(
             "Despacho Limite até:",
             value=ate_limite_default,
@@ -1598,17 +1597,14 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             disabled=not modo_personalizado
         )
     
-    # Corrige caso o modo não seja personalizado
     if not modo_personalizado:
         de_limite = de_limite_default
         ate_limite = ate_limite_default
-
-
     
-    # 3) Inputs de data de VENDA
-    col1, col2 = st.columns(2)
+    # --- Linha 2: Venda de / até ---
+    col_v1, col_v2 = st.columns(2)
     
-    with col1:
+    with col_v1:
         de_venda = st.date_input(
             "Venda de:",
             value=data_min_venda,
@@ -1616,7 +1612,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             max_value=data_max_venda,
             key="data_venda_de"
         )
-    with col2:
+    with col_v2:
         ate_venda = st.date_input(
             "Venda até:",
             value=data_max_venda,
@@ -1625,32 +1621,25 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             key="data_venda_ate"
         )
 
-
-    
-    # Traduz todos os status antes de gerar os selects
-    from sales import traduzir_status
-    df["status"] = df["status"].map(traduzir_status)
-    
-    # === APLICAR FILTRO DE DATAS ANTES DE MONTAR FILTROS ===
+    # --- Aplicar filtro por data de venda e expedição no DataFrame base ---
     df = df[
         (df["data_venda"] >= de_venda) & (df["data_venda"] <= ate_venda) &
         (df["data_limite"].isna() |
          ((df["data_limite"] >= de_limite) & (df["data_limite"] <= ate_limite)))
     ]
     
-    # Agora criamos as colunas para os demais filtros
-    col6, col7, col8, col9, col10, col11 = st.columns(6)
+    # --- Linha 3: Conta, Status, Status Envio, Tipo de Envio ---
+    col6, col7, col8, col11 = st.columns(4)
     
-    # --- Filtros principais baseados no df já reduzido às datas ---
     with col6:
         contas = df["nickname"].dropna().unique().tolist()
         conta = st.selectbox("Conta", ["Todos"] + sorted(contas))
     
     with col7:
         status_traduzido = sorted(df["status"].dropna().unique().tolist())
-        status_ops   = ["Todos"] + status_traduzido
+        status_ops = ["Todos"] + status_traduzido
         index_padrao = status_ops.index("Pago") if "Pago" in status_ops else 0
-        status       = st.selectbox("Status", status_ops, index=index_padrao)
+        status = st.selectbox("Status", status_ops, index=index_padrao)
     
     with col8:
         status_data_envio = st.selectbox(
@@ -1659,31 +1648,12 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             index=1
         )
     
-    # --- Filtros Avançados por Hierarquia (checkbox) ---
-    with st.expander("🔍 Filtros Avançados por Hierarquia", expanded=False):
-        # Hierarquia 1
-        level1_opcoes = sorted(df["level1"].dropna().unique().tolist())
-        st.markdown("**📂 Hierarquia 1**")
-        col_l1 = st.columns(4)
-        level1_selecionados = [op for i, op in enumerate(level1_opcoes)
-                               if col_l1[i % 4].checkbox(op, key=f"level1_{op}")]
-        if level1_selecionados:
-            df = df[df["level1"].isin(level1_selecionados)]
-    
-        # Hierarquia 2 (já considerando level1)
-        level2_opcoes = sorted(df["level2"].dropna().unique().tolist())
-        st.markdown("**📁 Hierarquia 2**")
-        col_l2 = st.columns(4)
-        level2_selecionados = [op for i, op in enumerate(level2_opcoes)
-                               if col_l2[i % 4].checkbox(op, key=f"level2_{op}")]
-        if level2_selecionados:
-            df = df[df["level2"].isin(level2_selecionados)]
-    
     with col11:
         tipo_envio = st.selectbox(
             "Tipo de Envio",
             ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
         )
+
     
     # --- Aplicar filtros restantes ---
     df_filtrado = df.copy()
