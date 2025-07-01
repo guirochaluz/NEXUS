@@ -385,10 +385,21 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str, return_changes: b
                     for attr, value in nova_venda.__dict__.items():
                         if attr in ["_sa_instance_state", "id"]:
                             continue
+                        from sqlalchemy.orm.attributes import flag_modified
+                        
                         antigo = getattr(existing_sale, attr, None)
+                        
+                        # Normalização de strings e nulos
+                        if isinstance(antigo, str):
+                            antigo = antigo.strip()
+                        if isinstance(value, str):
+                            value = value.strip()
+                        
                         if antigo != value:
                             setattr(existing_sale, attr, value)
+                            flag_modified(existing_sale, attr)  # força o SQLAlchemy a reconhecer mudança
                             houve_mudanca = True
+
 
                     if houve_mudanca:
                         atualizadas += 1
