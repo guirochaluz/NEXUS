@@ -1648,12 +1648,37 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             index=1
         )
     
-    with col11:
-        tipo_envio = st.selectbox(
-            "Tipo de Envio",
-            ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
-        )
-
+    if tipo_envio != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
+    
+    # Aqui entra o bloco com os filtros de hierarquia
+    with st.expander("🔍 Filtros Avançados por Hierarquia", expanded=False):
+        # Hierarquia 1
+        level1_opcoes = sorted(df_filtrado["level1"].dropna().unique().tolist())
+        st.markdown("**📂 Hierarquia 1**")
+        col_l1 = st.columns(4)
+        level1_selecionados = []
+        for i, op in enumerate(level1_opcoes):
+            if col_l1[i % 4].checkbox(op, key=f"filtros_level1_{op}"):
+                level1_selecionados.append(op)
+        if level1_selecionados:
+            df_filtrado = df_filtrado[df_filtrado["level1"].isin(level1_selecionados)]
+    
+        # Hierarquia 2
+        level2_opcoes = sorted(df_filtrado["level2"].dropna().unique().tolist())
+        st.markdown("**📁 Hierarquia 2**")
+        col_l2 = st.columns(4)
+        level2_selecionados = []
+        for i, op in enumerate(level2_opcoes):
+            if col_l2[i % 4].checkbox(op, key=f"filtros_level2_{op}"):
+                level2_selecionados.append(op)
+        if level2_selecionados:
+            df_filtrado = df_filtrado[df_filtrado["level2"].isin(level2_selecionados)]
+    
+    # Verificação final
+    if df_filtrado.empty:
+        st.warning("Nenhum dado encontrado com os filtros aplicados.")
+        return
     
     # --- Aplicar filtros restantes ---
     df_filtrado = df.copy()
