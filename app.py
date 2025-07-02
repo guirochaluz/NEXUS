@@ -932,7 +932,7 @@ def mostrar_contas_cadastradas():
                 progresso  = st.progress(0, text="🔁 Iniciando reconciliação…")
                 qtd_update = qtd_err = 0
     
-                for i, row in contas_df.itertuples(index=False):
+                for i, row in enumerate(contas_df.itertuples(index=False)):
                     ml_user_id = str(row.ml_user_id)
                     nickname   = row.nickname
     
