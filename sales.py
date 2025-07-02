@@ -348,7 +348,8 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str) -> Dict[str, int]
     from sqlalchemy import func
     from dateutil.tz import tzutc
     import requests
-    from db import SessionLocal, Sale
+    from db import SessionLocal
+    from models import Sale
 
     print(f"🔁 Iniciando revisão histórica para usuário {ml_user_id}")
     db = SessionLocal()
