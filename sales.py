@@ -355,6 +355,13 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str, return_changes: b
         data_min = db.query(func.min(Sale.date_closed)).filter(Sale.ml_user_id == int(ml_user_id)).scalar()
         data_max = db.query(func.max(Sale.date_closed)).filter(Sale.ml_user_id == int(ml_user_id)).scalar()
 
+        # 1.1 – debug: confira os bounds antes de qualquer lógica
+        print(f"DEBUG data_min: {data_min!r}, data_max: {data_max!r}")
+        
+        if not data_min or not data_max:
+            print("⚠️ Nenhuma venda encontrada no histórico para revisar.")
+            return {"novas": 0, "atualizadas": 0}
+
         if not data_min or not data_max:
             print("⚠️ Nenhuma venda encontrada no histórico para revisar.")
             return {"novas": 0, "atualizadas": 0}
