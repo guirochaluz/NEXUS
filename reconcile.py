@@ -1,7 +1,7 @@
 def reconciliar_vendas(ml_user_id: str,
                        desde: datetime | None = None,
                        ate: datetime | None = None,
-                       max_workers: int = MAX_WORKERS
+                       max_workers: int = 10
                       ) -> Dict[str, int]:
     """
     Verifica divergências entre DB e API e faz UPDATE em lote.
