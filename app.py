@@ -48,6 +48,7 @@ import io
 from datetime import datetime, timedelta
 from utils import engine, DATA_INICIO, buscar_ml_fee
 import time
+from reconcile import reconciliar_vendas
 
 
 
@@ -897,49 +898,72 @@ def mostrar_contas_cadastradas():
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    # --- Botões globais ---
-    col_a, col_b = st.columns(2)
+    # --- Botões globais ----------------------------------------------------------
+    col_a, col_b, col_c = st.columns(3)
     
+    # 1) Incremento diário
     with col_a:
         if st.button("🔄 Atualizar Vendas Recentes (Todas)", use_container_width=True):
             with st.spinner("🔄 Executando atualizações incrementais..."):
                 for row in df.itertuples(index=False):
-                    ml_user_id = str(row.ml_user_id)
+                    ml_user_id   = str(row.ml_user_id)
                     access_token = row.access_token
-                    nickname = row.nickname
-
+                    nickname     = row.nickname
+    
                     st.subheader(f"🔗 Conta: {nickname}")
                     novas = get_incremental_sales(ml_user_id, access_token)
                     st.success(f"✅ {novas} novas vendas ou alterações recentes importadas.")
-
+    
+    # 2) Reprocessa 100 % do histórico
     with col_b:
         if st.button("♻️ Reprocessar Histórico Completo", use_container_width=True):
             with st.spinner("♻️ Atualizando histórico de todas as vendas..."):
-                total = len(df)
-                progresso = st.progress(0, text="🔁 Iniciando reprocessamento...")
-                
+                total      = len(df)
+                progresso  = st.progress(0, text="🔁 Iniciando reprocessamento…")
                 for i, row in enumerate(df.itertuples(index=False)):
-                    ml_user_id = str(row.ml_user_id)
+                    ml_user_id   = str(row.ml_user_id)
                     access_token = row.access_token
-                    nickname = row.nickname
-                
-                    st.write(f"▶️ Processando conta {nickname}...")
-                    resultados = revisar_banco_de_dados(ml_user_id, access_token)
-                    novas      = resultados["novas"]
-                    atualizadas = resultados["atualizadas"]
+                    nickname     = row.nickname
+    
+                    st.write(f"▶️ Processando conta {nickname}…")
+                    resultados   = revisar_banco_de_dados(ml_user_id, access_token)
+                    atualizadas  = resultados["atualizadas"]
                     st.info(f"♻️ {atualizadas} vendas atualizadas para a conta {nickname}.")
                     st.write(f"✅ Conta {nickname} finalizada.\n---")
-                    
-                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas processadas...")
+    
+                    progresso.progress((i + 1) / total,
+                                       text=f"⏳ {i + 1}/{total} contas processadas…")
                     time.sleep(0.1)
-                
+    
                 st.success("✅ Reprocessamento completo!")
                 progresso.empty()
-
-
-
                 st.success("✅ Todos os status foram padronizados com sucesso.")
-                    
+    
+    # 3) NOVO – Reconciliação dos últimos 6 meses
+    with col_c:
+        if st.button("🧹 Reconciliar últimos 6 meses", use_container_width=True):
+            with st.spinner("🧹 Comparando registros com a API e atualizando divergências…"):
+                total      = len(df)
+                progresso  = st.progress(0, text="🔁 Iniciando reconciliação…")
+                qtd_update = qtd_err = 0
+    
+                for i, row in enumerate(df.itertuples(index=False)):
+                    ml_user_id = str(row.ml_user_id)
+                    nickname   = row.nickname
+    
+                    st.write(f"🔍 Conta {nickname}…")
+                    resultado  = reconciliar_vendas(ml_user_id)   # usa defaults (6 meses)
+                    qtd_update += resultado["atualizadas"]
+                    qtd_err    += resultado["erros"]
+    
+                    progresso.progress((i + 1) / total,
+                                       text=f"⏳ {i + 1}/{total} contas reconciliadas…")
+                    time.sleep(0.1)
+    
+                st.success(f"✅ Reconciliação concluída: {qtd_update} vendas atualizadas "
+                           f"({qtd_err} falhas de download).")
+                progresso.empty()
+
 
 
     # --- Seção por conta individual ---
