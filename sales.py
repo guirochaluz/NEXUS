@@ -12,6 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Tuple, Optional
 import time
 
+
+
 # Carrega variáveis de ambiente
 load_dotenv()
 BACKEND_URL = os.getenv("BACKEND_URL")
@@ -339,12 +341,14 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             db.close()
 
 
-def revisar_banco_de_dados(ml_user_id: str, access_token: str, return_changes: bool = False) -> Dict[str, int]:
+def revisar_banco_de_dados(ml_user_id: str, access_token: str) -> Dict[str, int]:
     from datetime import timedelta
     from dateutil.relativedelta import relativedelta
     from sales import _order_to_sale
     from sqlalchemy import func
     from dateutil.tz import tzutc
+    import requests
+    from db import SessionLocal, Sale
 
     print(f"🔁 Iniciando revisão histórica para usuário {ml_user_id}")
     db = SessionLocal()
@@ -362,18 +366,21 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str, return_changes: b
             print("⚠️ Nenhuma venda encontrada no histórico para revisar.")
             return {"novas": 0, "atualizadas": 0}
 
-        if not data_min or not data_max:
-            print("⚠️ Nenhuma venda encontrada no histórico para revisar.")
-            return {"novas": 0, "atualizadas": 0}
+        # normaliza o mínimo para o dia 1
+
 
         if data_min.tzinfo is None:
             data_min = data_min.replace(tzinfo=tzutc())
         if data_max.tzinfo is None:
             data_max = data_max.replace(tzinfo=tzutc())
 
+        data_min_month = data_min.replace(day=1)
+
         current_start = data_max.replace(day=1)
 
-        while current_start >= data_min:
+        print(f"DEBUG start_month: {data_min_month.date()}, current_start inicial: {current_start.date()}")
+
+        while current_start >= data_min_month:
             current_end = (current_start + relativedelta(months=1)) - timedelta(seconds=1)
             print(f"📅 Revisando intervalo: {current_start.date()} → {current_end.date()}")
             offset = 0
