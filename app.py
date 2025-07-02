@@ -921,35 +921,48 @@ def mostrar_contas_cadastradas():
         default=list(label_to_id.keys())  # todas por padrão
     )
     
-    # ▶️ Botão de reconciliação
-    if st.button("🧹 Iniciar Reconciliação", use_container_width=True):
+    st.markdown("### 🔧 Reconciliação de Vendas (Dia Único)")
+    
+    # 📅 Seleção de um único dia
+    data_unica = st.date_input("📅 Escolha o dia", value=datetime.today())
+    
+    # 🏢 Seleção de conta
+    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
+    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
+    
+    contas_escolhidas = st.multiselect(
+        "🏢 Escolha as contas para reconciliar",
+        options=list(label_to_id.keys()),
+        default=list(label_to_id.keys())
+    )
+    
+    if st.button("🧹 Reconciliar dia selecionado", use_container_width=True):
         if not contas_escolhidas:
             st.warning("⚠️ Nenhuma conta selecionada.")
         else:
-            with st.spinner("🧹 Comparando registros com a API..."):
-                desde = datetime.combine(data_inicio, datetime.min.time())
-                ate   = datetime.combine(data_fim, datetime.max.time())
+            desde = datetime.combine(data_unica, datetime.min.time())
+            ate   = datetime.combine(data_unica, datetime.max.time())
     
+            with st.spinner(f"🔍 Reconciliando vendas de {data_unica.strftime('%d/%m/%Y')}..."):
                 contas_df = df[df["nickname"].isin(contas_escolhidas)]
                 total = len(contas_df)
-                progresso = st.progress(0, text="🔁 Iniciando reconciliação…")
+                progresso = st.progress(0, text="🔁 Iniciando...")
+    
                 qtd_update = qtd_err = 0
     
                 for i, row in enumerate(contas_df.itertuples(index=False)):
                     ml_user_id = str(row.ml_user_id)
-                    nickname   = row.nickname
+                    nickname = row.nickname
     
                     st.write(f"🔍 Conta {nickname}…")
-                    resultado = reconciliar_vendas(ml_user_id, desde=desde)  # <-- passa só a data inicial
+                    resultado = reconciliar_vendas(ml_user_id, desde=desde, ate=ate)
                     qtd_update += resultado["atualizadas"]
                     qtd_err    += resultado["erros"]
     
-                    progresso.progress((i + 1) / total,
-                                       text=f"⏳ {i + 1}/{total} contas reconciliadas…")
+                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas processadas")
                     time.sleep(0.1)
     
-                st.success(f"✅ Reconciliação concluída: {qtd_update} vendas atualizadas "
-                           f"({qtd_err} falhas de download).")
+                st.success(f"✅ Concluído: {qtd_update} atualizadas, {qtd_err} erros.")
                 progresso.empty()
 
 
