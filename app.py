@@ -941,18 +941,27 @@ def mostrar_contas_cadastradas():
     
     # 3) NOVO – Reconciliação dos últimos 6 meses
     with col_c:
-        if st.button("🧹 Reconciliar últimos 6 meses", use_container_width=True):
-            with st.spinner("🧹 Comparando registros com a API e atualizando divergências…"):
+        meses = st.selectbox(
+            "🗓️ Período para reconciliação",
+            options=[3, 6, 9, 12, 15, 18, 24],
+            index=2,
+            format_func=lambda x: f"{x} meses"
+        )
+    
+        if st.button("🧹 Reconciliar vendas com a API", use_container_width=True):
+            with st.spinner(f"🧹 Comparando registros dos últimos {meses} meses com a API..."):
                 total      = len(df)
                 progresso  = st.progress(0, text="🔁 Iniciando reconciliação…")
                 qtd_update = qtd_err = 0
+    
+                desde = datetime.utcnow() - relativedelta(months=meses)
     
                 for i, row in enumerate(df.itertuples(index=False)):
                     ml_user_id = str(row.ml_user_id)
                     nickname   = row.nickname
     
                     st.write(f"🔍 Conta {nickname}…")
-                    resultado  = reconciliar_vendas(ml_user_id)   # usa defaults (6 meses)
+                    resultado  = reconciliar_vendas(ml_user_id, desde=desde)
                     qtd_update += resultado["atualizadas"]
                     qtd_err    += resultado["erros"]
     
@@ -963,7 +972,6 @@ def mostrar_contas_cadastradas():
                 st.success(f"✅ Reconciliação concluída: {qtd_update} vendas atualizadas "
                            f"({qtd_err} falhas de download).")
                 progresso.empty()
-
 
 
     # --- Seção por conta individual ---
