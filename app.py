@@ -900,65 +900,39 @@ def mostrar_contas_cadastradas():
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    # --- Botões globais ----------------------------------------------------------
-    col_a, col_b, col_c = st.columns(3)
+    st.markdown("### 🔧 Reconciliação de Vendas com API do Mercado Livre")
     
-    # 1) Incremento diário
-    with col_a:
-        if st.button("🔄 Atualizar Vendas Recentes (Todas)", use_container_width=True):
-            with st.spinner("🔄 Executando atualizações incrementais..."):
-                for row in df.itertuples(index=False):
-                    ml_user_id   = str(row.ml_user_id)
-                    access_token = row.access_token
-                    nickname     = row.nickname
+    # 🔽 Seletor de período
+    meses = st.selectbox(
+        "🗓️ Período para reconciliação",
+        options=[3, 6, 9, 12, 15, 18, 24],
+        index=2,
+        format_func=lambda x: f"{x} meses"
+    )
     
-                    st.subheader(f"🔗 Conta: {nickname}")
-                    novas = get_incremental_sales(ml_user_id, access_token)
-                    st.success(f"✅ {novas} novas vendas ou alterações recentes importadas.")
+    # 🔽 Seletor de contas (por nickname)
+    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
+    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
     
-    # 2) Reprocessa 100 % do histórico
-    with col_b:
-        if st.button("♻️ Reprocessar Histórico Completo", use_container_width=True):
-            with st.spinner("♻️ Atualizando histórico de todas as vendas..."):
-                total      = len(df)
-                progresso  = st.progress(0, text="🔁 Iniciando reprocessamento…")
-                for i, row in enumerate(df.itertuples(index=False)):
-                    ml_user_id   = str(row.ml_user_id)
-                    access_token = row.access_token
-                    nickname     = row.nickname
+    contas_escolhidas = st.multiselect(
+        "🏢 Escolha as contas para reconciliar",
+        options=list(label_to_id.keys()),
+        default=list(label_to_id.keys())  # todas por padrão
+    )
     
-                    st.write(f"▶️ Processando conta {nickname}…")
-                    resultados   = revisar_banco_de_dados(ml_user_id, access_token)
-                    atualizadas  = resultados["atualizadas"]
-                    st.info(f"♻️ {atualizadas} vendas atualizadas para a conta {nickname}.")
-                    st.write(f"✅ Conta {nickname} finalizada.\n---")
-    
-                    progresso.progress((i + 1) / total,
-                                       text=f"⏳ {i + 1}/{total} contas processadas…")
-                    time.sleep(0.1)
-    
-                st.success("✅ Reprocessamento completo!")
-                progresso.empty()
-                st.success("✅ Todos os status foram padronizados com sucesso.")
-    
-    # 3) NOVO – Reconciliação dos últimos 6 meses
-    with col_c:
-        meses = st.selectbox(
-            "🗓️ Período para reconciliação",
-            options=[3, 6, 9, 12, 15, 18, 24],
-            index=2,
-            format_func=lambda x: f"{x} meses"
-        )
-    
-        if st.button("🧹 Reconciliar vendas com a API", use_container_width=True):
+    # ▶️ Botão único
+    if st.button("🧹 Iniciar Reconciliação", use_container_width=True):
+        if not contas_escolhidas:
+            st.warning("⚠️ Nenhuma conta selecionada.")
+        else:
             with st.spinner(f"🧹 Comparando registros dos últimos {meses} meses com a API..."):
-                total      = len(df)
+                desde      = datetime.utcnow() - relativedelta(months=meses)
+                contas_df  = df[df["nickname"].isin(contas_escolhidas)]
+                total      = len(contas_df)
                 progresso  = st.progress(0, text="🔁 Iniciando reconciliação…")
                 qtd_update = qtd_err = 0
     
-                desde = datetime.utcnow() - relativedelta(months=meses)
-    
-                for i, row in enumerate(df.itertuples(index=False)):
+                for i, row in contas_df.itertuples(index=False):
                     ml_user_id = str(row.ml_user_id)
                     nickname   = row.nickname
     
@@ -974,6 +948,7 @@ def mostrar_contas_cadastradas():
                 st.success(f"✅ Reconciliação concluída: {qtd_update} vendas atualizadas "
                            f"({qtd_err} falhas de download).")
                 progresso.empty()
+
 
 
     # --- Seção por conta individual ---
