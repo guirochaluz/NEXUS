@@ -49,6 +49,8 @@ from datetime import datetime, timedelta
 from utils import engine, DATA_INICIO, buscar_ml_fee
 import time
 from reconcile import reconciliar_vendas
+from dateutil.relativedelta import relativedelta
+
 
 
 
