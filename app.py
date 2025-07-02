@@ -900,17 +900,18 @@ def mostrar_contas_cadastradas():
         st.warning("Nenhuma conta cadastrada.")
         return
 
+    from datetime import datetime, timedelta
+    
     st.markdown("### 🔧 Reconciliação de Vendas com API do Mercado Livre")
     
-    # 🔽 Seletor de período
-    meses = st.selectbox(
-        "🗓️ Período para reconciliação",
-        options=[3, 6, 9, 12, 15, 18, 24],
-        index=2,
-        format_func=lambda x: f"{x} meses"
-    )
+    # 🔽 Seleção manual de datas
+    col1, col2 = st.columns(2)
+    with col1:
+        data_inicio = st.date_input("📅 Data inicial", value=datetime.today() - timedelta(days=180))
+    with col2:
+        data_fim = st.date_input("📅 Data final", value=datetime.today())
     
-    # 🔽 Seletor de contas (por nickname)
+    # 🔽 Seleção de contas por nickname
     contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
     label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
     
@@ -920,16 +921,18 @@ def mostrar_contas_cadastradas():
         default=list(label_to_id.keys())  # todas por padrão
     )
     
-    # ▶️ Botão único
+    # ▶️ Botão de reconciliação
     if st.button("🧹 Iniciar Reconciliação", use_container_width=True):
         if not contas_escolhidas:
             st.warning("⚠️ Nenhuma conta selecionada.")
         else:
-            with st.spinner(f"🧹 Comparando registros dos últimos {meses} meses com a API..."):
-                desde      = datetime.utcnow() - relativedelta(months=meses)
-                contas_df  = df[df["nickname"].isin(contas_escolhidas)]
-                total      = len(contas_df)
-                progresso  = st.progress(0, text="🔁 Iniciando reconciliação…")
+            with st.spinner("🧹 Comparando registros com a API..."):
+                desde = datetime.combine(data_inicio, datetime.min.time())
+                ate   = datetime.combine(data_fim, datetime.max.time())
+    
+                contas_df = df[df["nickname"].isin(contas_escolhidas)]
+                total = len(contas_df)
+                progresso = st.progress(0, text="🔁 Iniciando reconciliação…")
                 qtd_update = qtd_err = 0
     
                 for i, row in enumerate(contas_df.itertuples(index=False)):
@@ -937,7 +940,7 @@ def mostrar_contas_cadastradas():
                     nickname   = row.nickname
     
                     st.write(f"🔍 Conta {nickname}…")
-                    resultado  = reconciliar_vendas(ml_user_id, desde=desde)
+                    resultado = reconciliar_vendas(ml_user_id, desde=desde)  # <-- passa só a data inicial
                     qtd_update += resultado["atualizadas"]
                     qtd_err    += resultado["erros"]
     
