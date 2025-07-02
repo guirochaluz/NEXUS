@@ -216,7 +216,8 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             itm = it.get("item", {}) or {}
         
             # tenta pegar o SKU direto
-            sku = itm.get("seller_sku")
+            sku = itm.get("seller_sku") or itm.get("seller_custom_field")
+
         
             # se não tiver, tenta buscar dentro de variation_attributes
             if not sku:
