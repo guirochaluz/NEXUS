@@ -903,132 +903,120 @@ def mostrar_contas_cadastradas():
         unsafe_allow_html=True,
     )
     st.header("🏷️ Contas Cadastradas")
+    render_add_account_button()
 
-    df = pd.read_sql(
-        text("SELECT ml_user_id, nickname, access_token, refresh_token FROM user_tokens ORDER BY nickname"),
-        engine,
-    )
+    df = pd.read_sql(text("SELECT ml_user_id, nickname, access_token, refresh_token FROM user_tokens ORDER BY nickname"), engine)
 
     if df.empty:
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
-    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
-
-    # 🔹 1. Modo Intervalo
-    st.markdown("### 📆 Reconciliar por Intervalo de Datas")
+    from datetime import datetime, timedelta
+    
+    st.markdown("### 🔧 Reconciliação de Vendas com API do Mercado Livre")
+    
+    # 🔽 Seleção manual de datas
     col1, col2 = st.columns(2)
     with col1:
-        data_inicio = st.date_input("📅 Data inicial", value=datetime.today() - timedelta(days=30), key="interval_start")
+        data_inicio = st.date_input("📅 Data inicial", value=datetime.today() - timedelta(days=180))
     with col2:
-        data_fim = st.date_input("📅 Data final", value=datetime.today(), key="interval_end")
-
-    contas_escolhidas_intervalo = st.multiselect(
-        "🏢 Contas para reconciliar (intervalo)",
+        data_fim = st.date_input("📅 Data final", value=datetime.today())
+    
+    # 🔽 Seleção de contas por nickname
+    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
+    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
+    
+    contas_escolhidas = st.multiselect(
+        "🏢 Escolha as contas para reconciliar",
         options=list(label_to_id.keys()),
-        default=list(label_to_id.keys()),
-        key="contas_intervalo"
+        default=list(label_to_id.keys())  # todas por padrão
     )
-
-    if st.button("🔁 Reconciliar Intervalo", use_container_width=True):
-        if not contas_escolhidas_intervalo:
-            st.warning("⚠️ Nenhuma conta selecionada.")
-        else:
-            desde = datetime.combine(data_inicio, datetime.min.time())
-            ate   = datetime.combine(data_fim, datetime.max.time())
-
-            with st.spinner(f"🔍 Reconciliando de {data_inicio:%d/%m/%Y} a {data_fim:%d/%m/%Y}..."):
-                contas_df = df[df["nickname"].isin(contas_escolhidas_intervalo)]
-                total = len(contas_df)
-                progresso = st.progress(0, text="🔁 Iniciando...")
-
-                qtd_update = qtd_err = 0
-
-                for i, row in enumerate(contas_df.itertuples(index=False)):
-                    ml_user_id = str(row.ml_user_id)
-                    nickname   = row.nickname
-                    st.write(f"🔎 {nickname}...")
-                    resultado = reconciliar_vendas(ml_user_id, desde=desde, ate=ate)
-                    qtd_update += resultado["atualizadas"]
-                    qtd_err    += resultado["erros"]
-                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas")
-                    time.sleep(0.1)
-
-                st.success(f"✅ Concluído: {qtd_update} atualizadas, {qtd_err} com erro.")
-                progresso.empty()
-
-    # 🔹 2. Modo Dia Único
-    st.markdown("### 📍 Reconciliar por Dia Único")
-    data_unica = st.date_input("📅 Escolha o dia", value=datetime.today(), key="data_unica")
-
-    contas_escolhidas_dia = st.multiselect(
-        "🏢 Contas para reconciliar (dia único)",
+    
+    st.markdown("### 🔧 Reconciliação de Vendas (Dia Único)")
+    
+    # 📅 Seleção de um único dia
+    data_unica = st.date_input("📅 Escolha o dia", value=datetime.today())
+    
+    # 🏢 Seleção de conta
+    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
+    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
+    
+    contas_escolhidas = st.multiselect(
+        "🏢 Escolha as contas para reconciliar",
         options=list(label_to_id.keys()),
-        default=list(label_to_id.keys()),
-        key="contas_dia"
+        default=list(label_to_id.keys())
     )
-
-    if st.button("🧹 Reconciliar Dia Selecionado", use_container_width=True):
-        if not contas_escolhidas_dia:
+    
+    if st.button("🧹 Reconciliar dia selecionado", use_container_width=True):
+        if not contas_escolhidas:
             st.warning("⚠️ Nenhuma conta selecionada.")
         else:
             desde = datetime.combine(data_unica, datetime.min.time())
             ate   = datetime.combine(data_unica, datetime.max.time())
-
-            with st.spinner(f"🔍 Reconciliando o dia {data_unica:%d/%m/%Y}..."):
-                contas_df = df[df["nickname"].isin(contas_escolhidas_dia)]
+    
+            with st.spinner(f"🔍 Reconciliando vendas de {data_unica.strftime('%d/%m/%Y')}..."):
+                contas_df = df[df["nickname"].isin(contas_escolhidas)]
                 total = len(contas_df)
                 progresso = st.progress(0, text="🔁 Iniciando...")
-
+    
                 qtd_update = qtd_err = 0
-
+    
                 for i, row in enumerate(contas_df.itertuples(index=False)):
                     ml_user_id = str(row.ml_user_id)
-                    nickname   = row.nickname
-                    st.write(f"🔎 {nickname}...")
-                    resultado = reconciliar_vendas(ml_user_id, desde=desde, ate=ate)
+                    nickname = row.nickname
+    
+                    st.write(f"🔍 Conta {nickname}…")
+                    resultado = reconciliar_vendas(
+                        ml_user_id,
+                        desde=desde,
+                        ate=ate
+                    )
                     qtd_update += resultado["atualizadas"]
                     qtd_err    += resultado["erros"]
-                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas")
+    
+                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas processadas")
                     time.sleep(0.1)
-
-                st.success(f"✅ Concluído: {qtd_update} atualizadas, {qtd_err} com erro.")
+    
+                st.success(f"✅ Concluído: {qtd_update} atualizadas, {qtd_err} erros.")
                 progresso.empty()
 
-    # 🔹 Detalhes por conta
-    st.markdown("---")
-    st.markdown("### 🧾 Detalhes das Contas")
+
+
+    # --- Seção por conta individual ---
     for row in df.itertuples(index=False):
         with st.expander(f"🔗 Conta ML: {row.nickname}"):
-            ml_user_id    = str(row.ml_user_id)
-            access_token  = row.access_token
+            ml_user_id = str(row.ml_user_id)
+            access_token = row.access_token
             refresh_token = row.refresh_token
 
-            st.write(f"**User ID:** `{ml_user_id}`")
-            st.write(f"**Access Token:** `{access_token}`")
-            st.write(f"**Refresh Token:** `{refresh_token}`")
+            st.write(f"**User ID:** {ml_user_id}")
+            st.write(f"**Access Token:** {access_token}")
+            st.write(f"**Refresh Token:** {refresh_token}")
 
             col1, col2, col3 = st.columns(3)
 
+            # Renovar Token
             with col1:
                 if st.button("🔄 Renovar Token", key=f"renew_{ml_user_id}"):
                     try:
                         resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": ml_user_id})
                         if resp.ok:
-                            salvar_tokens_no_banco(resp.json())
+                            data = resp.json()
+                            salvar_tokens_no_banco(data)
                             st.success("✅ Token atualizado com sucesso!")
                         else:
-                            st.error(f"❌ Erro: {resp.text}")
+                            st.error(f"❌ Erro ao atualizar o token: {resp.text}")
                     except Exception as e:
-                        st.error(f"❌ Erro de conexão: {e}")
+                        st.error(f"❌ Erro ao conectar com o servidor: {e}")
 
+            # Processar Status (somente da conta)
             with col2:
                 if st.button("♻️ Processar Status", key=f"status_{ml_user_id}"):
                     with st.spinner("♻️ Atualizando status das vendas..."):
                         resultados = revisar_banco_de_dados(ml_user_id, access_token)
-                        st.info(f"♻️ {resultados['atualizadas']} vendas com status alterado.")
-
+                        novas      = resultados["novas"]
+                        atualizadas = resultados["atualizadas"]
+                        st.info(f"♻️ {atualizadas} vendas com status alterados.")
 
 
 def mostrar_anuncios():
