@@ -924,7 +924,9 @@ def mostrar_contas_cadastradas():
                     nickname = row.nickname
                 
                     st.write(f"▶️ Processando conta {nickname}...")
-                    atualizadas, _ = revisar_banco_de_dados(ml_user_id, access_token, return_changes=False)
+                    resultados = revisar_banco_de_dados(ml_user_id, access_token)
+                    novas      = resultados["novas"]
+                    atualizadas = resultados["atualizadas"]
                     st.info(f"♻️ {atualizadas} vendas atualizadas para a conta {nickname}.")
                     st.write(f"✅ Conta {nickname} finalizada.\n---")
                     
@@ -971,7 +973,9 @@ def mostrar_contas_cadastradas():
             with col2:
                 if st.button("♻️ Processar Status", key=f"status_{ml_user_id}"):
                     with st.spinner("♻️ Atualizando status das vendas..."):
-                        atualizadas, _ = revisar_banco_de_dados(ml_user_id, access_token, return_changes=False)
+                        resultados = revisar_banco_de_dados(ml_user_id, access_token)
+                        novas      = resultados["novas"]
+                        atualizadas = resultados["atualizadas"]
                         st.info(f"♻️ {atualizadas} vendas com status alterados.")
 
 
