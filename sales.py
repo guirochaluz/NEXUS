@@ -367,17 +367,15 @@ def revisar_banco_de_dados(ml_user_id: str, access_token: str) -> Dict[str, int]
             print("⚠️ Nenhuma venda encontrada no histórico para revisar.")
             return {"novas": 0, "atualizadas": 0}
 
-        # normaliza o mínimo para o dia 1
-
-
+        # 1) garanta o tzinfo
         if data_min.tzinfo is None:
             data_min = data_min.replace(tzinfo=tzutc())
         if data_max.tzinfo is None:
             data_max = data_max.replace(tzinfo=tzutc())
-
-        data_min_month = data_min.replace(day=1)
-
-        current_start = data_max.replace(day=1)
+     
+        # 2) normalize para o primeiro dia do mês à meia-noite
+        data_min_month = data_min.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        current_start  = data_max.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         print(f"DEBUG start_month: {data_min_month.date()}, current_start inicial: {current_start.date()}")
 
