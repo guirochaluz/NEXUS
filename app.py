@@ -879,19 +879,6 @@ def mostrar_dashboard():
     
     st.plotly_chart(fig_hora, use_container_width=True)
 
-
-from datetime import datetime, timedelta
-import time
-import pandas as pd
-import requests
-from sqlalchemy import text
-import streamlit as st
-
-from db import engine
-from oauth import salvar_tokens_no_banco
-from sales import revisar_banco_de_dados
-from reconcile import reconciliar_vendas
-
 def mostrar_contas_cadastradas():
     st.markdown(
         """
@@ -980,7 +967,6 @@ def mostrar_contas_cadastradas():
     
                 st.success(f"✅ Concluído: {qtd_update} atualizadas, {qtd_err} erros.")
                 progresso.empty()
-
 
 
     # --- Seção por conta individual ---
