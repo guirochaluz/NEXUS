@@ -1987,21 +1987,19 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
                 ("FONTSIZE",   (0,0), (-1,-1), 6),
                 ("GRID",       (0,0), (-1,-1), 0.25, colors.grey),
             ]))
-            return [Paragraph(title, styles["Heading3"]), Spacer(1, 4), t]
+            return [Paragraph(title, styles["Heading3"]), Spacer(1,4), t]
     
-        e1 = resume(df_h1_pdf,   "Hierarquia 1")
-        e2 = resume(df_h2_pdf,   "Hierarquia 2")
-        e3 = resume(df_tipo_pdf, "Tipo de Envio")
+        # --- Página de resumo: Hierarquia 1 ---
+        elems.extend(resume(df_h1_pdf, "Hierarquia 1"))
+        elems.append(PageBreak())
     
-        # --- Sumário lado a lado ---
-        col_w = usable_w / 3
-        sum_table = Table([[e1, e2, e3]], colWidths=[col_w, col_w, col_w])
-        sum_table.setStyle(TableStyle([
-            ("VALIGN",      (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",(0, 0), (-1, -1), 4),
-        ]))
-        elems.append(sum_table)
+        # --- Página de resumo: Hierarquia 2 ---
+        elems.extend(resume(df_h2_pdf, "Hierarquia 2"))
+        elems.append(PageBreak())
+    
+        # --- Página de resumo: Tipo de Envio ---
+        elems.extend(resume(df_tipo_pdf, "Tipo de Envio"))
+        # (não precisa de PageBreak() final se for a última página)
     
         # --- Build e links ---
         doc.build(elems)
