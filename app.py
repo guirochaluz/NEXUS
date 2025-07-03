@@ -880,93 +880,92 @@ def mostrar_dashboard():
     st.plotly_chart(fig_hora, use_container_width=True)
 
 def mostrar_contas_cadastradas():
-    st.markdown(
-        """
-        <style>
-        .block-container {
-            padding-top: 0rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.header("🏷️ Contas Cadastradas")
-    render_add_account_button()
-
-    df = pd.read_sql(text("SELECT ml_user_id, nickname, access_token, refresh_token FROM user_tokens ORDER BY nickname"), engine)
+    # … imports, estilo, header e carregamento do df …
 
     if df.empty:
         st.warning("Nenhuma conta cadastrada.")
         return
 
-    from datetime import datetime, timedelta
-    
-    st.markdown("### 🔧 Reconciliação de Vendas com API do Mercado Livre")
-    
-    # 🔽 Seleção manual de datas
-    col1, col2 = st.columns(2)
-    with col1:
-        data_inicio = st.date_input("📅 Data inicial", value=datetime.today() - timedelta(days=180))
-    with col2:
-        data_fim = st.date_input("📅 Data final", value=datetime.today())
-    
-    # 🔽 Seleção de contas por nickname
-    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
-    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
-    
-    contas_escolhidas = st.multiselect(
-        "🏢 Escolha as contas para reconciliar",
-        options=list(label_to_id.keys()),
-        default=list(label_to_id.keys())  # todas por padrão
+    st.markdown("### 🔧 Reconciliação de Vendas")
+
+    # 1) Escolher o modo: Período ou Dia único
+    modo = st.radio(
+        "🔄 Modo de reconciliação",
+        ("Período", "Dia único"),
+        index=0
     )
-    
-    st.markdown("### 🔧 Reconciliação de Vendas (Dia Único)")
-    
-    # 📅 Seleção de um único dia
-    data_unica = st.date_input("📅 Escolha o dia", value=datetime.today())
-    
-    # 🏢 Seleção de conta
-    contas_opcoes = df[["nickname", "ml_user_id"]].drop_duplicates().sort_values("nickname")
-    label_to_id = {row.nickname: str(row.ml_user_id) for row in contas_opcoes.itertuples(index=False)}
-    
-    contas_escolhidas = st.multiselect(
-        "🏢 Escolha as contas para reconciliar",
-        options=list(label_to_id.keys()),
-        default=list(label_to_id.keys())
+
+    # 2) Inputs de data, dependendo do modo
+    if modo == "Período":
+        col1, col2 = st.columns(2)
+        with col1:
+            data_inicio = st.date_input(
+                "📅 Data inicial",
+                value=datetime.today() - timedelta(days=180),
+                key="dt_inicio"
+            )
+        with col2:
+            data_fim = st.date_input(
+                "📅 Data final",
+                value=datetime.today(),
+                key="dt_fim"
+            )
+    else:  # Dia único
+        data_unica = st.date_input(
+            "📅 Escolha o dia",
+            value=datetime.today(),
+            key="dt_unico"
+        )
+
+    # 3) Seleção de contas
+    contas_dict = (
+        df[["nickname", "ml_user_id"]]
+        .drop_duplicates()
+        .sort_values("nickname")
+        .set_index("nickname")["ml_user_id"]
+        .astype(str)
+        .to_dict()
     )
-    
-    if st.button("🧹 Reconciliar dia selecionado", use_container_width=True):
-        if not contas_escolhidas:
+    contas_selecionadas = st.multiselect(
+        "🏢 Escolha as contas para reconciliar",
+        options=list(contas_dict.keys()),
+        default=list(contas_dict.keys()),
+        key="contas"
+    )
+
+    # 4) Botão único para rodar
+    if st.button("🧹 Reconciliar", use_container_width=True):
+        if not contas_selecionadas:
             st.warning("⚠️ Nenhuma conta selecionada.")
         else:
-            desde = datetime.combine(data_unica, datetime.min.time())
-            ate   = datetime.combine(data_unica, datetime.max.time())
-    
-            with st.spinner(f"🔍 Reconciliando vendas de {data_unica.strftime('%d/%m/%Y')}..."):
-                contas_df = df[df["nickname"].isin(contas_escolhidas)]
-                total = len(contas_df)
-                progresso = st.progress(0, text="🔁 Iniciando...")
-    
-                qtd_update = qtd_err = 0
-    
-                for i, row in enumerate(contas_df.itertuples(index=False)):
-                    ml_user_id = str(row.ml_user_id)
-                    nickname = row.nickname
-    
-                    st.write(f"🔍 Conta {nickname}…")
-                    resultado = reconciliar_vendas(
-                        ml_user_id,
-                        desde=desde,
-                        ate=ate
-                    )
-                    qtd_update += resultado["atualizadas"]
-                    qtd_err    += resultado["erros"]
-    
-                    progresso.progress((i + 1) / total, text=f"⏳ {i + 1}/{total} contas processadas")
-                    time.sleep(0.1)
-    
-                st.success(f"✅ Concluído: {qtd_update} atualizadas, {qtd_err} erros.")
-                progresso.empty()
+            # Define intervalo
+            if modo == "Período":
+                desde = datetime.combine(data_inicio, datetime.min.time())
+                ate   = datetime.combine(data_fim,   datetime.max.time())
+            else:
+                desde = datetime.combine(data_unica, datetime.min.time())
+                ate   = datetime.combine(data_unica, datetime.max.time())
+
+            # Loop de reconciliação
+            contas_df = df[df["nickname"].isin(contas_selecionadas)]
+            total = len(contas_df)
+            progresso = st.progress(0, text="🔁 Iniciando...")
+            atualizadas = erros = 0
+
+            for i, row in enumerate(contas_df.itertuples(index=False), start=1):
+                st.write(f"🔍 Conta **{row.nickname}**")
+                res = reconciliar_vendas(
+                    ml_user_id=str(row.ml_user_id),
+                    desde=desde,
+                    ate=ate
+                )
+                atualizadas += res["atualizadas"]
+                erros       += res["erros"]
+                progresso.progress(i/total, text=f"⏳ {i}/{total}")
+                time.sleep(0.05)
+
+            progresso.empty()
+            st.success(f"✅ Concluído: {atualizadas} atualizações, {erros} erros.")
 
 
     # --- Seção por conta individual ---
