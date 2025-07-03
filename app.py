@@ -443,8 +443,8 @@ def mostrar_dashboard():
             index=1,
             key="filtro_quick"
         )
-
-    hoje = pd.Timestamp.now().date()
+    import pytz
+    hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
     data_min = df_full["date_adjusted"].dt.date.min()
     data_max = df_full["date_adjusted"].dt.date.max()
     
@@ -1185,7 +1185,8 @@ def mostrar_relatorios():
 
     # === Filtro Rápido ===
     col1, col2, col3 = st.columns(3)
-    hoje = datetime.now().date()
+    import pytz
+    hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
     ultimos_7 = hoje - timedelta(days=6)
     ultimos_30 = hoje - timedelta(days=29)
 
@@ -1589,8 +1590,9 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             key="filtro_expedicao_periodo"
         )
     
-    # Define intervalo padrão com base no filtro
-    hoje = pd.Timestamp.now().date()
+        # Define intervalo padrão com base no filtro
+    import pytz
+    hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
     if periodo == "Hoje":
         de_limite_default = ate_limite_default = min(hoje, data_max_limite)
     elif periodo == "Amanhã":
@@ -1680,11 +1682,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             index=1
         )
     
-    with col11:
-        tipo_envio = st.selectbox(
-            "Tipo de Envio",
-            ["Todos"] + sorted(df["Tipo de Envio"].dropna().unique().tolist())
-        )
 
     # --- Aplicar filtros restantes ---
 
@@ -1701,7 +1698,19 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     
     # Aqui entra o bloco com os filtros de hierarquia
-    with st.expander("🔍 Filtros Avançados por Hierarquia", expanded=False):
+    with st.expander("🔍 Filtros Avançados", expanded=False):
+
+        # Tipo de Envio (Checkboxes)
+        tipo_envio_opcoes = sorted(df_filtrado["Tipo de Envio"].dropna().unique().tolist())
+        st.markdown("**🚚 Tipo de Envio**")
+        col_envio = st.columns(4)
+        tipo_envio_selecionados = []
+        for i, op in enumerate(tipo_envio_opcoes):
+            if col_envio[i % 4].checkbox(op, key=f"tipo_envio_{op}"):
+                tipo_envio_selecionados.append(op)
+        if tipo_envio_selecionados:
+            df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"].isin(tipo_envio_selecionados)]
+    
         # Hierarquia 1
         level1_opcoes = sorted(df_filtrado["level1"].dropna().unique().tolist())
         st.markdown("**📂 Hierarquia 1**")
@@ -1760,7 +1769,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     # Ordenar pela quantidade em ordem decrescente
     tabela = tabela.sort_values(by="QUANTIDADE", ascending=False)
-
+    st.markdown(f"**🔢 Total de Vendas Filtradas: {len(df_filtrado):,}**")
+    
     st.markdown("### 📋 Tabela de Expedição por Venda")
     st.dataframe(tabela, use_container_width=True, height=500)
 
