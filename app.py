@@ -886,7 +886,7 @@ import streamlit as st
 from sqlalchemy import text
 
 from db import engine
-from sales import reconciliar_vendas
+from reconcile import reconciliar_vendas
 
 def mostrar_contas_cadastradas():
     # — Estilo e cabeçalho —
