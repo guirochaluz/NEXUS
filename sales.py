@@ -102,8 +102,6 @@ def get_incremental_sales(ml_user_id: str, access_token: str) -> int:
 
             full_order = full_resp.json()
             nova_venda = _order_to_sale(full_order, ml_user_id, access_token, db)
-            buffering_info = nova_venda.shipment_buffering_date.isoformat() if nova_venda.shipment_buffering_date else "None"
-            print(f"📦 shipment_buffering_date para {oid}: {buffering_info}")
 
             print(f"📦 Incremental - ordem {oid} processada | ml_fee: {nova_venda.ml_fee}")
 
@@ -292,11 +290,6 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             except Exception as e:
                 print(f"⚠️ Falha ao buscar shipment {shipment_id}: {e}")
 
-        shipment_buffering_date = to_sp_datetime(
-            shipment_data.get("shipping_option", {})
-                         .get("buffering", {})
-                         .get("date")
-        )
         
         print(f"✅ shipment_delivery_sla final (já convertido): {shipment_delivery_sla}")
         return Sale(
@@ -325,15 +318,11 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             shipment_status             = shipment_data.get("status"),
             shipment_substatus          = shipment_data.get("substatus"),
             shipment_last_updated       = to_sp_datetime(shipment_data.get("last_updated")),
-            shipment_first_printed      = to_sp_datetime(shipment_data.get("date_first_printed")),
             shipment_mode               = shipment_data.get("mode"),
             shipment_logistic_type      = shipment_data.get("logistic_type"),
             shipment_list_cost          = shipment_data.get("shipping_option", {}).get("list_cost"),
             shipment_delivery_type      = shipment_data.get("shipping_option", {}).get("delivery_type"),
-            shipment_delivery_limit     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_limit", {}).get("date")),
-            shipment_delivery_final     = to_sp_datetime(shipment_data.get("shipping_option", {}).get("estimated_delivery_final", {}).get("date")),
             shipment_receiver_name      = shipment_data.get("receiver_address", {}).get("receiver_name"),
-            shipment_buffering_date = shipment_buffering_date,
             shipment_delivery_sla = shipment_delivery_sla
         )
 
