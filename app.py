@@ -1047,6 +1047,9 @@ def mostrar_anuncios():
         st.warning("Sem registros para os filtros escolhidos.")
         return
 
+    # 📌 ordena da venda mais nova para a mais antiga
+    df_filt = df_filt.sort_values("date_adjusted", ascending=False)
+
     title_col = 'item_title'
     faturamento_col = 'total_amount'
 
@@ -1186,93 +1189,75 @@ def mostrar_relatorios():
     st.header("📋 Relatórios de Vendas")
 
     df = carregar_vendas()
-
     if df.empty:
         st.warning("Nenhum dado encontrado.")
         return
 
+    # Garante datetime
     df['date_adjusted'] = pd.to_datetime(df['date_adjusted'])
 
-    # === Filtro Rápido ===
+    # === Filtro Rápido de Período ===
     col1, col2, col3 = st.columns(3)
-    import pytz
-    hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
-    ultimos_7 = hoje - timedelta(days=6)
-    ultimos_30 = hoje - timedelta(days=29)
+    hoje     = pd.Timestamp.now(tz="America/Sao_Paulo").date()
+    ultimos7 = hoje - timedelta(days=6)
+    ultimos30= hoje - timedelta(days=29)
 
-    filtro_rapido = col1.selectbox("📅 Período rápido:", ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Personalizado"])
-
-    if filtro_rapido == "Hoje":
+    escolha = col1.selectbox(
+        "📅 Período rápido:",
+        ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Personalizado"]
+    )
+    if escolha == "Hoje":
         data_ini = data_fim = hoje
-    elif filtro_rapido == "Últimos 7 dias":
-        data_ini, data_fim = ultimos_7, hoje
-    elif filtro_rapido == "Últimos 30 dias":
-        data_ini, data_fim = ultimos_30, hoje
+    elif escolha == "Últimos 7 dias":
+        data_ini, data_fim = ultimos7, hoje
+    elif escolha == "Últimos 30 dias":
+        data_ini, data_fim = ultimos30, hoje
     else:
-        data_ini = col2.date_input("De:", value=df['date_adjusted'].min().date())
+        data_ini = col2.date_input("De:",  value=df['date_adjusted'].min().date())
         data_fim = col3.date_input("Até:", value=df['date_adjusted'].max().date())
 
-    df_filt = df.loc[
-        (df['date_adjusted'].dt.date >= data_ini) & 
+    df_filt = df[
+        (df['date_adjusted'].dt.date >= data_ini) &
         (df['date_adjusted'].dt.date <= data_fim)
     ]
-
     if df_filt.empty:
         st.warning("Nenhuma venda no período selecionado.")
         return
 
-    # === Preparar dados para exibição ===
+    # === Cálculos de Colunas Solicitadas ===
     df_filt = df_filt.copy()
-    df_filt['Quantidade'] = df_filt['quantity'] * df_filt['quantity_sku'].fillna(1)
-
-    df_filt['Preço Unitário'] = df_filt['unit_price'].apply(
-        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    df_filt['Data']                   = df_filt['date_adjusted'].dt.strftime('%d/%m/%Y %H:%M:%S')
+    df_filt['ID DA VENDA']            = df_filt['order_id']
+    df_filt['CONTA']                  = df_filt['nickname']
+    df_filt['TÍTULO DO ANÚNCIO']      = df_filt['item_title']
+    df_filt['SKU DO PRODUTO']         = df_filt['seller_sku']
+    df_filt['HIERARQUIA 1']           = df_filt['level1']
+    df_filt['HIERARQUIA 2']           = df_filt['level2']
+    df_filt['QUANTIDADE DO SKU']      = df_filt['quantity_sku'].fillna(0).astype(int)
+    df_filt['VALOR DA VENDA']         = df_filt['total_amount']
+    df_filt['TAXA DA PLATAFORMA']     = df_filt['ml_fee'].fillna(0)
+    df_filt['CUSTO DE FRETE']         = df_filt['frete_adjust'].fillna(0)
+    df_filt['CMV']                    = (
+        df_filt['quantity_sku'].fillna(0)
+        * df_filt['quantity'].fillna(0)
+        * df_filt['custo_unitario'].fillna(0)
     )
-    df_filt['Total da Venda'] = df_filt['total_amount'].apply(
-        lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    )
-    df_filt['Data da Venda'] = df_filt['date_adjusted'].dt.strftime('%d/%m/%Y')
-
-    df_filt['link'] = df_filt['item_id'].apply(
-        lambda x: f"[🔗 Ver Anúncio](https://www.mercadolivre.com.br/anuncio/{x})"
-    )
-
-    # Ordenar por data desc
-    df_filt = df_filt.sort_values("date_adjusted", ascending=False)
-
-    # Reorganizar e renomear colunas
-    df_exibir = df_filt.rename(columns={
-        "order_id": "ID da Venda",
-        "item_id": "MLB",
-        "item_title": "Título do Anúncio"
-    })[[
-        "ID da Venda",
-        "Data da Venda",
-        "MLB",
-        "Título do Anúncio",
-        "Quantidade",
-        "Preço Unitário",
-        "Total da Venda",
-        "link"
-    ]]
-
-    st.dataframe(df_exibir, use_container_width=True)
-
-    # Exportação CSV (valores crus, sem formatação)
-    df_exportar = df_filt[[
-        "order_id", "date_adjusted", "item_id", "item_title",
-        "quantity", "quantity_sku", "unit_price", "total_amount"
-    ]]
-    df_exportar["quantidade_total"] = df_exportar["quantity"] * df_exportar["quantity_sku"].fillna(1)
-
-    csv = df_exportar.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="⬇️ Exportar CSV das Vendas",
-        data=csv,
-        file_name="relatorio_vendas.csv",
-        mime="text/csv"
+    df_filt['MARGEM DE CONTRIBUIÇÃO'] = (
+        df_filt['VALOR DA VENDA']
+        - df_filt['TAXA DA PLATAFORMA']
+        - df_filt['CUSTO DE FRETE']
+        - df_filt['CMV']
     )
 
+    # === Monta e exibe tabela final ===
+    colunas = [
+        'ID DA VENDA', 'CONTA', 'Data', 'TÍTULO DO ANÚNCIO',
+        'SKU DO PRODUTO', 'HIERARQUIA 1', 'HIERARQUIA 2',
+        'QUANTIDADE DO SKU', 'VALOR DA VENDA', 'TAXA DA PLATAFORMA',
+        'CUSTO DE FRETE', 'CMV', 'MARGEM DE CONTRIBUIÇÃO'
+    ]
+    tabela = df_filt[colunas]
+    st.dataframe(tabela, use_container_width=True)
 
 
 def mostrar_gestao_sku():
