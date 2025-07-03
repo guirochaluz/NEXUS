@@ -1767,7 +1767,21 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     # Ordenar pela quantidade em ordem decrescente
     tabela = tabela.sort_values(by="QUANTIDADE", ascending=False)
-    st.markdown(f"**🔢 Total de Vendas Filtradas: {len(df_filtrado):,}**")
+    
+    # === KPIs ===
+    total_vendas = len(df_filtrado)
+    total_quantidade = int(df_filtrado["quantidade"].sum())
+    
+    k1, k2 = st.columns(2)
+    with k1:
+        st.metric(label="Total de Vendas Filtradas", value=f"{total_vendas:,}")
+    with k2:
+        st.metric(label="Quantidade Total", value=f"{total_quantidade:,}")
+    
+    # em seguida exibe a tabela
+    st.markdown("### 📋 Tabela de Expedição por Venda")
+    st.dataframe(tabela, use_container_width=True, height=500)
+
     
     st.markdown("### 📋 Tabela de Expedição por Venda")
     st.dataframe(tabela, use_container_width=True, height=500)
@@ -1797,23 +1811,30 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     st.plotly_chart(fig_bar, use_container_width=True)
 
 
-    # === TABELAS LADO A LADO ===
+    # === TABELAS LADO A LADO COM UNIDADES E VENDAS ===
     st.markdown("### 📊 Resumo por Agrupamento")
-    
     col_r1, col_r2, col_r3 = st.columns(3)
-
     
     # ===== Tabela 1: Hierarquia 1 =====
     df_h1 = (
         df_filtrado
-        .groupby("level1", as_index=False)["quantidade"]
-        .sum()
-        .rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
+        .groupby("level1", as_index=False)
+        .agg(
+            Quantidade_Unidades=("quantidade", "sum"),
+            Quantidade_de_Vendas=("order_id", "nunique")
+        )
+        .rename(columns={"level1": "Hierarquia 1"})
     )
-    total_h1 = df_h1["Quantidade"].sum()
+    # totais
+    tot_q1 = df_h1["Quantidade_Unidades"].sum()
+    tot_v1 = df_h1["Quantidade_de_Vendas"].sum()
     df_h1 = pd.concat([
         df_h1,
-        pd.DataFrame({"Hierarquia 1": ["Total"], "Quantidade": [total_h1]})
+        pd.DataFrame({
+            "Hierarquia 1": ["Total"],
+            "Quantidade_Unidades": [tot_q1],
+            "Quantidade_de_Vendas": [tot_v1]
+        })
     ], ignore_index=True)
     with col_r1:
         st.dataframe(df_h1, use_container_width=True, hide_index=True)
@@ -1821,14 +1842,22 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # ===== Tabela 2: Hierarquia 2 =====
     df_h2 = (
         df_filtrado
-        .groupby("level2", as_index=False)["quantidade"]
-        .sum()
-        .rename(columns={"level2": "Hierarquia 2", "quantidade": "Quantidade"})
+        .groupby("level2", as_index=False)
+        .agg(
+            Quantidade_Unidades=("quantidade", "sum"),
+            Quantidade_de_Vendas=("order_id", "nunique")
+        )
+        .rename(columns={"level2": "Hierarquia 2"})
     )
-    total_h2 = df_h2["Quantidade"].sum()
+    tot_q2 = df_h2["Quantidade_Unidades"].sum()
+    tot_v2 = df_h2["Quantidade_de_Vendas"].sum()
     df_h2 = pd.concat([
         df_h2,
-        pd.DataFrame({"Hierarquia 2": ["Total"], "Quantidade": [total_h2]})
+        pd.DataFrame({
+            "Hierarquia 2": ["Total"],
+            "Quantidade_Unidades": [tot_q2],
+            "Quantidade_de_Vendas": [tot_v2]
+        })
     ], ignore_index=True)
     with col_r2:
         st.dataframe(df_h2, use_container_width=True, hide_index=True)
@@ -1836,14 +1865,21 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     # ===== Tabela 3: Tipo de Envio =====
     df_tipo = (
         df_filtrado
-        .groupby("Tipo de Envio", as_index=False)["quantidade"]
-        .sum()
-        .rename(columns={"quantidade": "Quantidade"})
+        .groupby("Tipo de Envio", as_index=False)
+        .agg(
+            Quantidade_Unidades=("quantidade", "sum"),
+            Quantidade_de_Vendas=("order_id", "nunique")
+        )
     )
-    total_tipo = df_tipo["Quantidade"].sum()
+    tot_qt = df_tipo["Quantidade_Unidades"].sum()
+    tot_vt = df_tipo["Quantidade_de_Vendas"].sum()
     df_tipo = pd.concat([
         df_tipo,
-        pd.DataFrame({"Tipo de Envio": ["Total"], "Quantidade": [total_tipo]})
+        pd.DataFrame({
+            "Tipo de Envio": ["Total"],
+            "Quantidade_Unidades": [tot_qt],
+            "Quantidade_de_Vendas": [tot_vt]
+        })
     ], ignore_index=True)
     with col_r3:
         st.dataframe(df_tipo, use_container_width=True, hide_index=True)
@@ -1866,7 +1902,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         )
         normal = styles["Normal"]
         elems = []
-
+    
         # cabeçalho
         try:
             logo = Image("favicon.png", width=50, height=50)
@@ -1882,7 +1918,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         ]))
         elems.append(header)
         elems.append(Spacer(1, 8))
-
+    
         # períodos
         txt = (
             f"<b>Venda:</b> {periodo_venda[0].strftime('%d/%m/%Y')} ↔ {periodo_venda[1].strftime('%d/%m/%Y')}<br/>"
@@ -1890,7 +1926,33 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         )
         elems.append(Paragraph(txt, normal))
         elems.append(Spacer(1, 12))
-
+    
+        # ==== NOVO: KPIs em mini-tabela ====
+        total_vendas     = len(tabela_df)
+        total_quantidade = int(tabela_df["QUANTIDADE"].fillna(0).sum())
+    
+        # calcula largura útil da página
+        page_w, _ = A4
+        usable_w = page_w - doc.leftMargin - doc.rightMargin
+        # cria mini-tabela de KPI
+        kpi_data = [
+            ["Total de Vendas Filtradas:", f"{total_vendas:,}"],
+            ["Quantidade Total:",          f"{total_quantidade:,}"]
+        ]
+        kpi_table = Table(kpi_data, colWidths=[usable_w*0.5, usable_w*0.5])
+        kpi_table.setStyle(TableStyle([
+            ("BACKGROUND",   (0, 0), (-1, 0), colors.whitesmoke),
+            ("BACKGROUND",   (0, 1), (-1, 1), colors.lightgrey),
+            ("TEXTCOLOR",    (0, 0), (-1, -1), colors.black),
+            ("ALIGN",        (0, 0), (-1, -1), "LEFT"),
+            ("FONTSIZE",     (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+            ("GRID",         (0, 0), (-1, -1), 0.25, colors.grey),
+        ]))
+        elems.append(kpi_table)
+        elems.append(Spacer(1, 12))
+        # ==== Fim KPIs ====
+    
         # tabela principal
         main = tabela_df.copy()
         main["QUANTIDADE"] = main["QUANTIDADE"].fillna(0).astype(int)
@@ -1906,6 +1968,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         ]))
         elems.append(tab)
         elems.append(PageBreak())
+
 
         # resumos
         def resume(df, title):
