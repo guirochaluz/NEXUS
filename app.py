@@ -580,7 +580,7 @@ def mostrar_dashboard():
     st.markdown("### 💼 Indicadores Financeiros")
     row1 = st.columns(5)
     kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
-    kpi_card(row1[1], "🚚 Frete Total", f"{format_currency(frete)} {pct(frete)}"))
+    kpi_card(row1[1], "🚚 Frete Total", f"{format_currency(frete)} {pct(frete)}")
     kpi_card(row1[2], "📉 Taxa Marketplace", f"{format_currency(taxa_mktplace)} {pct(taxa_mktplace)}")
     kpi_card(row1[3], "📦 CMV", f"{format_currency(cmv)} {pct(cmv)}")
     kpi_card(row1[4], "💵 Margem Operacional", f"{format_currency(margem_operacional)} {pct(margem_operacional)}")
