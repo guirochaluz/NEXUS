@@ -1663,7 +1663,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     df_filtrado = df.copy()
     
     # --- Linha 3: Conta, Status, Status Envio, Tipo de Envio ---
-    col6, col7, col8, col11 = st.columns(4)
+    col6, col7, col8 = st.columns(3)
     
     with col6:
         contas = df["nickname"].dropna().unique().tolist()
@@ -1693,8 +1693,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df_filtrado = df_filtrado[df_filtrado["data_limite"].notna()]
     elif status_data_envio == "Sem Data de Envio":
         df_filtrado = df_filtrado[df_filtrado["data_limite"].isna()]
-    if tipo_envio != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["Tipo de Envio"] == tipo_envio]
     
     
     # Aqui entra o bloco com os filtros de hierarquia
