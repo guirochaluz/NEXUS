@@ -1782,10 +1782,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     st.markdown("### 📋 Tabela de Expedição por Venda")
     st.dataframe(tabela, use_container_width=True, height=500)
 
-    
-    st.markdown("### 📋 Tabela de Expedição por Venda")
-    st.dataframe(tabela, use_container_width=True, height=500)
-
     df_grouped = df_filtrado.groupby("level1", as_index=False).agg({"quantidade": "sum"})
     df_grouped = df_grouped.rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
     
@@ -1903,7 +1899,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         normal = styles["Normal"]
         elems = []
     
-        # cabeçalho
+        # --- Cabeçalho ---
         try:
             logo = Image("favicon.png", width=50, height=50)
         except:
@@ -1919,7 +1915,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         elems.append(header)
         elems.append(Spacer(1, 8))
     
-        # períodos
+        # --- Períodos ---
         txt = (
             f"<b>Venda:</b> {periodo_venda[0].strftime('%d/%m/%Y')} ↔ {periodo_venda[1].strftime('%d/%m/%Y')}<br/>"
             f"<b>Expedição:</b> {periodo_expedicao[0].strftime('%d/%m/%Y')} ↔ {periodo_expedicao[1].strftime('%d/%m/%Y')}"
@@ -1927,17 +1923,14 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         elems.append(Paragraph(txt, normal))
         elems.append(Spacer(1, 12))
     
-        # ==== NOVO: KPIs em mini-tabela ====
+        # --- KPIs em mini-tabela ---
         total_vendas     = len(tabela_df)
         total_quantidade = int(tabela_df["QUANTIDADE"].fillna(0).sum())
-    
-        # calcula largura útil da página
         page_w, _ = A4
         usable_w = page_w - doc.leftMargin - doc.rightMargin
-        # cria mini-tabela de KPI
         kpi_data = [
-            ["Total de Vendas Filtradas:", f"{total_vendas:,}"],
-            ["Quantidade Total:",          f"{total_quantidade:,}"]
+            ["Total de Vendas Filtradas", f"{total_vendas:,}"],
+            ["Quantidade Total",          f"{total_quantidade:,}"]
         ]
         kpi_table = Table(kpi_data, colWidths=[usable_w*0.5, usable_w*0.5])
         kpi_table.setStyle(TableStyle([
@@ -1951,9 +1944,8 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         ]))
         elems.append(kpi_table)
         elems.append(Spacer(1, 12))
-        # ==== Fim KPIs ====
     
-        # tabela principal
+        # --- Tabela principal ---
         main = tabela_df.copy()
         main["QUANTIDADE"] = main["QUANTIDADE"].fillna(0).astype(int)
         data = [main.columns.tolist()] + main.values.tolist()
@@ -1968,13 +1960,27 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         ]))
         elems.append(tab)
         elems.append(PageBreak())
-
-
-        # resumos
+    
+        # --- Preparar resumos para o PDF ---
+        def _prep_summary(df, label):
+            df = df.copy()
+            cols = df.columns.tolist()
+            return df.rename(columns={
+                cols[0]: label,
+                "Quantidade_Unidades": "Quantidade",
+                "Quantidade_de_Vendas": "Quantidade de Vendas"
+            })
+    
+        df_h1_pdf   = _prep_summary(df_h1,   "Hierarquia 1")
+        df_h2_pdf   = _prep_summary(df_h2,   "Hierarquia 2")
+        df_tipo_pdf = _prep_summary(df_tipo, "Tipo de Envio")
+    
         def resume(df, title):
             d = df.copy()
-            d["Quantidade"] = d["Quantidade"].fillna(0).astype(int)
-            t = Table([d.columns.tolist()] + d.values.tolist(), repeatRows=1)
+            for col in d.columns[1:]:
+                d[col] = d[col].fillna(0).astype(int)
+            data = [d.columns.tolist()] + d.values.tolist()
+            t = Table(data, repeatRows=1)
             t.setStyle(TableStyle([
                 ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
                 ("ALIGN",      (0,0), (-1,-1), "CENTER"),
@@ -1982,38 +1988,31 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
                 ("GRID",       (0,0), (-1,-1), 0.25, colors.grey),
             ]))
             return [Paragraph(title, styles["Heading3"]), Spacer(1, 4), t]
-
-        e1 = resume(df_h1, "Hierarquia 1")
-        e2 = resume(df_h2, "Hierarquia 2")
-        e3 = resume(df_tipo, "Tipo de Envio")
-
-        # --- Ajuste dinâmico de largura para não sobrepor ---
-        page_w, _ = A4
-        usable_w = page_w - doc.leftMargin - doc.rightMargin
+    
+        e1 = resume(df_h1_pdf,   "Hierarquia 1")
+        e2 = resume(df_h2_pdf,   "Hierarquia 2")
+        e3 = resume(df_tipo_pdf, "Tipo de Envio")
+    
+        # --- Sumário lado a lado ---
         col_w = usable_w / 3
-
-        sum_table = Table(
-            [[e1, e2, e3]],
-            colWidths=[col_w, col_w, col_w]
-        )
+        sum_table = Table([[e1, e2, e3]], colWidths=[col_w, col_w, col_w])
         sum_table.setStyle(TableStyle([
             ("VALIGN",      (0, 0), (-1, -1), "TOP"),
             ("LEFTPADDING", (0, 0), (-1, -1), 4),
             ("RIGHTPADDING",(0, 0), (-1, -1), 4),
         ]))
         elems.append(sum_table)
-
+    
+        # --- Build e links ---
         doc.build(elems)
-
-        # PDF link
+    
         pdf_b64 = base64.b64encode(buffer.getvalue()).decode()
         href_pdf = (
             f'<a style="margin-right:20px;" '
             f'href="data:application/pdf;base64,{pdf_b64}" '
             f'download="relatorio_expedicao.pdf">📄 Baixar PDF</a>'
         )
-
-        # XLSX link
+    
         xlsx_buf = BytesIO()
         with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as w:
             main.to_excel(w, index=False, sheet_name="Dados")
@@ -2025,17 +2024,9 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{xlsx_b64}" '
             f'download="relatorio_expedicao.xlsx">⬇️ Baixar Excel</a>'
         )
-
+    
         return href_pdf + href_xlsx
 
-    # chamada única dos downloads
-    periodo_venda     = (de_venda, ate_venda)
-    periodo_expedicao = (de_limite, ate_limite)
-    botoes = gerar_relatorio_pdf(
-        tabela, df_h1, df_h2, df_tipo,
-        periodo_venda, periodo_expedicao
-    )
-    st.markdown(botoes, unsafe_allow_html=True)
 
 def mostrar_gestao_despesas():
     st.markdown(
