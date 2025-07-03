@@ -997,43 +997,6 @@ def mostrar_contas_cadastradas():
         st.success(f"✅ Concluído: {atualizadas} atualizações, {erros} erros.")
 
 
-    # --- Seção por conta individual ---
-    for row in df.itertuples(index=False):
-        with st.expander(f"🔗 Conta ML: {row.nickname}"):
-            ml_user_id = str(row.ml_user_id)
-            access_token = row.access_token
-            refresh_token = row.refresh_token
-
-            st.write(f"**User ID:** {ml_user_id}")
-            st.write(f"**Access Token:** {access_token}")
-            st.write(f"**Refresh Token:** {refresh_token}")
-
-            col1, col2, col3 = st.columns(3)
-
-            # Renovar Token
-            with col1:
-                if st.button("🔄 Renovar Token", key=f"renew_{ml_user_id}"):
-                    try:
-                        resp = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": ml_user_id})
-                        if resp.ok:
-                            data = resp.json()
-                            salvar_tokens_no_banco(data)
-                            st.success("✅ Token atualizado com sucesso!")
-                        else:
-                            st.error(f"❌ Erro ao atualizar o token: {resp.text}")
-                    except Exception as e:
-                        st.error(f"❌ Erro ao conectar com o servidor: {e}")
-
-            # Processar Status (somente da conta)
-            with col2:
-                if st.button("♻️ Processar Status", key=f"status_{ml_user_id}"):
-                    with st.spinner("♻️ Atualizando status das vendas..."):
-                        resultados = revisar_banco_de_dados(ml_user_id, access_token)
-                        novas      = resultados["novas"]
-                        atualizadas = resultados["atualizadas"]
-                        st.info(f"♻️ {atualizadas} vendas com status alterados.")
-
-
 def mostrar_anuncios():
     st.markdown(
         """
