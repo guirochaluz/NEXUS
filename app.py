@@ -1805,51 +1805,24 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     # Tabela 1: Hierarquia 1
     with col_r1:
-        df_h1 = (
-            df_filtrado
-            .groupby("level1", as_index=False)["quantidade"]
-            .sum()
-            .rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
-        )
-        # → calcula total e adiciona linha
-        total_h1 = df_h1["Quantidade"].sum()
-        df_h1 = pd.concat([
-            df_h1,
-            pd.DataFrame([{"Hierarquia 1": "Total", "Quantidade": total_h1}])
-        ], ignore_index=True)
+        df_h1 = df_filtrado.groupby("level1", as_index=False)["quantidade"].sum().rename(columns={
+            "level1": "Hierarquia 1", "quantidade": "Quantidade"
+        })
         st.dataframe(df_h1, use_container_width=True, hide_index=True)
     
     # Tabela 2: Hierarquia 2
     with col_r2:
-        df_h2 = (
-            df_filtrado
-            .groupby("level2", as_index=False)["quantidade"]
-            .sum()
-            .rename(columns={"level2": "Hierarquia 2", "quantidade": "Quantidade"})
-        )
-        total_h2 = df_h2["Quantidade"].sum()
-        df_h2 = pd.concat([
-            df_h2,
-            pd.DataFrame([{"Hierarquia 2": "Total", "Quantidade": total_h2}])
-        ], ignore_index=True)
+        df_h2 = df_filtrado.groupby("level2", as_index=False)["quantidade"].sum().rename(columns={
+            "level2": "Hierarquia 2", "quantidade": "Quantidade"
+        })
         st.dataframe(df_h2, use_container_width=True, hide_index=True)
     
     # Tabela 3: Tipo de Envio
     with col_r3:
-        df_tipo = (
-            df_filtrado
-            .groupby("Tipo de Envio", as_index=False)["quantidade"]
-            .sum()
-            .rename(columns={"Tipo de Envio": "Tipo de Envio", "quantidade": "Quantidade"})
-        )
-        total_tipo = df_tipo["Quantidade"].sum()
-        df_tipo = pd.concat([
-            df_tipo,
-            pd.DataFrame([{"Tipo de Envio": "Total", "Quantidade": total_tipo}])
-        ], ignore_index=True)
+        df_tipo = df_filtrado.groupby("Tipo de Envio", as_index=False)["quantidade"].sum().rename(columns={
+            "Tipo de Envio": "Tipo de Envio", "quantidade": "Quantidade"
+        })
         st.dataframe(df_tipo, use_container_width=True, hide_index=True)
-
-
 
     def gerar_relatorio_pdf(
         tabela_df, df_h1, df_h2, df_tipo,
