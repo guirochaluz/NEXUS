@@ -259,7 +259,10 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
         # 📦 Shipment enrichment
         shipment_id = ship.get("id")
         shipment_data = {}
-        shipment_delivery_sla = None          # 👈  garante que a variável existe
+        shipment_delivery_sla = None  
+        order_cost = None
+        base_cost = None
+        shipment_cost = None
 
         if shipment_id:
             try:
@@ -268,6 +271,9 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
                 )
                 shipment_resp.raise_for_status()
                 shipment_data = shipment_resp.json()
+                order_cost    = shipment_data.get("order_cost")
+                base_cost     = shipment_data.get("base_cost")
+                shipment_cost = shipment_data.get("shipping_option", {}).get("cost")
                 print(f"📮 Dados logísticos carregados para order {order_id}")
 
                 try:
@@ -323,6 +329,9 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
             shipment_list_cost          = shipment_data.get("shipping_option", {}).get("list_cost"),
             shipment_delivery_type      = shipment_data.get("shipping_option", {}).get("delivery_type"),
             shipment_receiver_name      = shipment_data.get("receiver_address", {}).get("receiver_name"),
+            order_cost    = order_cost,
+            base_cost     = base_cost,
+            shipment_cost = shipment_cost,
             shipment_delivery_sla = shipment_delivery_sla
         )
 
