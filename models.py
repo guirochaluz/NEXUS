@@ -50,5 +50,8 @@ class Sale(Base):
     shipment_delivery_type      = Column(String, nullable=True)
     shipment_receiver_name      = Column(String, nullable=True)
     shipment_delivery_sla = Column(DateTime(timezone=True))
+    order_cost    = Column(Numeric(10, 2), nullable=True)
+    base_cost     = Column(Numeric(10, 2), nullable=True)
+    shipment_cost = Column(Numeric(10, 2), nullable=True)
 
 
