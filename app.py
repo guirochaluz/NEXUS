@@ -889,26 +889,20 @@ from db import engine
 from reconcile import reconciliar_vendas
 
 def mostrar_contas_cadastradas():
-    # — Estilo e cabeçalho —
     st.markdown(
         """
         <style>
-            .block-container { padding-top: 0rem; }
+        .block-container {
+            padding-top: 0rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
     st.header("🏷️ Contas Cadastradas")
+    render_add_account_button()
 
-    # — Carrega as contas do banco —
-    df = pd.read_sql(
-        text("""
-            SELECT ml_user_id, nickname
-            FROM user_tokens
-            ORDER BY nickname
-        """),
-        engine
-    )
+    df = pd.read_sql(text("SELECT ml_user_id, nickname, access_token, refresh_token FROM user_tokens ORDER BY nickname"), engine)
 
     if df.empty:
         st.warning("Nenhuma conta cadastrada.")
@@ -995,6 +989,18 @@ def mostrar_contas_cadastradas():
 
         progresso.empty()
         st.success(f"✅ Concluído: {atualizadas} atualizações, {erros} erros.")
+
+    # --- Seção por conta individual ---
+    for row in df.itertuples(index=False):
+        with st.expander(f"🔗 Conta ML: {row.nickname}"):
+            ml_user_id = str(row.ml_user_id)
+            access_token = row.access_token
+            refresh_token = row.refresh_token
+    
+            st.write(f"**User ID:** `{ml_user_id}`")
+            st.write(f"**Access Token:** `{access_token}`")
+            st.write(f"**Refresh Token:** `{refresh_token}`")
+
 
 
 def mostrar_anuncios():
