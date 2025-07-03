@@ -44,15 +44,11 @@ class Sale(Base):
     shipment_status             = Column(String, nullable=True)
     shipment_substatus          = Column(String, nullable=True)
     shipment_last_updated       = Column(DateTime, nullable=True)
-    shipment_first_printed      = Column(DateTime, nullable=True)
     shipment_mode               = Column(String, nullable=True)
     shipment_logistic_type      = Column(String, nullable=True)
     shipment_list_cost          = Column(Float, nullable=True)
     shipment_delivery_type      = Column(String, nullable=True)
-    shipment_delivery_limit     = Column(DateTime, nullable=True)
-    shipment_delivery_final     = Column(DateTime, nullable=True)
     shipment_receiver_name      = Column(String, nullable=True)
-    shipment_buffering_date = Column(DateTime, nullable=True)
     shipment_delivery_sla = Column(DateTime(timezone=True))
 
 
