@@ -1609,6 +1609,13 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         de_limite_default, ate_limite_default = hoje.replace(month=1, day=1), hoje
     else:
         de_limite_default, ate_limite_default = data_min_limite, data_max_limite
+
+
+    # Ajuste para não extrapolar as datas mínimas/máximas disponíveis
+    de_limite_default = max(de_limite_default, data_min_limite)
+    de_limite_default = min(de_limite_default, data_max_limite)
+    ate_limite_default = max(ate_limite_default, data_min_limite)
+    ate_limite_default = min(ate_limite_default, data_max_limite)
     
     modo_personalizado = (periodo == "Período Personalizado")
     
