@@ -1893,7 +1893,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
 
         # tabela principal
         main = tabela_df.copy()
-        main["QUANTIDADE"] = main["QUANTIDADE"].astype(int)
+        main["QUANTIDADE"] = main["QUANTIDADE"].fillna(0).astype(int)
         data = [main.columns.tolist()] + main.values.tolist()
         tab = Table(data, repeatRows=1, splitByRow=1)
         tab.setStyle(TableStyle([
@@ -1910,7 +1910,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         # resumos
         def resume(df, title):
             d = df.copy()
-            d["Quantidade"] = d["Quantidade"].astype(int)
+            d["Quantidade"] = d["Quantidade"].fillna(0).astype(int)
             t = Table([d.columns.tolist()] + d.values.tolist(), repeatRows=1)
             t.setStyle(TableStyle([
                 ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
