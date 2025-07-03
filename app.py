@@ -556,7 +556,15 @@ def mostrar_dashboard():
     taxa_mktplace       = df["ml_fee"].fillna(0).sum()
     cmv                 = ((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
     margem_operacional  = total_valor - frete - taxa_mktplace - cmv
-    sem_sku             = df["quantity_sku"].isnull().sum()
+    # Colunas que não podem ficar vazias
+    colunas_chk = ["seller_sku", "quantity_sku", "level1", "level2", "custo_unitario"]
+    
+    # Cria uma máscara booleana: True se **qualquer** uma das colunas estiver nula
+    mask_faltantes = df[colunas_chk].isnull().any(axis=1)
+    
+    # Conta quantas linhas têm pelo menos um campo vazio
+    sem_sku = mask_faltantes.sum()
+
 
     
     pct = lambda val: f"<span style='font-size: 70%; color: #666; display: inline-block; margin-left: 6px;'>({val / total_valor * 100:.1f}%)</span>" if total_valor else "<span style='font-size: 70%'>(0%)</span>"
