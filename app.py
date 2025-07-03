@@ -888,7 +888,8 @@ from sqlalchemy import text
 import streamlit as st
 
 from db import engine
-from backend_utils import salvar_tokens_no_banco, revisar_banco_de_dados
+from oauth import salvar_tokens_no_banco
+from sales import revisar_banco_de_dados
 from reconcile import reconciliar_vendas
 
 def mostrar_contas_cadastradas():
