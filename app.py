@@ -558,7 +558,7 @@ def mostrar_dashboard():
     total_itens         = (df["quantity_sku"] * df["quantity"]).sum()
     ticket_venda        = total_valor / total_vendas if total_vendas else 0
     ticket_unidade      = total_valor / total_itens if total_itens else 0
-    frete               = total_valor * 0.10
+    frete = df["frete_adjust"].fillna(0).sum()
     taxa_mktplace       = df["ml_fee"].fillna(0).sum()
     cmv                 = ((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
     margem_operacional  = total_valor - frete - taxa_mktplace - cmv
@@ -580,7 +580,7 @@ def mostrar_dashboard():
     st.markdown("### 💼 Indicadores Financeiros")
     row1 = st.columns(5)
     kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
-    kpi_card(row1[1], "🚚 Frete Estimado", f"{format_currency(frete)} {pct(frete)}")
+    kpi_card(row1[1], "🚚 Frete Total", f"{format_currency(frete)} {pct(frete)}"))
     kpi_card(row1[2], "📉 Taxa Marketplace", f"{format_currency(taxa_mktplace)} {pct(taxa_mktplace)}")
     kpi_card(row1[3], "📦 CMV", f"{format_currency(cmv)} {pct(cmv)}")
     kpi_card(row1[4], "💵 Margem Operacional", f"{format_currency(margem_operacional)} {pct(margem_operacional)}")
