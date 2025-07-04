@@ -1174,92 +1174,145 @@ def mostrar_anuncios():
     )
 
 def mostrar_relatorios():
-    # Remove o espaçamento superior
-    st.markdown(
-        """
+    import time
+    import pytz
+    from sales import traduzir_status
+
+    # --- CSS de espaçamento ---
+    st.markdown("""
         <style>
-        .block-container {
-            padding-top: 0rem;
-        }
+        .block-container { padding-top: 0rem; }
+        .stSelectbox > div, .stDateInput > div { padding-top: 0; padding-bottom: 0; }
+        .stMultiSelect { max-height: 40px; overflow-y: auto; }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
     st.header("📋 Relatórios de Vendas")
 
-    df = carregar_vendas()
-    if df.empty:
+    # --- carga e tradução de status ---
+    df_full = carregar_vendas(None)
+    if df_full.empty:
         st.warning("Nenhum dado encontrado.")
         return
+    df_full["status"] = df_full["status"].map(traduzir_status)
+    df_full["date_adjusted"] = pd.to_datetime(df_full["date_adjusted"])
 
-    # Garante datetime
-    df['date_adjusted'] = pd.to_datetime(df['date_adjusted'])
+    # --- Filtro de Contas Lado a Lado ---
+    contas_df   = pd.read_sql(text("SELECT nickname FROM user_tokens ORDER BY nickname"), engine)
+    contas_lst  = contas_df["nickname"].tolist()
+    st.markdown("**🧾 Contas Mercado Livre:**")
+    if "todas_contas_marcadas" not in st.session_state:
+        st.session_state["todas_contas_marcadas"] = True
+    cols = st.columns(8)
+    selecionadas = []
+    for i, conta in enumerate(contas_lst):
+        key = f"rel_conta_{conta}"
+        if key not in st.session_state:
+            st.session_state[key] = st.session_state["todas_contas_marcadas"]
+        if cols[i % 8].checkbox(conta, key=key):
+            selecionadas.append(conta)
+    if selecionadas:
+        df_full = df_full[df_full["nickname"].isin(selecionadas)]
 
-    # === Filtro Rápido de Período ===
-    col1, col2, col3 = st.columns(3)
-    hoje     = pd.Timestamp.now(tz="America/Sao_Paulo").date()
-    ultimos7 = hoje - timedelta(days=6)
-    ultimos30= hoje - timedelta(days=29)
+    # --- Filtro Rápido | De | Até | Status ---
+    col1, col2, col3, col4 = st.columns([1.5,1.2,1.2,1.5])
+    hoje      = pd.Timestamp.now(tz="America/Sao_Paulo").date()
+    data_min  = df_full["date_adjusted"].dt.date.min()
+    data_max  = df_full["date_adjusted"].dt.date.max()
 
-    escolha = col1.selectbox(
-        "📅 Período rápido:",
-        ["Hoje", "Últimos 7 dias", "Últimos 30 dias", "Personalizado"]
-    )
-    if escolha == "Hoje":
-        data_ini = data_fim = hoje
-    elif escolha == "Últimos 7 dias":
-        data_ini, data_fim = ultimos7, hoje
-    elif escolha == "Últimos 30 dias":
-        data_ini, data_fim = ultimos30, hoje
+    with col1:
+        filtro = st.selectbox(
+            "📅 Período",
+            ["Personalizado","Hoje","Ontem","Últimos 7 Dias","Este Mês","Últimos 30 Dias","Este Ano"],
+            index=1, key="rel_filtro_quick"
+        )
+    if filtro == "Hoje":
+        de = ate = min(hoje, data_max)
+    elif filtro == "Ontem":
+        de = ate = hoje - pd.Timedelta(days=1)
+    elif filtro == "Últimos 7 Dias":
+        de, ate = hoje - pd.Timedelta(days=7), hoje
+    elif filtro == "Últimos 30 Dias":
+        de, ate = hoje - pd.Timedelta(days=30), hoje
+    elif filtro == "Este Mês":
+        de, ate = hoje.replace(day=1), hoje
+    elif filtro == "Este Ano":
+        de, ate = hoje.replace(month=1, day=1), hoje
     else:
-        data_ini = col2.date_input("De:",  value=df['date_adjusted'].min().date())
-        data_fim = col3.date_input("Até:", value=df['date_adjusted'].max().date())
+        de, ate = data_min, data_max
 
-    df_filt = df[
-        (df['date_adjusted'].dt.date >= data_ini) &
-        (df['date_adjusted'].dt.date <= data_fim)
+    custom = (filtro == "Personalizado")
+    with col2:
+        de = st.date_input("De",  value=de,  min_value=data_min, max_value=data_max, disabled=not custom, key="rel_de")
+    with col3:
+        ate= st.date_input("Até", value=ate, min_value=data_min, max_value=data_max, disabled=not custom, key="rel_ate")
+    with col4:
+        opts = ["Todos"] + df_full["status"].dropna().unique().tolist()
+        idx  = opts.index("Pago") if "Pago" in opts else 0
+        status_sel = st.selectbox("Status", opts, index=idx, key="rel_status")
+
+    df = df_full[
+        (df_full["date_adjusted"].dt.date >= de) &
+        (df_full["date_adjusted"].dt.date <= ate)
     ]
-    if df_filt.empty:
-        st.warning("Nenhuma venda no período selecionado.")
+    if status_sel != "Todos":
+        df = df[df["status"] == status_sel]
+
+    # --- Filtros Avançados: Hierarquia 1 e 2 ---
+    with st.expander("🔍 Filtros Avançados", expanded=False):
+        # Hierarquia 1
+        l1_opts = sorted(df["level1"].dropna().unique())
+        st.markdown("**📂 Hierarquia 1**")
+        cols1 = st.columns(4)
+        sel1 = [op for i,op in enumerate(l1_opts) if cols1[i%4].checkbox(op, key=f"rel_l1_{op}")]
+        if sel1:
+            df = df[df["level1"].isin(sel1)]
+        # Hierarquia 2
+        l2_opts = sorted(df["level2"].dropna().unique())
+        st.markdown("**📁 Hierarquia 2**")
+        cols2 = st.columns(4)
+        sel2 = [op for i,op in enumerate(l2_opts) if cols2[i%4].checkbox(op, key=f"rel_l2_{op}")]
+        if sel2:
+            df = df[df["level2"].isin(sel2)]
+
+    if df.empty:
+        st.warning("Nenhuma venda após filtros.")
         return
 
-    df_filt = df_filt.sort_values("date_adjusted", ascending=False)
+    # --- Ordena por timestamp completo ---
+    df = df.sort_values("date_adjusted", ascending=False).copy()
 
-    # === Cálculos de Colunas Solicitadas ===
-    df_filt = df_filt.copy()
-    df_filt['Data']                   = df_filt['date_adjusted'].dt.strftime('%d/%m/%Y %H:%M:%S')
-    df_filt['ID DA VENDA']            = df_filt['order_id']
-    df_filt['CONTA']                  = df_filt['nickname']
-    df_filt['TÍTULO DO ANÚNCIO']      = df_filt['item_title']
-    df_filt['SKU DO PRODUTO']         = df_filt['seller_sku']
-    df_filt['HIERARQUIA 1']           = df_filt['level1']
-    df_filt['HIERARQUIA 2']           = df_filt['level2']
-    df_filt['QUANTIDADE DO SKU']      = df_filt['quantity_sku'].fillna(0).astype(int)
-    df_filt['VALOR DA VENDA']         = df_filt['total_amount']
-    df_filt['TAXA DA PLATAFORMA']     = df_filt['ml_fee'].fillna(0)
-    df_filt['CUSTO DE FRETE']         = df_filt['frete_adjust'].fillna(0)
-    df_filt['CMV']                    = (
-        df_filt['quantity_sku'].fillna(0)
-        * df_filt['quantity'].fillna(0)
-        * df_filt['custo_unitario'].fillna(0)
+    # --- Monta colunas finais ---
+    df["Data"]                   = df["date_adjusted"].dt.strftime("%d/%m/%Y %H:%M:%S")
+    df["ID DA VENDA"]            = df["order_id"]
+    df["CONTA"]                  = df["nickname"]
+    df["TÍTULO DO ANÚNCIO"]      = df["item_title"]
+    df["SKU DO PRODUTO"]         = df["seller_sku"]
+    df["HIERARQUIA 1"]           = df["level1"]
+    df["HIERARQUIA 2"]           = df["level2"]
+    df["QUANTIDADE DO SKU"]      = df["quantity_sku"].fillna(0).astype(int)
+    df["VALOR DA VENDA"]         = df["total_amount"]
+    df["TAXA DA PLATAFORMA"]     = df["ml_fee"].fillna(0)
+    df["CUSTO DE FRETE"]         = df["frete_adjust"].fillna(0)
+    df["CMV"]                    = (
+        df["quantity_sku"].fillna(0)
+        * df["quantity"].fillna(0)
+        * df["custo_unitario"].fillna(0)
     )
-    df_filt['MARGEM DE CONTRIBUIÇÃO'] = (
-        df_filt['VALOR DA VENDA']
-        - df_filt['TAXA DA PLATAFORMA']
-        - df_filt['CUSTO DE FRETE']
-        - df_filt['CMV']
+    df["MARGEM DE CONTRIBUIÇÃO"] = (
+        df["VALOR DA VENDA"]
+        - df["TAXA DA PLATAFORMA"]
+        - df["CUSTO DE FRETE"]
+        - df["CMV"]
     )
 
-    # === Monta e exibe tabela final ===
-    colunas = [
-        'ID DA VENDA', 'CONTA', 'Data', 'TÍTULO DO ANÚNCIO',
-        'SKU DO PRODUTO', 'HIERARQUIA 1', 'HIERARQUIA 2',
-        'QUANTIDADE DO SKU', 'VALOR DA VENDA', 'TAXA DA PLATAFORMA',
-        'CUSTO DE FRETE', 'CMV', 'MARGEM DE CONTRIBUIÇÃO'
+    cols_final = [
+        "ID DA VENDA","CONTA","Data","TÍTULO DO ANÚNCIO","SKU DO PRODUTO",
+        "HIERARQUIA 1","HIERARQUIA 2","QUANTIDADE DO SKU","VALOR DA VENDA",
+        "TAXA DA PLATAFORMA","CUSTO DE FRETE","CMV","MARGEM DE CONTRIBUIÇÃO"
     ]
-    tabela = df_filt[colunas]
-    st.dataframe(tabela, use_container_width=True)
+    st.dataframe(df[cols_final], use_container_width=True)
+
 
 
 def mostrar_gestao_sku():
