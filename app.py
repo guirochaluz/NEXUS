@@ -306,7 +306,7 @@ def render_sidebar():
                 "Gestão de Despesas",
                 "Painel de Metas",
                 "Gestão de Anúncios",
-                "Configurações"
+                "Gerenciar Cadastros"
             ],
             icons=[
                 "house",
@@ -317,7 +317,7 @@ def render_sidebar():
                 "currency-dollar",
                 "bar-chart-line",
                 "bullseye",
-                "gear"
+                "folder-plus"
             ],
             menu_icon="list",
             default_index=[
@@ -329,7 +329,7 @@ def render_sidebar():
                 "Gestão de Despesas",
                 "Painel de Metas",
                 "Gestão de Anúncios",
-                "Configurações"
+                "Gerenciar Cadastros"
             ].index(st.session_state.get("page", "Dashboard")),
             orientation="vertical",
             styles={
@@ -2133,7 +2133,38 @@ def mostrar_painel_metas():
     )
     st.header("🎯 Painel de Metas")
     st.info("Em breve...")
-    
+
+def mostrar_gerenciar_cadastros():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 0rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.header("📝 Gerenciar Cadastros")
+    st.info("Aqui você pode criar, editar e gerenciar seus cadastros.")
+
+    # Estrutura inicial com abas para diferentes tipos de cadastro
+    aba = st.radio("Escolha o tipo de cadastro:", ["Produtos", "Clientes", "Fornecedores", "Outros"])
+
+    if aba == "Produtos":
+        st.subheader("📦 Cadastro de Produtos")
+        st.write("Aqui você pode adicionar e gerenciar produtos.")
+        # Aqui podemos colocar um formulário de cadastro
+    elif aba == "Clientes":
+        st.subheader("👤 Cadastro de Clientes")
+        st.write("Aqui você pode adicionar e gerenciar clientes.")
+    elif aba == "Fornecedores":
+        st.subheader("🏢 Cadastro de Fornecedores")
+        st.write("Aqui você pode adicionar e gerenciar fornecedores.")
+    else:
+        st.subheader("📁 Outros Cadastros")
+        st.write("Gerencie outros tipos de dados aqui.")
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
@@ -2158,5 +2189,5 @@ elif pagina == "Painel de Metas":
     mostrar_painel_metas()
 elif pagina == "Gestão de Anúncios":
     mostrar_anuncios()
-elif pagina == "Configurações":
-    mostrar_configuracoes()
+elif pagina == "Gerenciar Cadastros":
+    mostrar_gerenciar_cadastros()
