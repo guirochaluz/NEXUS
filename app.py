@@ -1224,6 +1224,8 @@ def mostrar_relatorios():
         st.warning("Nenhuma venda no período selecionado.")
         return
 
+    df_filt = df_filt.sort_values("date_adjusted", ascending=False)
+
     # === Cálculos de Colunas Solicitadas ===
     df_filt = df_filt.copy()
     df_filt['Data']                   = df_filt['date_adjusted'].dt.strftime('%d/%m/%Y %H:%M:%S')
