@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: nexus
+    name: Cyberdock
     env: python
     branch: main
     plan: standard
@@ -8,7 +8,7 @@ services:
     startCommand: "./start.sh"
     envVars:
       - key: DB_URL
-        value: "postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com:5432/contazoom?sslmode=require"
+        value: "postgresql://cyberdock_db_user:6kJ2cQVY2moRxkgGMTROnilAjf3y0qzT@dpg-d1jtonm3jp1c73epht0g-a.oregon-postgres.render.com/cyberdock_db?sslmode=require"
       - key: ML_CLIENT_ID
         value: "3597957782423859"
       - key: ML_CLIENT_SECRET
