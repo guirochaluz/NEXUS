@@ -279,8 +279,22 @@ def render_add_account_button():
 from streamlit_option_menu import option_menu
 
 def render_sidebar():
+    # --- Injetar CSS para impedir wrap nos itens do menu ---
+    st.sidebar.markdown(
+        """
+        <style>
+          /* Aplica apenas aos links do option_menu dentro da sidebar */
+          [data-testid="stSidebar"] .nav-link {
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     with st.sidebar:
-        # Menu de navegação sem título
         selected = option_menu(
             menu_title=None,
             options=[
@@ -292,7 +306,7 @@ def render_sidebar():
                 "Gestão de Despesas",
                 "Painel de Metas",
                 "Gestão de Anúncios",
-                "Configurações"  # 🔧 Nova tela adicionada
+                "Configurações"
             ],
             icons=[
                 "house",
@@ -303,7 +317,7 @@ def render_sidebar():
                 "currency-dollar",
                 "bar-chart-line",
                 "bullseye",
-                "gear"  # ícone para Configurações
+                "gear"
             ],
             menu_icon="list",
             default_index=[
@@ -332,7 +346,8 @@ def render_sidebar():
                     "text-align": "left",
                     "margin": "4px 0",
                     "color": "#fff",
-                    "background-color": "transparent"
+                    "background-color": "transparent",
+                    "white-space": "nowrap"  # impede quebra
                 },
                 "nav-link:hover": {
                     "background-color": "#27ae60"
