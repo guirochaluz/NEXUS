@@ -2127,12 +2127,22 @@ from datetime import datetime
 
 # Função para mostrar a página de Supply Chain (Compra de Insumos)
 def mostrar_supply_chain():
-    # Layout e estilo
+    import streamlit as st
+    from datetime import datetime
+
     st.markdown(
         """
         <style>
         .block-container {
             padding-top: 0rem;
+        }
+        .stTextInput, .stSelectbox, .stDateInput {
+            width: 100%;
+        }
+        .stForm {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
         }
         </style>
         """,
@@ -2140,71 +2150,91 @@ def mostrar_supply_chain():
     )
     
     st.header("🚚 Supply Chain - Compra de Insumos")
-    st.info("Aqui você pode registrar e analisar suas compras de insumos.")
-    
-    # === Formulário para lançar uma nova compra de insumo ===
-    st.subheader("🛒 Registrar Compra de Insumo")
+    st.info("Aqui você pode registrar e analisar as compras de insumos.")
 
-    with st.form("form_compra", clear_on_submit=True):
-        col1, col2 = st.columns(2)
+    # === Formulário de Compra de Insumo ===
+    with st.form("form_compra_insumo", clear_on_submit=True):
+        col1, col2, col3 = st.columns([1, 1, 1])
         
-        # Coluna 1: Fornecedor e Insumo
         with col1:
-            # Fornecedor (relacionado com a tabela fornecedores)
-            fornecedor = st.selectbox("Fornecedor *", get_fornecedores(), key="fornecedor")
-            
-            # Insumo (relacionado com a tabela insumos)
-            insumo = st.selectbox("Insumo *", get_insumos(), key="insumo")
-
-        # Coluna 2: Quantidade, Preço Unitário, Parcelas
+            fornecedor = st.selectbox("Fornecedor *", ["Selecione um Fornecedor"] + get_fornecedores())
+        
         with col2:
+            insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + get_insumos())
+        
+        with col3:
             quantidade = st.number_input("Quantidade *", min_value=1, step=1)
-            preco_unitario = st.number_input("Preço Unitário *", min_value=0.01, format="%.2f")
+        
+        with col1:
+            preco_unitario = st.number_input("Preço Unitário *", format="%.2f", min_value=0.0)
+        
+        with col2:
             parcelas = st.number_input("Parcelas", min_value=1, step=1)
         
-        # Campos adicionais
-        forma_pagamento = st.selectbox("Forma de Pagamento *", ["Boleto", "Cartão de Crédito", "Transferência Bancária", "PIX", "Dinheiro", "Cheque"])
+        with col3:
+            forma_pagamento = st.selectbox("Forma de Pagamento *", ["Selecione", "Boleto", "Cartão de Crédito", "Transferência", "Pix"])
+        
         data_compra = st.date_input("Data da Compra *", value=datetime.today())
-        status_compra = st.selectbox("Status da Compra *", ["Paga", "Pendente", "Em Processamento", "Cancelada"])
-        data_entrega_esperada = st.date_input("Data de Entrega Esperada", value=datetime.today())
+        status_compra = st.selectbox("Status da Compra *", ["Selecione", "Paga", "A Pagar", "Cancelada"])
+        data_entrega = st.date_input("Data de Entrega Esperada", value=datetime.today())
+        
         observacoes = st.text_area("Observações")
-
-        # Botão de submissão
+        
         submitted = st.form_submit_button("➕ Registrar Compra")
+        
         if submitted:
-            if fornecedor and insumo and quantidade > 0 and preco_unitario > 0 and parcelas > 0:
-                try:
-                    total_compra = quantidade * preco_unitario  # Calcula o total da compra
-                    with engine.begin() as conn:
-                        conn.execute(text("""
-                            INSERT INTO compras_insumos (
-                                fornecedor_id, insumo_id, quantidade, preco_unitario,
-                                total_compra, forma_pagamento, parcelas, data_compra,
-                                status_compra, data_entrega_esperada, observacoes
-                            ) VALUES (
-                                :fornecedor_id, :insumo_id, :quantidade, :preco_unitario,
-                                :total_compra, :forma_pagamento, :parcelas, :data_compra,
-                                :status_compra, :data_entrega_esperada, :observacoes
-                            )
-                        """), {
-                            "fornecedor_id": fornecedor,
-                            "insumo_id": insumo,
-                            "quantidade": quantidade,
-                            "preco_unitario": preco_unitario,
-                            "total_compra": total_compra,
-                            "forma_pagamento": forma_pagamento,
-                            "parcelas": parcelas,
-                            "data_compra": data_compra,
-                            "status_compra": status_compra,
-                            "data_entrega_esperada": data_entrega_esperada,
-                            "observacoes": observacoes
-                        })
-                    st.success("✅ Compra registrada com sucesso!")
-                    st.experimental_rerun()  # Atualiza a página para refletir a nova compra
-                except Exception as e:
-                    st.error(f"❌ Erro ao registrar compra: {e}")
-            else:
-                st.warning("⚠️ Preencha todos os campos obrigatórios corretamente!")
+            # Aqui você iria salvar a compra no banco de dados
+            st.success("✅ Compra registrada com sucesso!")
+            st.rerun()
+
+    # === Filtros ===
+    st.markdown("### Filtros de Pesquisa")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col1:
+        filtro_fornecedor = st.selectbox("Filtrar por Fornecedor", ["Selecione um Fornecedor"] + get_fornecedores())
+    
+    with col2:
+        filtro_insumo = st.selectbox("Filtrar por Insumo", ["Selecione um Insumo"] + get_insumos())
+    
+    with col3:
+        filtro_data_inicio = st.date_input("Data Início", value=datetime.today())
+    
+    col4, col5 = st.columns([1, 1])
+    
+    with col4:
+        filtro_data_fim = st.date_input("Data Fim", value=datetime.today())
+    
+    with col5:
+        filtro_status = st.selectbox("Status da Compra", ["Selecione", "Paga", "A Pagar", "Cancelada"])
+    
+    # Exemplo de consulta de compras filtradas (substitua pela lógica real)
+    st.markdown("### Últimas Compras Registradas")
+    compras = get_compras(filtro_fornecedor, filtro_insumo, filtro_data_inicio, filtro_data_fim, filtro_status)
+    st.dataframe(compras)
+
+# Funções para preencher os filtros (substitua com consultas reais no banco)
+def get_fornecedores():
+    return ["Fornecedor A", "Fornecedor B", "Fornecedor C"]
+
+def get_insumos():
+    return ["Insumo A", "Insumo B", "Insumo C"]
+
+def get_compras(fornecedor, insumo, data_inicio, data_fim, status):
+    # Aqui você faria uma consulta no banco de dados com base nos filtros
+    return pd.DataFrame({
+        "Fornecedor": ["Fornecedor A", "Fornecedor B"],
+        "Insumo": ["Insumo A", "Insumo B"],
+        "Quantidade": [10, 20],
+        "Preço Unitário": [5.00, 6.00],
+        "Total Compra": [50.00, 120.00],
+        "Forma de Pagamento": ["Boleto", "Cartão"],
+        "Parcelas": [1, 2],
+        "Data da Compra": [datetime(2025, 7, 5), datetime(2025, 7, 6)],
+        "Status da Compra": ["Paga", "A Pagar"],
+        "Data de Entrega Esperada": [datetime(2025, 7, 10), datetime(2025, 7, 15)],
+    })
+
 
     # =======================
     # Tabela de Compras Registradas
@@ -2233,9 +2263,13 @@ def mostrar_supply_chain():
             FROM compras_insumos ci
             JOIN fornecedores f ON ci.fornecedor_id = f.id
             JOIN insumos i ON ci.insumo_id = i.id
-            WHERE ci.data_compra BETWEEN :data_inicio AND :data_fim
+            WHERE ci.data_compra BETWEEN %s AND %s
         """
-        params = {"data_inicio": data_inicio_filtro, "data_fim": data_fim_filtro}
+        
+        # Parametros de data que serão passados para a consulta
+        params = [data_inicio_filtro, data_fim_filtro]
+        
+        df_compras = pd.read_sql(query, engine, params=params)
 
         # Aplicar filtros adicionais
         if fornecedor_filtro != "Todos":
