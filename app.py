@@ -2223,7 +2223,7 @@ def mostrar_supply_chain():
     
     # Exemplo de consulta de compras filtradas (substitua pela lógica real)
     st.markdown("### Últimas Compras Registradas")
-    compras = get_compras(filtro_fornecedor, filtro_insumo, filtro_data_inicio, filtro_data_fim, filtro_status)
+    compras = get_compras(filtro_fornecedor, filtro_insumo, filtro_data_inicio, filtro_data_fim)
     st.dataframe(compras)
 
 # Funções para preencher os filtros (substitua com consultas reais no banco)
