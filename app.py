@@ -304,7 +304,7 @@ def render_sidebar():
                 "Expedição",
                 "Gestão de SKU",
                 "Gestão de Despesas",
-                "Painel de Metas",
+                "Supply Chain",
                 "Gestão de Anúncios",
                 "Gerenciar Cadastros"
             ],
@@ -327,7 +327,7 @@ def render_sidebar():
                 "Expedição",
                 "Gestão de SKU",
                 "Gestão de Despesas",
-                "Painel de Metas",
+                "Supply Chain",
                 "Gestão de Anúncios",
                 "Gerenciar Cadastros"
             ].index(st.session_state.get("page", "Dashboard")),
@@ -2120,7 +2120,14 @@ def mostrar_gestao_despesas():
     st.header("💰 Gestão de Despesas")
     st.info("Em breve...")
 
-def mostrar_painel_metas():
+import streamlit as st
+from sqlalchemy import text
+import pandas as pd
+from datetime import datetime
+
+# Função para mostrar a página de Supply Chain (Compra de Insumos)
+def mostrar_supply_chain():
+    # Layout e estilo
     st.markdown(
         """
         <style>
@@ -2131,8 +2138,137 @@ def mostrar_painel_metas():
         """,
         unsafe_allow_html=True,
     )
-    st.header("🎯 Painel de Metas")
-    st.info("Em breve...")
+    
+    st.header("🚚 Supply Chain - Compra de Insumos")
+    st.info("Aqui você pode registrar e analisar suas compras de insumos.")
+    
+    # === Formulário para lançar uma nova compra de insumo ===
+    st.subheader("🛒 Registrar Compra de Insumo")
+
+    with st.form("form_compra", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        
+        # Coluna 1: Fornecedor e Insumo
+        with col1:
+            # Fornecedor (relacionado com a tabela fornecedores)
+            fornecedor = st.selectbox("Fornecedor *", get_fornecedores(), key="fornecedor")
+            
+            # Insumo (relacionado com a tabela insumos)
+            insumo = st.selectbox("Insumo *", get_insumos(), key="insumo")
+
+        # Coluna 2: Quantidade, Preço Unitário, Parcelas
+        with col2:
+            quantidade = st.number_input("Quantidade *", min_value=1, step=1)
+            preco_unitario = st.number_input("Preço Unitário *", min_value=0.01, format="%.2f")
+            parcelas = st.number_input("Parcelas", min_value=1, step=1)
+        
+        # Campos adicionais
+        forma_pagamento = st.selectbox("Forma de Pagamento *", ["Boleto", "Cartão de Crédito", "Transferência Bancária", "PIX", "Dinheiro", "Cheque"])
+        data_compra = st.date_input("Data da Compra *", value=datetime.today())
+        status_compra = st.selectbox("Status da Compra *", ["Paga", "Pendente", "Em Processamento", "Cancelada"])
+        data_entrega_esperada = st.date_input("Data de Entrega Esperada", value=datetime.today())
+        observacoes = st.text_area("Observações")
+
+        # Botão de submissão
+        submitted = st.form_submit_button("➕ Registrar Compra")
+        if submitted:
+            if fornecedor and insumo and quantidade > 0 and preco_unitario > 0 and parcelas > 0:
+                try:
+                    total_compra = quantidade * preco_unitario  # Calcula o total da compra
+                    with engine.begin() as conn:
+                        conn.execute(text("""
+                            INSERT INTO compras_insumos (
+                                fornecedor_id, insumo_id, quantidade, preco_unitario,
+                                total_compra, forma_pagamento, parcelas, data_compra,
+                                status_compra, data_entrega_esperada, observacoes
+                            ) VALUES (
+                                :fornecedor_id, :insumo_id, :quantidade, :preco_unitario,
+                                :total_compra, :forma_pagamento, :parcelas, :data_compra,
+                                :status_compra, :data_entrega_esperada, :observacoes
+                            )
+                        """), {
+                            "fornecedor_id": fornecedor,
+                            "insumo_id": insumo,
+                            "quantidade": quantidade,
+                            "preco_unitario": preco_unitario,
+                            "total_compra": total_compra,
+                            "forma_pagamento": forma_pagamento,
+                            "parcelas": parcelas,
+                            "data_compra": data_compra,
+                            "status_compra": status_compra,
+                            "data_entrega_esperada": data_entrega_esperada,
+                            "observacoes": observacoes
+                        })
+                    st.success("✅ Compra registrada com sucesso!")
+                    st.experimental_rerun()  # Atualiza a página para refletir a nova compra
+                except Exception as e:
+                    st.error(f"❌ Erro ao registrar compra: {e}")
+            else:
+                st.warning("⚠️ Preencha todos os campos obrigatórios corretamente!")
+
+    # =======================
+    # Tabela de Compras Registradas
+    # =======================
+    st.subheader("📋 Últimas Compras de Insumos")
+    
+    # Filtros para análise
+    st.markdown("**🔍 Filtros para Análise**")
+    
+    # Filtro de fornecedor
+    fornecedores_lista = get_fornecedores()
+    fornecedor_filtro = st.selectbox("Filtrar por Fornecedor", ["Todos"] + fornecedores_lista)
+
+    # Filtro de status da compra
+    status_filtro = st.selectbox("Filtrar por Status", ["Todos", "Paga", "Pendente", "Em Processamento", "Cancelada"])
+
+    # Filtro de Data de Compra
+    data_inicio_filtro = st.date_input("De", value=datetime(2022, 1, 1))
+    data_fim_filtro = st.date_input("Até", value=datetime.today())
+
+    # Consultar o banco de dados para obter as compras
+    try:
+        query = """
+            SELECT ci.id, f.empresa_nome AS fornecedor, i.descricao AS insumo, ci.quantidade, ci.preco_unitario, ci.total_compra,
+                   ci.forma_pagamento, ci.parcelas, ci.data_compra, ci.status_compra, ci.data_entrega_esperada, ci.observacoes
+            FROM compras_insumos ci
+            JOIN fornecedores f ON ci.fornecedor_id = f.id
+            JOIN insumos i ON ci.insumo_id = i.id
+            WHERE ci.data_compra BETWEEN :data_inicio AND :data_fim
+        """
+        params = {"data_inicio": data_inicio_filtro, "data_fim": data_fim_filtro}
+
+        # Aplicar filtros adicionais
+        if fornecedor_filtro != "Todos":
+            query += " AND f.empresa_nome = :fornecedor_filtro"
+            params["fornecedor_filtro"] = fornecedor_filtro
+        
+        if status_filtro != "Todos":
+            query += " AND ci.status_compra = :status_filtro"
+            params["status_filtro"] = status_filtro
+        
+        df_compras = pd.read_sql(query, engine, params=params)
+        if df_compras.empty:
+            st.info("📭 Nenhuma compra registrada com os filtros aplicados.")
+        else:
+            st.dataframe(df_compras, use_container_width=True)
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar compras: {e}")
+
+# Função para obter lista de fornecedores
+def get_fornecedores():
+    # Recupera os fornecedores do banco de dados
+    query = "SELECT id, empresa_nome FROM fornecedores ORDER BY empresa_nome"
+    df = pd.read_sql(query, engine)
+    return df["empresa_nome"].tolist()
+
+# Função para obter lista de insumos
+def get_insumos():
+    # Recupera os insumos do banco de dados
+    query = "SELECT id, descricao FROM insumos ORDER BY descricao"
+    df = pd.read_sql(query, engine)
+    return df["descricao"].tolist()
+
+
 
 def mostrar_gerenciar_cadastros():
     import streamlit as st
@@ -2144,14 +2280,6 @@ def mostrar_gerenciar_cadastros():
         <style>
         .block-container {
             padding-top: 0rem;
-        }
-        .action-buttons {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-        }
-        .action-buttons button {
-            margin-left: 5px;
         }
         </style>
         """,
@@ -2174,7 +2302,6 @@ def mostrar_gerenciar_cadastros():
     if aba == "🏢 Fornecedores":
         st.subheader("🏢 Cadastro de Fornecedores")
 
-        # === Formulário de adição ===
         with st.form("form_fornecedor", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -2220,66 +2347,7 @@ def mostrar_gerenciar_cadastros():
             if df.empty:
                 st.info("📭 Nenhum fornecedor cadastrado ainda.")
             else:
-                st.markdown("### 📋 Fornecedores Cadastrados")
-
-                # Exibe a tabela com os dados dos fornecedores
                 st.dataframe(df, use_container_width=True)
-
-                # Ações de edição e exclusão
-                for _, row in df.iterrows():
-                    col1, col2 = st.columns([8, 2])
-                    with col1:
-                        st.write(f"**{row['empresa_nome']}** | CNPJ: {row['cnpj']} | Contato: {row['whatsapp']}")
-                    with col2:
-                        editar = st.button("✏️", key=f"edit_for_{row['id']}")
-                        excluir = st.button("🗑️", key=f"del_for_{row['id']}")
-
-                        if editar:
-                            with st.form(f"form_edit_for_{row['id']}"):
-                                col_e1, col_e2 = st.columns(2)
-                                with col_e1:
-                                    novo_nome = st.text_input("Nome da Empresa *", value=row["empresa_nome"])
-                                    novo_cnpj = st.text_input("CNPJ", value=row["cnpj"])
-                                    novo_ref = st.text_input("Nome de Referência", value=row["referencia_nome"])
-                                with col_e2:
-                                    novo_whatsapp = st.text_input("WhatsApp", value=row["whatsapp"])
-                                    novo_endereco = st.text_area("Endereço Completo", value=row["endereco_completo"])
-                                    novo_tipo = st.text_input("Tipo de Insumo", value=row["tipo_insumo"])
-
-                                if st.form_submit_button("💾 Salvar Alterações"):
-                                    if novo_nome.strip() == "":
-                                        st.warning("⚠️ Nome da Empresa é obrigatório.")
-                                    else:
-                                        try:
-                                            with engine.begin() as conn:
-                                                conn.execute(text("""
-                                                    UPDATE fornecedores
-                                                    SET empresa_nome = :nome, cnpj = :cnpj, referencia_nome = :ref,
-                                                        whatsapp = :whatsapp, endereco_completo = :endereco, tipo_insumo = :tipo
-                                                    WHERE id = :id
-                                                """), {
-                                                    "nome": novo_nome, "cnpj": novo_cnpj, "ref": novo_ref,
-                                                    "whatsapp": novo_whatsapp, "endereco": novo_endereco,
-                                                    "tipo": novo_tipo, "id": row["id"]
-                                                })
-                                            st.success("✅ Fornecedor atualizado com sucesso!")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ Erro ao atualizar fornecedor: {e}")
-
-                        if excluir:
-                            if st.confirm(f"Tem certeza que deseja excluir **{row['empresa_nome']}**?"):
-                                try:
-                                    with engine.begin() as conn:
-                                        conn.execute(
-                                            text("DELETE FROM fornecedores WHERE id = :id"),
-                                            {"id": row["id"]}
-                                        )
-                                    st.success("✅ Fornecedor excluído com sucesso!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao excluir fornecedor: {e}")
-
         except Exception as e:
             st.error(f"❌ Erro ao carregar fornecedores: {e}")
 
@@ -2389,6 +2457,16 @@ def mostrar_gerenciar_cadastros():
         except Exception as e:
             st.error(f"❌ Erro ao carregar insumos: {e}")
 
+        # === Lista de insumos cadastrados ===
+        try:
+            df = pd.read_sql("SELECT * FROM insumos ORDER BY id DESC", engine)
+            if df.empty:
+                st.info("📭 Nenhum insumo cadastrado ainda.")
+            else:
+                st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar insumos: {e}")
+
 
 
 
@@ -2413,8 +2491,8 @@ elif pagina == "Gestão de SKU":
     mostrar_gestao_sku()
 elif pagina == "Gestão de Despesas":
     mostrar_gestao_despesas()
-elif pagina == "Painel de Metas":
-    mostrar_painel_metas()
+elif pagina == "Supply Chain":
+    mostrar_supply_chain()
 elif pagina == "Gestão de Anúncios":
     mostrar_anuncios()
 elif pagina == "Gerenciar Cadastros":
