@@ -2334,104 +2334,44 @@ def mostrar_gerenciar_cadastros():
     if aba == "🏢 Fornecedores":
         st.subheader("🏢 Cadastro de Fornecedores")
 
-        # === Formulário de novo fornecedor ===
-        if "edit_id" not in st.session_state:
-            st.session_state.edit_id = None
+        with st.form("form_fornecedor", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                empresa_nome = st.text_input("Nome da Empresa *")
+                cnpj = st.text_input("CNPJ")
+                referencia_nome = st.text_input("Nome de Referência")
+            with col2:
+                whatsapp = st.text_input("WhatsApp")
+                endereco_completo = st.text_area("Endereço Completo")
+                tipo_insumo = st.text_input("Tipo de Insumo")
 
-        if st.session_state.edit_id is None:
-            with st.form("form_fornecedor", clear_on_submit=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    empresa_nome = st.text_input("Nome da Empresa *")
-                    cnpj = st.text_input("CNPJ")
-                    referencia_nome = st.text_input("Nome de Referência")
-                with col2:
-                    whatsapp = st.text_input("WhatsApp")
-                    endereco_completo = st.text_area("Endereço Completo")
-                    tipo_insumo = st.text_input("Tipo de Insumo")
-
-                submitted = st.form_submit_button("➕ Adicionar Fornecedor")
-                if submitted:
-                    if empresa_nome.strip() == "":
-                        st.warning("⚠️ Nome da Empresa é obrigatório.")
-                    else:
-                        try:
-                            with engine.begin() as conn:
-                                conn.execute(text("""
-                                    INSERT INTO fornecedores (
-                                        empresa_nome, cnpj, referencia_nome,
-                                        whatsapp, endereco_completo, tipo_insumo
-                                    ) VALUES (
-                                        :empresa_nome, :cnpj, :referencia_nome,
-                                        :whatsapp, :endereco_completo, :tipo_insumo
-                                    )
-                                """), {
-                                    "empresa_nome": empresa_nome,
-                                    "cnpj": cnpj,
-                                    "referencia_nome": referencia_nome,
-                                    "whatsapp": whatsapp,
-                                    "endereco_completo": endereco_completo,
-                                    "tipo_insumo": tipo_insumo
-                                })
-                            st.success("✅ Fornecedor adicionado com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Erro ao adicionar fornecedor: {e}")
-        else:
-            # === Formulário para editar fornecedor ===
-            try:
-                with engine.begin() as conn:
-                    fornecedor = conn.execute(
-                        text("SELECT * FROM fornecedores WHERE id=:id"),
-                        {"id": st.session_state.edit_id}
-                    ).fetchone()
-
-                if fornecedor:
-                    st.subheader(f"✏️ Editar Fornecedor: {fornecedor['empresa_nome']}")
-                    with st.form("form_editar_fornecedor", clear_on_submit=True):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            empresa_nome = st.text_input("Nome da Empresa *", fornecedor['empresa_nome'])
-                            cnpj = st.text_input("CNPJ", fornecedor['cnpj'])
-                            referencia_nome = st.text_input("Nome de Referência", fornecedor['referencia_nome'])
-                        with col2:
-                            whatsapp = st.text_input("WhatsApp", fornecedor['whatsapp'])
-                            endereco_completo = st.text_area("Endereço Completo", fornecedor['endereco_completo'])
-                            tipo_insumo = st.text_input("Tipo de Insumo", fornecedor['tipo_insumo'])
-
-                        submitted = st.form_submit_button("💾 Salvar Alterações")
-                        cancelar = st.form_submit_button("❌ Cancelar")
-                        if submitted:
-                            try:
-                                with engine.begin() as conn:
-                                    conn.execute(text("""
-                                        UPDATE fornecedores SET
-                                            empresa_nome=:empresa_nome,
-                                            cnpj=:cnpj,
-                                            referencia_nome=:referencia_nome,
-                                            whatsapp=:whatsapp,
-                                            endereco_completo=:endereco_completo,
-                                            tipo_insumo=:tipo_insumo
-                                        WHERE id=:id
-                                    """), {
-                                        "empresa_nome": empresa_nome,
-                                        "cnpj": cnpj,
-                                        "referencia_nome": referencia_nome,
-                                        "whatsapp": whatsapp,
-                                        "endereco_completo": endereco_completo,
-                                        "tipo_insumo": tipo_insumo,
-                                        "id": fornecedor['id']
-                                    })
-                                st.success("✅ Fornecedor atualizado com sucesso!")
-                                st.session_state.edit_id = None
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao atualizar: {e}")
-                        if cancelar:
-                            st.session_state.edit_id = None
-                            st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro ao carregar dados para edição: {e}")
+            submitted = st.form_submit_button("➕ Adicionar Fornecedor")
+            if submitted:
+                if empresa_nome.strip() == "":
+                    st.warning("⚠️ Nome da Empresa é obrigatório.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO fornecedores (
+                                    empresa_nome, cnpj, referencia_nome,
+                                    whatsapp, endereco_completo, tipo_insumo
+                                ) VALUES (
+                                    :empresa_nome, :cnpj, :referencia_nome,
+                                    :whatsapp, :endereco_completo, :tipo_insumo
+                                )
+                            """), {
+                                "empresa_nome": empresa_nome,
+                                "cnpj": cnpj,
+                                "referencia_nome": referencia_nome,
+                                "whatsapp": whatsapp,
+                                "endereco_completo": endereco_completo,
+                                "tipo_insumo": tipo_insumo
+                            })
+                        st.success("✅ Fornecedor adicionado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao adicionar fornecedor: {e}")
 
         # === Lista de fornecedores cadastrados ===
         try:
@@ -2439,41 +2379,115 @@ def mostrar_gerenciar_cadastros():
             if df.empty:
                 st.info("📭 Nenhum fornecedor cadastrado ainda.")
             else:
-                st.subheader("📋 Fornecedores Cadastrados")
-                for idx, row in df.iterrows():
-                    col1, col2, col3 = st.columns([6, 1, 1])
-                    with col1:
-                        st.write(f"**{row['empresa_nome']}** - {row['cnpj']}")
-                    with col2:
-                        if st.button("✏️", key=f"edit_fornecedor_{row['id']}"):
-                            st.session_state.edit_id = row['id']
-                            st.rerun()
-                    with col3:
-                        if st.button("🗑️", key=f"delete_fornecedor_{row['id']}"):
-                            try:
-                                with engine.begin() as conn:
-                                    conn.execute(text("DELETE FROM fornecedores WHERE id=:id"), {"id": row['id']})
-                                st.success("✅ Fornecedor excluído com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao excluir: {e}")
-
+                st.dataframe(df, use_container_width=True)
         except Exception as e:
             st.error(f"❌ Erro ao carregar fornecedores: {e}")
 
     # ==============================
-    # STAKEHOLDERS (mesmo modelo simplificado)
+    # STAKEHOLDERS
     # ==============================
     elif aba == "👥 Stakeholders":
         st.subheader("👥 Cadastro de Stakeholders")
-        st.info("Funcionalidade de edição/exclusão será implementada aqui também...")
+
+        with st.form("form_stakeholder", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                relacao = st.selectbox("Relação *", ["Colaborador", "Sócio", "Outro"])
+                nome = st.text_input("Nome *")
+            with col2:
+                whatsapp = st.text_input("WhatsApp")
+                observacao = st.text_area("Observações")
+
+            submitted = st.form_submit_button("➕ Adicionar Stakeholder")
+            if submitted:
+                if nome.strip() == "":
+                    st.warning("⚠️ Nome é obrigatório.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO stakeholders (
+                                    relacao, nome, whatsapp, observacao
+                                ) VALUES (
+                                    :relacao, :nome, :whatsapp, :observacao
+                                )
+                            """), {
+                                "relacao": relacao,
+                                "nome": nome,
+                                "whatsapp": whatsapp,
+                                "observacao": observacao
+                            })
+                        st.success("✅ Stakeholder adicionado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao adicionar stakeholder: {e}")
+
+        # === Lista de stakeholders cadastrados ===
+        try:
+            df = pd.read_sql("SELECT * FROM stakeholders ORDER BY id DESC", engine)
+            if df.empty:
+                st.info("📭 Nenhum stakeholder cadastrado ainda.")
+            else:
+                st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar stakeholders: {e}")
 
     # ==============================
-    # INSUMOS (mesmo modelo simplificado)
+    # INSUMOS
     # ==============================
     elif aba == "🧱 Insumos":
         st.subheader("🧱 Cadastro de Insumos")
-        st.info("Funcionalidade de edição/exclusão será implementada aqui também...")
+
+        with st.form("form_insumo", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                descricao = st.text_input("Descrição do Insumo *")
+                categoria = st.text_input("Categoria do Insumo")
+                classificacao = st.selectbox("Classificação", ["Bruto", "Acabado"])
+            with col2:
+                unidade_medida = st.selectbox("Unidade de Medida *",["mm", "cm", "m", "und", "L", "Kg"])
+                medida = st.text_input("Medida")
+                cores = st.text_input("Cor(es) (separadas por vírgula)")
+            observacao = st.text_area("Observações")
+
+            submitted = st.form_submit_button("➕ Adicionar Insumo")
+            if submitted:
+                if descricao.strip() == "":
+                    st.warning("⚠️ Descrição do Insumo é obrigatória.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO insumos (
+                                    descricao, categoria, classificacao,
+                                    unidade_medida, medida, cores, observacao
+                                ) VALUES (
+                                    :descricao, :categoria, :classificacao,
+                                    :unidade_medida, :medida, :cores, :observacao
+                                )
+                            """), {
+                                "descricao": descricao,
+                                "categoria": categoria,
+                                "classificacao": classificacao,
+                                "unidade_medida": unidade_medida,
+                                "medida": medida,
+                                "cores": cores,
+                                "observacao": observacao
+                            })
+                        st.success("✅ Insumo adicionado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao adicionar insumo: {e}")
+
+        # === Lista de insumos cadastrados ===
+        try:
+            df = pd.read_sql("SELECT * FROM insumos ORDER BY id DESC", engine)
+            if df.empty:
+                st.info("📭 Nenhum insumo cadastrado ainda.")
+            else:
+                st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar insumos: {e}")
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
