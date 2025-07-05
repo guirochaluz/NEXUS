@@ -2204,7 +2204,7 @@ def mostrar_supply_chain():
     with col3:
         filtro_data_inicio = st.date_input("Data Início", value=datetime.today())
     
-    col4= st.columns([1)
+    col4= st.columns([1])
     
     with col4:
         filtro_data_fim = st.date_input("Data da Compra", value=datetime.today())
