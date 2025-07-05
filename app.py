@@ -2166,7 +2166,6 @@ def mostrar_gerenciar_cadastros():
     if aba == "🏢 Fornecedores":
         st.subheader("🏢 Cadastro de Fornecedores")
 
-        # === Formulário de adição ===
         with st.form("form_fornecedor", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -2214,43 +2213,10 @@ def mostrar_gerenciar_cadastros():
             else:
                 st.markdown("### 📋 Fornecedores Cadastrados")
                 for _, row in df.iterrows():
-                    col1, col2, col3 = st.columns([8, 1, 1])
+                    col1, col2 = st.columns([10, 1])
                     with col1:
                         st.markdown(f"**{row['empresa_nome']}** - {row['cnpj']}")
                     with col2:
-                        if st.button("✏️", key=f"edit_for_{row['id']}"):
-                            with st.form(f"form_edit_for_{row['id']}"):
-                                col_e1, col_e2 = st.columns(2)
-                                with col_e1:
-                                    novo_nome = st.text_input("Nome da Empresa *", value=row["empresa_nome"])
-                                    novo_cnpj = st.text_input("CNPJ", value=row["cnpj"])
-                                    novo_ref = st.text_input("Nome de Referência", value=row["referencia_nome"])
-                                with col_e2:
-                                    novo_whatsapp = st.text_input("WhatsApp", value=row["whatsapp"])
-                                    novo_endereco = st.text_area("Endereço Completo", value=row["endereco_completo"])
-                                    novo_tipo = st.text_input("Tipo de Insumo", value=row["tipo_insumo"])
-
-                                if st.form_submit_button("💾 Salvar Alterações"):
-                                    if novo_nome.strip() == "":
-                                        st.warning("⚠️ Nome da Empresa é obrigatório.")
-                                    else:
-                                        try:
-                                            with engine.begin() as conn:
-                                                conn.execute(text("""
-                                                    UPDATE fornecedores
-                                                    SET empresa_nome = :nome, cnpj = :cnpj, referencia_nome = :ref,
-                                                        whatsapp = :whatsapp, endereco_completo = :endereco, tipo_insumo = :tipo
-                                                    WHERE id = :id
-                                                """), {
-                                                    "nome": novo_nome, "cnpj": novo_cnpj, "ref": novo_ref,
-                                                    "whatsapp": novo_whatsapp, "endereco": novo_endereco,
-                                                    "tipo": novo_tipo, "id": row["id"]
-                                                })
-                                            st.success("✅ Fornecedor atualizado com sucesso!")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ Erro ao atualizar fornecedor: {e}")
-                    with col3:
                         if st.button("🗑️", key=f"del_for_{row['id']}"):
                             if st.confirm(f"Tem certeza que deseja excluir **{row['empresa_nome']}**?"):
                                 try:
@@ -2313,39 +2279,10 @@ def mostrar_gerenciar_cadastros():
             else:
                 st.markdown("### 📋 Stakeholders Cadastrados")
                 for _, row in df.iterrows():
-                    col1, col2, col3 = st.columns([8, 1, 1])
+                    col1, col2 = st.columns([10, 1])
                     with col1:
                         st.markdown(f"**{row['nome']}** - {row['relacao']}")
                     with col2:
-                        if st.button("✏️", key=f"edit_stk_{row['id']}"):
-                            with st.form(f"form_edit_stk_{row['id']}"):
-                                col_e1, col_e2 = st.columns(2)
-                                with col_e1:
-                                    novo_relacao = st.selectbox("Relação *", ["Colaborador", "Sócio", "Outro"], index=["Colaborador", "Sócio", "Outro"].index(row["relacao"]))
-                                    novo_nome = st.text_input("Nome *", value=row["nome"])
-                                with col_e2:
-                                    novo_whatsapp = st.text_input("WhatsApp", value=row["whatsapp"])
-                                    novo_obs = st.text_area("Observações", value=row["observacao"])
-
-                                if st.form_submit_button("💾 Salvar Alterações"):
-                                    if novo_nome.strip() == "":
-                                        st.warning("⚠️ Nome é obrigatório.")
-                                    else:
-                                        try:
-                                            with engine.begin() as conn:
-                                                conn.execute(text("""
-                                                    UPDATE stakeholders
-                                                    SET relacao = :relacao, nome = :nome, whatsapp = :whatsapp, observacao = :obs
-                                                    WHERE id = :id
-                                                """), {
-                                                    "relacao": novo_relacao, "nome": novo_nome,
-                                                    "whatsapp": novo_whatsapp, "obs": novo_obs, "id": row["id"]
-                                                })
-                                            st.success("✅ Stakeholder atualizado com sucesso!")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ Erro ao atualizar stakeholder: {e}")
-                    with col3:
                         if st.button("🗑️", key=f"del_stk_{row['id']}"):
                             if st.confirm(f"Tem certeza que deseja excluir **{row['nome']}**?"):
                                 try:
@@ -2419,46 +2356,10 @@ def mostrar_gerenciar_cadastros():
             else:
                 st.markdown("### 📋 Insumos Cadastrados")
                 for _, row in df.iterrows():
-                    col1, col2, col3 = st.columns([8, 1, 1])
+                    col1, col2 = st.columns([10, 1])
                     with col1:
                         st.markdown(f"**{row['descricao']}** - {row['categoria']}")
                     with col2:
-                        if st.button("✏️", key=f"edit_ins_{row['id']}"):
-                            with st.form(f"form_edit_ins_{row['id']}"):
-                                col_e1, col_e2 = st.columns(2)
-                                with col_e1:
-                                    novo_desc = st.text_input("Descrição do Insumo *", value=row["descricao"])
-                                    novo_categoria = st.text_input("Categoria do Insumo", value=row["categoria"])
-                                    novo_classificacao = st.selectbox("Classificação", ["Bruto", "Acabado"], index=["Bruto", "Acabado"].index(row["classificacao"]))
-                                with col_e2:
-                                    novo_unid = st.selectbox("Unidade de Medida *", unid_options, index=unid_options.index(row["unidade_medida"]) if row["unidade_medida"] in unid_options else unid_options.index("Outro"))
-                                    if novo_unid == "Outro":
-                                        novo_unid = st.text_input("Especifique a Unidade de Medida *", value=row["unidade_medida"])
-                                    novo_medida = st.text_input("Medida", value=row["medida"])
-                                    novo_cores = st.text_input("Cor(es)", value=row["cores"])
-                                novo_obs = st.text_area("Observações", value=row["observacao"])
-
-                                if st.form_submit_button("💾 Salvar Alterações"):
-                                    if novo_desc.strip() == "":
-                                        st.warning("⚠️ Descrição do Insumo é obrigatória.")
-                                    else:
-                                        try:
-                                            with engine.begin() as conn:
-                                                conn.execute(text("""
-                                                    UPDATE insumos
-                                                    SET descricao = :desc, categoria = :cat, classificacao = :classif,
-                                                        unidade_medida = :unid, medida = :medida, cores = :cores, observacao = :obs
-                                                    WHERE id = :id
-                                                """), {
-                                                    "desc": novo_desc, "cat": novo_categoria, "classif": novo_classificacao,
-                                                    "unid": novo_unid, "medida": novo_medida,
-                                                    "cores": novo_cores, "obs": novo_obs, "id": row["id"]
-                                                })
-                                            st.success("✅ Insumo atualizado com sucesso!")
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(f"❌ Erro ao atualizar insumo: {e}")
-                    with col3:
                         if st.button("🗑️", key=f"del_ins_{row['id']}"):
                             if st.confirm(f"Tem certeza que deseja excluir **{row['descricao']}**?"):
                                 try:
@@ -2473,6 +2374,7 @@ def mostrar_gerenciar_cadastros():
                                     st.error(f"❌ Erro ao excluir insumo: {e}")
         except Exception as e:
             st.error(f"❌ Erro ao carregar insumos: {e}")
+
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
