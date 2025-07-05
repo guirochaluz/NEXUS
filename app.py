@@ -2192,22 +2192,34 @@ def mostrar_supply_chain():
 
 
     # === Filtros ===
-    st.markdown("### Filtros de Pesquisa")
-    col1, col2, col3 = st.columns([1, 1, 1])
+    st.markdown("### 🔍 Filtros de Pesquisa")
     
+    # Primeira linha com 3 filtros
+    col1, col2, col3 = st.columns(3)
     with col1:
-        filtro_fornecedor = st.selectbox("Filtrar por Fornecedor", ["Selecione um Fornecedor"] + get_fornecedores())
-    
+        filtro_fornecedor = st.selectbox(
+            "Fornecedor", ["Todos"] + get_fornecedores()
+        )
     with col2:
-        filtro_insumo = st.selectbox("Filtrar por Insumo", ["Selecione um Insumo"] + get_insumos())
-    
+        filtro_insumo = st.selectbox(
+            "Insumo", ["Todos"] + get_insumos()
+        )
     with col3:
-        filtro_data_inicio = st.date_input("Data Início", value=datetime.today())
+        filtro_data_inicio = st.date_input(
+            "Data Início", value=datetime.today()
+        )
     
-    col4= st.columns([1])
+    # Segunda linha com Data Fim sozinho
+    with st.container():
+        filtro_data_fim = st.date_input(
+            "Data Fim", value=datetime.today()
+        )
     
-    with col4:
-        filtro_data_fim = st.date_input("Data da Compra", value=datetime.today())
+    # Botão de aplicar filtros
+    if st.button("🔍 Aplicar Filtros"):
+        st.success("Filtros aplicados!")
+        # Aqui você pode disparar a consulta filtrada no banco
+
     
     # Exemplo de consulta de compras filtradas (substitua pela lógica real)
     st.markdown("### Últimas Compras Registradas")
