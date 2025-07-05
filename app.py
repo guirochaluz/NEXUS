@@ -2125,7 +2125,6 @@ from sqlalchemy import text
 import pandas as pd
 from datetime import datetime
 
-# Função para mostrar a página de Supply Chain (Compra de Insumos)
 def mostrar_supply_chain():
     import streamlit as st
     from datetime import datetime
@@ -2152,40 +2151,45 @@ def mostrar_supply_chain():
     st.header("🚚 Supply Chain - Compra de Insumos")
     st.info("Aqui você pode registrar e analisar as compras de insumos.")
 
-    # === Formulário de Compra de Insumo ===
-    with st.form("form_compra_insumo", clear_on_submit=True):
-        col1, col2, col3 = st.columns([1, 1, 1])
-        
-        with col1:
-            fornecedor = st.selectbox("Fornecedor *", ["Selecione um Fornecedor"] + get_fornecedores())
-        
-        with col2:
-            insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + get_insumos())
-        
-        with col3:
-            quantidade = st.number_input("Quantidade *", min_value=1, step=1)
-        
-        with col1:
-            preco_unitario = st.number_input("Preço Unitário *", format="%.2f", min_value=0.0)
-        
-        with col2:
-            parcelas = st.number_input("Parcelas", min_value=1, step=1)
-        
-        with col3:
-            forma_pagamento = st.selectbox("Forma de Pagamento *", ["Selecione", "Boleto", "Cartão de Crédito", "Transferência", "Pix"])
-        
-        data_compra = st.date_input("Data da Compra *", value=datetime.today())
-        status_compra = st.selectbox("Status da Compra *", ["Selecione", "Paga", "A Pagar", "Cancelada"])
-        data_entrega = st.date_input("Data de Entrega Esperada", value=datetime.today())
-        
-        observacoes = st.text_area("Observações")
-        
-        submitted = st.form_submit_button("➕ Registrar Compra")
-        
-        if submitted:
-            # Aqui você iria salvar a compra no banco de dados
-            st.success("✅ Compra registrada com sucesso!")
-            st.rerun()
+    # === Formulário de Compra de Insumo (dentro de expander) ===
+    with st.expander("➕ Registrar Nova Compra", expanded=False):
+        with st.form("form_compra_insumo", clear_on_submit=True):
+            col1, col2, col3 = st.columns([1, 1, 1])
+            
+            with col1:
+                fornecedor = st.selectbox("Fornecedor *", ["Selecione um Fornecedor"] + get_fornecedores())
+            
+            with col2:
+                insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + get_insumos())
+            
+            with col3:
+                quantidade = st.number_input("Quantidade *", min_value=1, step=1)
+            
+            with col1:
+                preco_unitario = st.number_input("Preço Unitário *", format="%.2f", min_value=0.0)
+            
+            with col2:
+                parcelas = st.number_input("Parcelas", min_value=1, step=1)
+            
+            with col3:
+                forma_pagamento = st.selectbox("Forma de Pagamento *", ["Selecione", "Boleto", "Cartão de Crédito", "Transferência", "Pix"])
+
+            # Colocando Data de Compra e Data de Entrega Esperada na mesma linha
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                data_compra = st.date_input("Data da Compra *", value=datetime.today())
+            with col2:
+                data_entrega = st.date_input("Data de Entrega Esperada", value=datetime.today())
+
+            observacoes = st.text_area("Observações")
+            
+            submitted = st.form_submit_button("💾 Salvar Compra")
+            
+            if submitted:
+                # Aqui você iria salvar a compra no banco de dados
+                st.success("✅ Compra registrada com sucesso!")
+                st.rerun()
+
 
     # === Filtros ===
     st.markdown("### Filtros de Pesquisa")
