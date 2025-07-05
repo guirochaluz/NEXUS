@@ -2145,6 +2145,14 @@ def mostrar_gerenciar_cadastros():
         .block-container {
             padding-top: 0rem;
         }
+        .action-buttons {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+        .action-buttons button {
+            margin-left: 5px;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -2206,7 +2214,7 @@ def mostrar_gerenciar_cadastros():
                     except Exception as e:
                         st.error(f"❌ Erro ao adicionar fornecedor: {e}")
 
-        # === Lista de fornecedores cadastrados com botões de ação ===
+        # === Lista de fornecedores cadastrados ===
         try:
             df = pd.read_sql("SELECT * FROM fornecedores ORDER BY id DESC", engine)
             if df.empty:
@@ -2214,9 +2222,12 @@ def mostrar_gerenciar_cadastros():
             else:
                 st.markdown("### 📋 Fornecedores Cadastrados")
 
-                # Adicionar coluna de ações com ícones
-                for index, row in df.iterrows():
-                    col1, col2 = st.columns([10, 2])
+                # Exibe a tabela com os dados dos fornecedores
+                st.dataframe(df, use_container_width=True)
+
+                # Ações de edição e exclusão
+                for _, row in df.iterrows():
+                    col1, col2 = st.columns([8, 2])
                     with col1:
                         st.write(f"**{row['empresa_nome']}** | CNPJ: {row['cnpj']} | Contato: {row['whatsapp']}")
                     with col2:
@@ -2271,6 +2282,114 @@ def mostrar_gerenciar_cadastros():
 
         except Exception as e:
             st.error(f"❌ Erro ao carregar fornecedores: {e}")
+
+    # ==============================
+    # STAKEHOLDERS
+    # ==============================
+    elif aba == "👥 Stakeholders":
+        st.subheader("👥 Cadastro de Stakeholders")
+
+        with st.form("form_stakeholder", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                relacao = st.selectbox("Relação *", ["Colaborador", "Sócio", "Outro"])
+                nome = st.text_input("Nome *")
+            with col2:
+                whatsapp = st.text_input("WhatsApp")
+                observacao = st.text_area("Observações")
+
+            submitted = st.form_submit_button("➕ Adicionar Stakeholder")
+            if submitted:
+                if nome.strip() == "":
+                    st.warning("⚠️ Nome é obrigatório.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO stakeholders (
+                                    relacao, nome, whatsapp, observacao
+                                ) VALUES (
+                                    :relacao, :nome, :whatsapp, :observacao
+                                )
+                            """), {
+                                "relacao": relacao,
+                                "nome": nome,
+                                "whatsapp": whatsapp,
+                                "observacao": observacao
+                            })
+                        st.success("✅ Stakeholder adicionado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao adicionar stakeholder: {e}")
+
+        # === Lista de stakeholders cadastrados ===
+        try:
+            df = pd.read_sql("SELECT * FROM stakeholders ORDER BY id DESC", engine)
+            if df.empty:
+                st.info("📭 Nenhum stakeholder cadastrado ainda.")
+            else:
+                st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar stakeholders: {e}")
+
+    # ==============================
+    # INSUMOS
+    # ==============================
+    elif aba == "🧱 Insumos":
+        st.subheader("🧱 Cadastro de Insumos")
+
+        with st.form("form_insumo", clear_on_submit=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                descricao = st.text_input("Descrição do Insumo *")
+                categoria = st.text_input("Categoria do Insumo")
+                classificacao = st.selectbox("Classificação", ["Bruto", "Acabado"])
+            with col2:
+                unidade_medida = st.selectbox("Unidade de Medida *",["mm", "cm", "m", "und", "L", "Kg"])
+                medida = st.text_input("Medida")
+                cores = st.text_input("Cor(es) (separadas por vírgula)")
+            observacao = st.text_area("Observações")
+
+            submitted = st.form_submit_button("➕ Adicionar Insumo")
+            if submitted:
+                if descricao.strip() == "":
+                    st.warning("⚠️ Descrição do Insumo é obrigatória.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO insumos (
+                                    descricao, categoria, classificacao,
+                                    unidade_medida, medida, cores, observacao
+                                ) VALUES (
+                                    :descricao, :categoria, :classificacao,
+                                    :unidade_medida, :medida, :cores, :observacao
+                                )
+                            """), {
+                                "descricao": descricao,
+                                "categoria": categoria,
+                                "classificacao": classificacao,
+                                "unidade_medida": unidade_medida,
+                                "medida": medida,
+                                "cores": cores,
+                                "observacao": observacao
+                            })
+                        st.success("✅ Insumo adicionado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao adicionar insumo: {e}")
+
+        # === Lista de insumos cadastrados ===
+        try:
+            df = pd.read_sql("SELECT * FROM insumos ORDER BY id DESC", engine)
+            if df.empty:
+                st.info("📭 Nenhum insumo cadastrado ainda.")
+            else:
+                st.dataframe(df, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ Erro ao carregar insumos: {e}")
+
+
 
 
 
