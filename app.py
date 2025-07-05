@@ -2204,13 +2204,10 @@ def mostrar_supply_chain():
     with col3:
         filtro_data_inicio = st.date_input("Data Início", value=datetime.today())
     
-    col4, col5 = st.columns([1, 1])
+    col4= st.columns([1)
     
     with col4:
-        filtro_data_fim = st.date_input("Data Fim", value=datetime.today())
-    
-    with col5:
-        filtro_status = st.selectbox("Status da Compra", ["Selecione", "Paga", "A Pagar", "Cancelada"])
+        filtro_data_fim = st.date_input("Data da Compra", value=datetime.today())
     
     # Exemplo de consulta de compras filtradas (substitua pela lógica real)
     st.markdown("### Últimas Compras Registradas")
