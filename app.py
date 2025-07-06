@@ -1888,20 +1888,19 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df_filtrado
         .groupby("level1", as_index=False)
         .agg(
-            Quantidade_Unidades=("quantidade", "sum"),
-            Quantidade_de_Vendas=("order_id", "nunique")
+            Unidade=("quantidade", "sum"),
+            Vendas=("order_id", "nunique")
         )
         .rename(columns={"level1": "Hierarquia 1"})
     )
-    # totais
-    tot_q1 = df_h1["Quantidade_Unidades"].sum()
-    tot_v1 = df_h1["Quantidade_de_Vendas"].sum()
+    tot_q1 = df_h1["Unidade"].sum()
+    tot_v1 = df_h1["Vendas"].sum()
     df_h1 = pd.concat([
         df_h1,
         pd.DataFrame({
             "Hierarquia 1": ["Total"],
-            "Quantidade_Unidades": [tot_q1],
-            "Quantidade_de_Vendas": [tot_v1]
+            "Unidade": [tot_q1],
+            "Vendas": [tot_v1]
         })
     ], ignore_index=True)
     with col_r1:
@@ -1912,19 +1911,19 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df_filtrado
         .groupby("level2", as_index=False)
         .agg(
-            Quantidade_Unidades=("quantidade", "sum"),
-            Quantidade_de_Vendas=("order_id", "nunique")
+            Unidade=("quantidade", "sum"),
+            Vendas=("order_id", "nunique")
         )
         .rename(columns={"level2": "Hierarquia 2"})
     )
-    tot_q2 = df_h2["Quantidade_Unidades"].sum()
-    tot_v2 = df_h2["Quantidade_de_Vendas"].sum()
+    tot_q2 = df_h2["Unidade"].sum()
+    tot_v2 = df_h2["Vendas"].sum()
     df_h2 = pd.concat([
         df_h2,
         pd.DataFrame({
             "Hierarquia 2": ["Total"],
-            "Quantidade_Unidades": [tot_q2],
-            "Quantidade_de_Vendas": [tot_v2]
+            "Unidade": [tot_q2],
+            "Vendas": [tot_v2]
         })
     ], ignore_index=True)
     with col_r2:
@@ -1935,22 +1934,23 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         df_filtrado
         .groupby("Tipo de Envio", as_index=False)
         .agg(
-            Quantidade_Unidades=("quantidade", "sum"),
-            Quantidade_de_Vendas=("order_id", "nunique")
+            Unidade=("quantidade", "sum"),
+            Vendas=("order_id", "nunique")
         )
     )
-    tot_qt = df_tipo["Quantidade_Unidades"].sum()
-    tot_vt = df_tipo["Quantidade_de_Vendas"].sum()
+    tot_qt = df_tipo["Unidade"].sum()
+    tot_vt = df_tipo["Vendas"].sum()
     df_tipo = pd.concat([
         df_tipo,
         pd.DataFrame({
             "Tipo de Envio": ["Total"],
-            "Quantidade_Unidades": [tot_qt],
-            "Quantidade_de_Vendas": [tot_vt]
+            "Unidade": [tot_qt],
+            "Vendas": [tot_vt]
         })
     ], ignore_index=True)
     with col_r3:
         st.dataframe(df_tipo, use_container_width=True, hide_index=True)
+
 
 
     def gerar_relatorio_pdf(
