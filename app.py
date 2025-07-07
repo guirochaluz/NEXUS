@@ -1344,24 +1344,31 @@ def mostrar_gestao_sku():
     if st.button("🔄 Recarregar Dados"):
         st.session_state["atualizar_gestao_sku"] = True
 
-    # === Consulta de SKUs únicos ===
+    # === Consulta de combinações únicas ===
     if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
         df = pd.read_sql(text("""
             SELECT
                 seller_sku,
-                MAX(level1) AS level1,
-                MAX(level2) AS level2,
-                MAX(custo_unitario) AS custo_unitario,
-                MAX(quantity_sku) AS quantity_sku,
+                level1,
+                level2,
+                custo_unitario,
+                quantity_sku,
                 COUNT(DISTINCT item_id) AS qtde_vendas
             FROM sales
             WHERE seller_sku IS NOT NULL
-            GROUP BY seller_sku
+            GROUP BY
+                seller_sku,
+                level1,
+                level2,
+                custo_unitario,
+                quantity_sku
+            ORDER BY seller_sku
         """), engine)
         st.session_state["df_gestao_sku"] = df
         st.session_state["atualizar_gestao_sku"] = False
     else:
         df = st.session_state["df_gestao_sku"]
+
 
     # === Métricas ===
     with engine.begin() as conn:
