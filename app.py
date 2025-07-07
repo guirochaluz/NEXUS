@@ -279,88 +279,93 @@ def render_add_account_button():
 from streamlit_option_menu import option_menu
 
 def render_sidebar():
-    # --- Injetar CSS para impedir wrap nos itens do menu ---
+    import streamlit as st
+    from streamlit_option_menu import option_menu
+
+    # --- Centralizar itens do menu ---
+    menu_items = [
+        {"name": "Dashboard", "icon": "speedometer"},
+        {"name": "Contas Cadastradas", "icon": "people"},
+        {"name": "Relatórios", "icon": "bar-chart"},
+        {"name": "Expedição", "icon": "truck"},
+        {"name": "Gestão de SKU", "icon": "box"},
+        {"name": "Gestão de Despesas", "icon": "wallet2"},
+        {"name": "Supply Chain", "icon": "link-45deg"},
+        {"name": "Gestão de Anúncios", "icon": "megaphone"},
+        {"name": "Gerenciar Cadastros", "icon": "journal-plus"},
+    ]
+
+    options = [item["name"] for item in menu_items]
+    icons = [item["icon"] for item in menu_items]
+
+    # --- Estilo customizado ---
     st.sidebar.markdown(
         """
         <style>
-          /* Aplica apenas aos links do option_menu dentro da sidebar */
-          [data-testid="stSidebar"] .nav-link {
+        [data-testid="stSidebar"] .nav-link {
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-          }
+            transition: all 0.2s ease-in-out;
+        }
+        [data-testid="stSidebar"] .nav-link-selected {
+            background-color: #2ecc71 !important;
+            color: #ffffff !important;
+            border-radius: 8px;
+        }
+        [data-testid="stSidebar"] .nav-link:hover {
+            background-color: #27ae60 !important;
+            color: #ffffff !important;
+        }
+        /* Ícone padrão */
+        [data-testid="stSidebar"] .nav-link i {
+            color: #888 !important;
+            font-size: 18px !important;
+        }
+        /* Ícone selecionado */
+        [data-testid="stSidebar"] .nav-link-selected i {
+            color: #ffffff !important;
+        }
+        /* Mini sidebar em telas pequenas */
+        @media (max-width: 768px) {
+            [data-testid="stSidebar"] .nav-link {
+                font-size: 0 !important;
+            }
+            [data-testid="stSidebar"] .nav-link i {
+                font-size: 22px !important;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
+    # --- Menu principal ---
     with st.sidebar:
         selected = option_menu(
             menu_title=None,
-            options=[
-                "Dashboard",
-                "Contas Cadastradas",
-                "Relatórios",
-                "Expedição",
-                "Gestão de SKU",
-                "Gestão de Despesas",
-                "Supply Chain",
-                "Gestão de Anúncios",
-                "Gerenciar Cadastros"
-            ],
-            icons=[
-                "house",
-                "person-up",
-                "file-earmark-text",
-                "collection-fill",
-                "box-seam",
-                "currency-dollar",
-                "bar-chart-line",
-                "bullseye",
-                "folder-plus"
-            ],
+            options=options,
+            icons=icons,
             menu_icon="list",
-            default_index=[
-                "Dashboard",
-                "Contas Cadastradas",
-                "Relatórios",
-                "Expedição",
-                "Gestão de SKU",
-                "Gestão de Despesas",
-                "Supply Chain",
-                "Gestão de Anúncios",
-                "Gerenciar Cadastros"
-            ].index(st.session_state.get("page", "Dashboard")),
+            default_index=options.index(st.session_state.get("page", "Dashboard")),
             orientation="vertical",
-            styles={
-                "container": {
-                    "padding": "0",
-                    "background-color": "#161b22"
-                },
-                "icon": {
-                    "color": "#2ecc71",
-                    "font-size": "18px"
-                },
-                "nav-link": {
-                    "font-size": "16px",
-                    "text-align": "left",
-                    "margin": "4px 0",
-                    "color": "#fff",
-                    "background-color": "transparent",
-                    "white-space": "nowrap"  # impede quebra
-                },
-                "nav-link:hover": {
-                    "background-color": "#27ae60"
-                },
-                "nav-link-selected": {
-                    "background-color": "#2ecc71",
-                    "color": "white"
-                },
-            },
         )
 
+        # --- Separador + botão extra ---
+        st.markdown("---")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("⚙️ Configurações"):
+                selected = "Configurações"
+        with col2:
+            if st.button("🚪 Sair"):
+                st.session_state.clear()
+                st.experimental_rerun()
+
+    # Salva a página selecionada no session_state
     st.session_state["page"] = selected
     return selected
+
 # ----------------- Telas -----------------
 import io  # no topo do seu script
 
@@ -582,18 +587,13 @@ def mostrar_dashboard():
     colunas_chk = ["level1", "level2", "custo_unitario", "quantity_sku"]
     
     # Filtra linhas onde seller_sku NÃO é nulo e pelo menos uma coluna está nula
-    df_faltantes = df[
-        df["seller_sku"].notnull() & df[colunas_chk].isnull().any(axis=1)
+    df_faltantes = df_full[
+        df_full["seller_sku"].notnull() & df_full[colunas_chk].isnull().any(axis=1)
     ]
-    
-    # Conta quantos seller_sku distintos existem nessas linhas
     sku_incompleto = df_faltantes["seller_sku"].nunique()
 
-
-    
     pct = lambda val: f"<span style='font-size: 70%; color: #666; display: inline-block; margin-left: 6px;'>({val / total_valor * 100:.1f}%)</span>" if total_valor else "<span style='font-size: 70%'>(0%)</span>"
 
-    
     # Bloco 1: Indicadores Financeiros
     st.markdown("### 💼 Indicadores Financeiros")
     row1 = st.columns(5)
