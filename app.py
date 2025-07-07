@@ -579,14 +579,15 @@ def mostrar_dashboard():
     taxa_mktplace       = df["ml_fee"].fillna(0).sum()
     cmv                 = ((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
     margem_operacional  = total_valor - frete - taxa_mktplace - cmv
-    # Colunas que não podem ficar vazias
-    colunas_chk = ["seller_sku", "quantity_sku", "level1", "level2", "custo_unitario"]
+    colunas_chk = ["level1", "level2", "custo_unitario", "quantity_sku"]
     
-    # Cria uma máscara booleana: True se **qualquer** uma das colunas estiver nula
-    mask_faltantes = df[colunas_chk].isnull().any(axis=1)
+    # Filtra linhas onde seller_sku NÃO é nulo e pelo menos uma coluna está nula
+    df_faltantes = df[
+        df["seller_sku"].notnull() & df[colunas_chk].isnull().any(axis=1)
+    ]
     
-    # Conta quantas linhas têm pelo menos um campo vazio
-    sem_sku = mask_faltantes.sum()
+    # Conta quantos seller_sku distintos existem nessas linhas
+    sku_incompleto = df_faltantes["seller_sku"].nunique()
 
 
     
@@ -609,7 +610,8 @@ def mostrar_dashboard():
     kpi_card(row2[1], "📦 Unidades Vendidas", str(int(total_itens)))
     kpi_card(row2[2], "🎯 Tkt Médio p/ Venda", format_currency(ticket_venda))
     kpi_card(row2[3], "🎯 Tkt Médio p/ Unid.", format_currency(ticket_unidade))
-    kpi_card(row2[4], "❌ SKU Incompleto", str(sem_sku))
+    kpi_card(row2[4], "❌ SKU Incompleto", str(sku_incompleto))
+
     
     import plotly.express as px
 
