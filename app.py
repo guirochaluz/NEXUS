@@ -307,8 +307,7 @@ def render_sidebar():
                 "Supply Chain",           # Compras e cadeia de suprimentos
                 "Gestão de Anúncios",     # Anúncios e marketplace
                 "Gerenciar Cadastros"     # Cadastros gerais
-            ]
-            
+            ],
             icons = [
                 "speedometer",           # Dashboard (painel principal, velocidade)
                 "people",                # Contas Cadastradas (ícone de grupo de pessoas)
