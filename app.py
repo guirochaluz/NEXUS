@@ -279,90 +279,87 @@ def render_add_account_button():
 from streamlit_option_menu import option_menu
 
 def render_sidebar():
-    import streamlit as st
-    from streamlit_option_menu import option_menu
-
-    # --- Centralizar itens do menu ---
-    menu_items = [
-        {"name": "Dashboard", "icon": "speedometer"},
-        {"name": "Contas Cadastradas", "icon": "people"},
-        {"name": "Relatórios", "icon": "bar-chart"},
-        {"name": "Expedição", "icon": "truck"},
-        {"name": "Gestão de SKU", "icon": "box"},
-        {"name": "Gestão de Despesas", "icon": "wallet2"},
-        {"name": "Supply Chain", "icon": "link-45deg"},
-        {"name": "Gestão de Anúncios", "icon": "megaphone"},
-        {"name": "Gerenciar Cadastros", "icon": "journal-plus"},
-    ]
-
-    options = [item["name"] for item in menu_items]
-    icons = [item["icon"] for item in menu_items]
-
-    # --- Estilo customizado ---
+    # --- Injetar CSS para impedir wrap nos itens do menu ---
     st.sidebar.markdown(
         """
         <style>
-        [data-testid="stSidebar"] .nav-link {
+          /* Aplica apenas aos links do option_menu dentro da sidebar */
+          [data-testid="stSidebar"] .nav-link {
             white-space: nowrap !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
-            transition: all 0.2s ease-in-out;
-        }
-        [data-testid="stSidebar"] .nav-link-selected {
-            background-color: #2ecc71 !important;
-            color: #ffffff !important;
-            border-radius: 8px;
-        }
-        [data-testid="stSidebar"] .nav-link:hover {
-            background-color: #27ae60 !important;
-            color: #ffffff !important;
-        }
-        /* Ícone padrão */
-        [data-testid="stSidebar"] .nav-link i {
-            color: #888 !important;
-            font-size: 18px !important;
-        }
-        /* Ícone selecionado */
-        [data-testid="stSidebar"] .nav-link-selected i {
-            color: #ffffff !important;
-        }
-        /* Mini sidebar em telas pequenas */
-        @media (max-width: 768px) {
-            [data-testid="stSidebar"] .nav-link {
-                font-size: 0 !important;
-            }
-            [data-testid="stSidebar"] .nav-link i {
-                font-size: 22px !important;
-            }
-        }
+          }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # --- Menu principal ---
     with st.sidebar:
         selected = option_menu(
             menu_title=None,
-            options=options,
-            icons=icons,
+            options = [
+                "Dashboard",              # Visão geral do sistema
+                "Contas Cadastradas",     # Usuários conectados
+                "Relatórios",             # Relatórios de vendas e métricas
+                "Expedição",              # Controle de envios
+                "Gestão de SKU",          # Controle de produtos/SKUs
+                "Gestão de Despesas",     # Custos e despesas operacionais
+                "Supply Chain",           # Compras e cadeia de suprimentos
+                "Gestão de Anúncios",     # Anúncios e marketplace
+                "Gerenciar Cadastros"     # Cadastros gerais
+            ]
+            
+            icons = [
+                "speedometer",           # Dashboard (painel principal, velocidade)
+                "people",                # Contas Cadastradas (ícone de grupo de pessoas)
+                "bar-chart",             # Relatórios (gráficos)
+                "truck",                 # Expedição (caminhão de entregas)
+                "box",                   # Gestão de SKU (caixa/produto)
+                "wallet2",               # Gestão de Despesas (carteira/custos)
+                "link-45deg",            # Supply Chain (cadeia/conexões)
+                "megaphone",             # Gestão de Anúncios (megafone/publicidade)
+                "journal-plus"           # Gerenciar Cadastros (ícone de cadastro/documento)
+            ],
             menu_icon="list",
-            default_index=options.index(st.session_state.get("page", "Dashboard")),
+            default_index=[
+                "Dashboard",
+                "Contas Cadastradas",
+                "Relatórios",
+                "Expedição",
+                "Gestão de SKU",
+                "Gestão de Despesas",
+                "Supply Chain",
+                "Gestão de Anúncios",
+                "Gerenciar Cadastros"
+            ].index(st.session_state.get("page", "Dashboard")),
             orientation="vertical",
+            styles={
+                "container": {
+                    "padding": "0",
+                    "background-color": "#161b22"
+                },
+                "icon": {
+                    "color": "#2ecc71",
+                    "font-size": "18px"
+                },
+                "nav-link": {
+                    "font-size": "16px",
+                    "text-align": "left",
+                    "margin": "4px 0",
+                    "color": "#fff",
+                    "background-color": "transparent",
+                    "white-space": "nowrap"  # impede quebra
+                },
+                "nav-link:hover": {
+                    "background-color": "#27ae60"
+                },
+                "nav-link-selected": {
+                    "background-color": "#2ecc71",
+                    "color": "white"
+                },
+            },
         )
 
-        # --- Separador + botão extra ---
-        st.markdown("---")
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("⚙️ Configurações"):
-                selected = "Configurações"
-        with col2:
-            if st.button("🚪 Sair"):
-                st.session_state.clear()
-                st.experimental_rerun()
-
-    # Salva a página selecionada no session_state
     st.session_state["page"] = selected
     return selected
 
