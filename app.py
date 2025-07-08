@@ -2119,6 +2119,10 @@ from utils import engine  # 🔥 usa seu engine já configurado
 
 def mostrar_painel_metas():
     from datetime import datetime
+    import pandas as pd
+    import streamlit as st
+    from sqlalchemy import text
+    import plotly.graph_objects as go
 
     # ======== Ano-Mês atual ========
     hoje = datetime.now()
@@ -2147,57 +2151,45 @@ def mostrar_painel_metas():
     producao_mes = df_producao["quantidade"].sum()
     percentual_atingido = (producao_mes / meta_mensal) * 100 if meta_mensal else 0
 
-    # ======== Painel Visual ========
-    st.markdown("""
+    # ======== Definir cores dinâmicas ========
+    cor_percentual = (
+        "#2ecc71" if percentual_atingido >= 80 else
+        "#f1c40f" if percentual_atingido >= 50 else
+        "#e74c3c"
+    )
+
+    # ======== Estilo customizado ========
+    st.markdown(f"""
         <style>
-            body { background-color: #0e1117; color: #fff; }
-            .container {
+            body {{
+                background-color: #0e1117;
+                color: #fff;
+            }}
+            .container {{
                 display: flex;
                 justify-content: space-around;
                 align-items: center;
                 margin-top: 30px;
-            }
-            .card {
+            }}
+            .card {{
                 background-color: #1f2630;
                 border-radius: 20px;
                 padding: 40px;
                 text-align: center;
                 width: 28%;
                 box-shadow: 0 0 30px rgba(0,0,0,0.4);
-            }
-            .card h1 {
+            }}
+            .card h1 {{
                 font-size: 3rem;
                 margin-bottom: 10px;
                 color: #ffffff;
-            }
-            .card p {
+            }}
+            .card p {{
                 font-size: 2rem;
                 margin-top: 5px;
                 color: #d1d1d1;
-            }
-            .percentual {
-                font-size: 5rem;
-                font-weight: bold;
-                color: """ + 
-                ("#2ecc71" if percentual_atingido >= 100 else "#f1c40f" if percentual_atingido >= 50 else "#e74c3c") + 
-                """;
-                text-align: center;
-            }
-            .progress-container {
-                width: 80%;
-                height: 30px;
-                background-color: #333;
-                border-radius: 15px;
-                margin: 40px auto;
-            }
-            .progress-bar {
-                height: 100%;
-                border-radius: 15px;
-                background-color: #2ecc71;
-                width: """ + str(min(percentual_atingido, 100)) + """%;
-                transition: width 0.5s ease-in-out;
-            }
-            .config-button {
+            }}
+            .config-button {{
                 position: absolute;
                 top: 10px;
                 right: 10px;
@@ -2206,7 +2198,7 @@ def mostrar_painel_metas():
                 color: white;
                 border: none;
                 cursor: pointer;
-            }
+            }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -2214,16 +2206,9 @@ def mostrar_painel_metas():
     if "show_config" not in st.session_state:
         st.session_state.show_config = False
 
-    st.markdown("<button class='config-button' onclick='document.dispatchEvent(new Event(\"toggleConfig\"))'>⚙️</button>", unsafe_allow_html=True)
-
-    # Toggle no botão
-    st.markdown("""
-        <script>
-            document.addEventListener('toggleConfig', function() {
-                window.parent.postMessage({isStreamlitMessage: true, type: 'rerunScript'}, '*');
-            });
-        </script>
-    """, unsafe_allow_html=True)
+    if st.button("⚙️ Configurações", key="config_button"):
+        st.session_state.show_config = not st.session_state.get("show_config", False)
+        st.experimental_rerun()
 
     # ======== Blocos principais ========
     st.markdown(f"""
@@ -2238,17 +2223,66 @@ def mostrar_painel_metas():
             </div>
             <div class="card">
                 <h1>📊 % Atingido</h1>
-                <p class="percentual">{percentual_atingido:.1f}%</p>
+                <p style="font-size:5rem;font-weight:bold;color:{cor_percentual};">
+                    {percentual_atingido:.1f}%
+                </p>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
+    # ======== Velocímetro (Gauge) ========
+    fig_gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=percentual_atingido,
+        title={'text': "Progresso Mensal (%)", 'font': {'size': 30}},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': cor_percentual, 'thickness': 0.3},
+            'steps': [
+                {'range': [0, 50], 'color': "#e74c3c"},
+                {'range': [50, 80], 'color': "#f1c40f"},
+                {'range': [80, 100], 'color': "#2ecc71"}
+            ],
+            'threshold': {
+                'line': {'color': "white", 'width': 4},
+                'thickness': 0.75,
+                'value': 100
+            }
+        }
+    ))
+    fig_gauge.update_layout(margin=dict(t=50, b=0, l=50, r=50))
+    st.plotly_chart(fig_gauge, use_container_width=True)
+
     # ======== Barra de Progresso ========
     st.markdown("""
-        <div class="progress-container">
-            <div class="progress-bar"></div>
+        <div style="width: 90%; height: 40px; background-color: #333; border-radius: 20px; margin: 30px auto;">
+            <div style="
+                width: """ + str(min(percentual_atingido, 100)) + """%;
+                height: 100%;
+                background-color: """ + cor_percentual + """;
+                border-radius: 20px;
+                transition: width 0.5s ease-in-out;">
+            </div>
         </div>
     """, unsafe_allow_html=True)
+
+    # ======== Gráfico de Produção Diária ========
+    if not df_producao.empty:
+        fig_prod = go.Figure()
+        fig_prod.add_trace(go.Bar(
+            x=pd.to_datetime(df_producao["data"]).dt.strftime("%d/%m"),
+            y=df_producao["quantidade"],
+            marker_color="#3498db"
+        ))
+        fig_prod.update_layout(
+            title="📅 Produção Diária no Mês",
+            xaxis_title="Dia",
+            yaxis_title="Unidades",
+            plot_bgcolor="#0e1117",
+            paper_bgcolor="#0e1117",
+            font_color="white"
+        )
+        st.plotly_chart(fig_prod, use_container_width=True)
 
     # ======== Tela de Configuração ========
     if st.session_state.show_config:
