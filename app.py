@@ -314,7 +314,7 @@ def render_sidebar():
                 "bar-chart",             # Relatórios (gráficos)
                 "truck",                 # Expedição (caminhão de entregas)
                 "box",                   # Gestão de SKU (caixa/produto)
-                "target",                # Painel de Metas
+                "bullseye",              # Painel de Metas
                 "link-45deg",            # Supply Chain (cadeia/conexões)
                 "megaphone",             # Gestão de Anúncios (megafone/publicidade)
                 "journal-plus"           # Gerenciar Cadastros (ícone de cadastro/documento)
@@ -2155,18 +2155,18 @@ def mostrar_painel_metas():
                 display: flex;
                 justify-content: space-around;
                 align-items: center;
-                margin-top: 50px;
+                margin-top: 30px;
             }
             .card {
                 background-color: #1f2630;
                 border-radius: 20px;
                 padding: 40px;
                 text-align: center;
-                width: 30%;
+                width: 28%;
                 box-shadow: 0 0 30px rgba(0,0,0,0.4);
             }
             .card h1 {
-                font-size: 4rem;
+                font-size: 3rem;
                 margin-bottom: 10px;
                 color: #ffffff;
             }
@@ -2176,16 +2176,56 @@ def mostrar_painel_metas():
                 color: #d1d1d1;
             }
             .percentual {
-                font-size: 6rem;
+                font-size: 5rem;
                 font-weight: bold;
                 color: """ + 
                 ("#2ecc71" if percentual_atingido >= 100 else "#f1c40f" if percentual_atingido >= 50 else "#e74c3c") + 
                 """;
                 text-align: center;
             }
+            .progress-container {
+                width: 80%;
+                height: 30px;
+                background-color: #333;
+                border-radius: 15px;
+                margin: 40px auto;
+            }
+            .progress-bar {
+                height: 100%;
+                border-radius: 15px;
+                background-color: #2ecc71;
+                width: """ + str(min(percentual_atingido, 100)) + """%;
+                transition: width 0.5s ease-in-out;
+            }
+            .config-button {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                font-size: 24px;
+                background: transparent;
+                color: white;
+                border: none;
+                cursor: pointer;
+            }
         </style>
     """, unsafe_allow_html=True)
 
+    # ======== Botão de Configuração ========
+    if "show_config" not in st.session_state:
+        st.session_state.show_config = False
+
+    st.markdown("<button class='config-button' onclick='document.dispatchEvent(new Event(\"toggleConfig\"))'>⚙️</button>", unsafe_allow_html=True)
+
+    # Toggle no botão
+    st.markdown("""
+        <script>
+            document.addEventListener('toggleConfig', function() {
+                window.parent.postMessage({isStreamlitMessage: true, type: 'rerunScript'}, '*');
+            });
+        </script>
+    """, unsafe_allow_html=True)
+
+    # ======== Blocos principais ========
     st.markdown(f"""
         <div class="container">
             <div class="card">
@@ -2203,7 +2243,70 @@ def mostrar_painel_metas():
         </div>
     """, unsafe_allow_html=True)
 
-    st.progress(min(percentual_atingido / 100, 1.0))
+    # ======== Barra de Progresso ========
+    st.markdown("""
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # ======== Tela de Configuração ========
+    if st.session_state.show_config:
+        st.markdown("---")
+        st.subheader("⚙️ Configurações")
+        # Definir Meta Mensal
+        nova_meta = st.number_input(
+            "Definir Meta Mensal (unidades)",
+            min_value=0,
+            value=meta_mensal,
+            step=100
+        )
+        if st.button("💾 Salvar Meta"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO meta_mensal (ano_mes, meta_unidades)
+                        VALUES (:ano_mes, :meta)
+                        ON CONFLICT (ano_mes) DO UPDATE
+                        SET meta_unidades = EXCLUDED.meta_unidades
+                    """),
+                    {"ano_mes": ano_mes, "meta": nova_meta}
+                )
+            st.success("✅ Meta atualizada com sucesso!")
+            st.rerun()
+
+        # Registrar Produção Diária
+        hoje_str = hoje.strftime("%Y-%m-%d")
+        producao_hoje = st.number_input(
+            f"Produção em {hoje_str} (unidades)",
+            min_value=0,
+            step=10,
+            value=int(df_producao[df_producao["data"] == hoje_str]["quantidade"].sum())
+        )
+        if st.button("➕ Registrar Produção de Hoje"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO producao_diaria (data, quantidade)
+                        VALUES (:data, :qtd)
+                        ON CONFLICT (data) DO UPDATE
+                        SET quantidade = EXCLUDED.quantidade
+                    """),
+                    {"data": hoje_str, "qtd": producao_hoje}
+                )
+            st.success(f"✅ Produção registrada para {hoje_str}!")
+            st.rerun()
+
+        # Histórico Produção
+        st.markdown("### 📊 Histórico de Produção")
+        st.dataframe(df_producao.rename(
+            columns={"data": "Data", "quantidade": "Unidades"}
+        ), use_container_width=True)
+
+        if st.button("🔙 Voltar ao Painel"):
+            st.session_state.show_config = False
+            st.rerun()
+
 
 import streamlit as st
 from sqlalchemy import text
