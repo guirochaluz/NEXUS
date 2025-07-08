@@ -2179,14 +2179,16 @@ def mostrar_painel_metas():
                 width: 28%;
                 box-shadow: 0 0 30px rgba(0,0,0,0.4);
             }}
-            .card h1 {{
-                font-size: 3rem;
-                margin-bottom: 10px;
+            .card p {{
+                font-size: 5rem;
+                margin: 0;
+                font-weight: bold;
                 color: #ffffff;
             }}
-            .card p {{
+            .title {{
                 font-size: 2rem;
-                margin-top: 5px;
+                text-align: center;
+                margin-bottom: 10px;
                 color: #d1d1d1;
             }}
             .config-button {{
@@ -2208,24 +2210,28 @@ def mostrar_painel_metas():
 
     if st.button("⚙️ Configurações", key="config_button"):
         st.session_state.show_config = not st.session_state.get("show_config", False)
-        st.experimental_rerun()
+        st.rerun()  # ✅ corrigido: st.rerun()
 
     # ======== Blocos principais ========
     st.markdown(f"""
         <div class="container">
-            <div class="card">
-                <h1>🎯 Meta do Mês</h1>
-                <p>{meta_mensal:,} unidades</p>
+            <div>
+                <div class="title">🎯 Meta do Mês</div>
+                <div class="card">
+                    <p>{meta_mensal:,}</p>
+                </div>
             </div>
-            <div class="card">
-                <h1>🏭 Produção Atual</h1>
-                <p>{producao_mes:,} unidades</p>
+            <div>
+                <div class="title">🏭 Produção Atual</div>
+                <div class="card">
+                    <p>{producao_mes:,}</p>
+                </div>
             </div>
-            <div class="card">
-                <h1>📊 % Atingido</h1>
-                <p style="font-size:5rem;font-weight:bold;color:{cor_percentual};">
-                    {percentual_atingido:.1f}%
-                </p>
+            <div>
+                <div class="title">📊 % Atingido</div>
+                <div class="card">
+                    <p style="color:{cor_percentual};">{percentual_atingido:.1f}%</p>
+                </div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -2254,12 +2260,12 @@ def mostrar_painel_metas():
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # ======== Barra de Progresso ========
-    st.markdown("""
+    st.markdown(f"""
         <div style="width: 90%; height: 40px; background-color: #333; border-radius: 20px; margin: 30px auto;">
             <div style="
-                width: """ + str(min(percentual_atingido, 100)) + """%;
+                width: {min(percentual_atingido, 100)}%;
                 height: 100%;
-                background-color: """ + cor_percentual + """;
+                background-color: {cor_percentual};
                 border-radius: 20px;
                 transition: width 0.5s ease-in-out;">
             </div>
@@ -2307,7 +2313,7 @@ def mostrar_painel_metas():
                     {"ano_mes": ano_mes, "meta": nova_meta}
                 )
             st.success("✅ Meta atualizada com sucesso!")
-            st.rerun()
+            st.rerun()  # ✅ corrigido aqui também
 
         # Registrar Produção Diária
         hoje_str = hoje.strftime("%Y-%m-%d")
@@ -2330,12 +2336,6 @@ def mostrar_painel_metas():
                 )
             st.success(f"✅ Produção registrada para {hoje_str}!")
             st.rerun()
-
-        # Histórico Produção
-        st.markdown("### 📊 Histórico de Produção")
-        st.dataframe(df_producao.rename(
-            columns={"data": "Data", "quantidade": "Unidades"}
-        ), use_container_width=True)
 
         if st.button("🔙 Voltar ao Painel"):
             st.session_state.show_config = False
