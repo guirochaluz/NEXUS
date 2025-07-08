@@ -303,7 +303,7 @@ def render_sidebar():
                 "Relatórios",             # Relatórios de vendas e métricas
                 "Expedição",              # Controle de envios
                 "Gestão de SKU",          # Controle de produtos/SKUs
-                "Gestão de Despesas",     # Custos e despesas operacionais
+                "Painel de Metas",        # Painel de Meta de Produção
                 "Supply Chain",           # Compras e cadeia de suprimentos
                 "Gestão de Anúncios",     # Anúncios e marketplace
                 "Gerenciar Cadastros"     # Cadastros gerais
@@ -314,7 +314,7 @@ def render_sidebar():
                 "bar-chart",             # Relatórios (gráficos)
                 "truck",                 # Expedição (caminhão de entregas)
                 "box",                   # Gestão de SKU (caixa/produto)
-                "wallet2",               # Gestão de Despesas (carteira/custos)
+                "target",                # Painel de Metas
                 "link-45deg",            # Supply Chain (cadeia/conexões)
                 "megaphone",             # Gestão de Anúncios (megafone/publicidade)
                 "journal-plus"           # Gerenciar Cadastros (ícone de cadastro/documento)
@@ -326,7 +326,7 @@ def render_sidebar():
                 "Relatórios",
                 "Expedição",
                 "Gestão de SKU",
-                "Gestão de Despesas",
+                "Painel de Metas",
                 "Supply Chain",
                 "Gestão de Anúncios",
                 "Gerenciar Cadastros"
@@ -2111,19 +2111,142 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     )
     st.markdown(botoes, unsafe_allow_html=True)
 
-def mostrar_gestao_despesas():
-    st.markdown(
-        """
+from sqlalchemy import text
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+from utils import engine  # 🔥 usa seu engine já configurado
+
+def mostrar_painel_metas():
+    # ======== Helper: Ano-Mês atual ========
+    hoje = datetime.now()
+    ano_mes = hoje.strftime("%Y-%m")
+
+    # ======== Carregar Meta Mensal ========
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT meta_unidades FROM meta_mensal WHERE ano_mes = :ano_mes"),
+            {"ano_mes": ano_mes}
+        ).fetchone()
+        meta_mensal = result[0] if result else 0
+
+    # ======== Carregar Produção do Mês ========
+    with engine.connect() as conn:
+        df_producao = pd.read_sql(
+            text("""
+                SELECT data, quantidade
+                FROM producao_diaria
+                WHERE TO_CHAR(data, 'YYYY-MM') = :ano_mes
+                ORDER BY data
+            """),
+            conn,
+            params={"ano_mes": ano_mes}
+        )
+    producao_mes = df_producao["quantidade"].sum()
+    percentual_atingido = (producao_mes / meta_mensal) * 100 if meta_mensal else 0
+
+    # ======== Painel Visual ========
+    st.markdown("""
         <style>
-        .block-container {
-            padding-top: 0rem;
-        }
+            body { background-color: #0e1117; color: #fff; }
+            .big-number {
+                font-size: 4rem;
+                font-weight: bold;
+                color: #fff;
+                text-align: center;
+            }
+            .percentual {
+                font-size: 5rem;
+                font-weight: bold;
+                color: #2ecc71;
+                text-align: center;
+            }
+            .config-button {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+            }
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.header("💰 Gestão de Despesas")
-    st.info("Em breve...")
+    """, unsafe_allow_html=True)
+
+    # ======== Ícone de Configuração ========
+    with st.container():
+        col1, col2, col3 = st.columns([1, 8, 1])
+        with col3:
+            if st.button("⚙️", key="config", help="Configurações"):
+                st.session_state.show_config = True
+
+    # ======== Tela Principal ========
+    st.markdown("<div class='big-number'>🎯 META DO MÊS</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='big-number'>{meta_mensal:,} unidades</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='big-number'>🏭 PRODUÇÃO ATUAL</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='big-number'>{producao_mes:,} unidades</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='big-number'>📊 % ATINGIDO</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='percentual'>{percentual_atingido:.1f}%</div>", unsafe_allow_html=True)
+
+    st.progress(min(percentual_atingido / 100, 1.0))
+
+    # ======== Configuração ========
+    if st.session_state.get("show_config"):
+        st.markdown("---")
+        st.subheader("⚙️ Configurações")
+
+        # === Definir Meta Mensal ===
+        nova_meta = st.number_input(
+            "Definir Meta Mensal (unidades)",
+            min_value=0,
+            value=meta_mensal,
+            step=100
+        )
+        if st.button("💾 Salvar Meta"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO meta_mensal (ano_mes, meta_unidades)
+                        VALUES (:ano_mes, :meta)
+                        ON CONFLICT (ano_mes) DO UPDATE
+                        SET meta_unidades = EXCLUDED.meta_unidades
+                    """),
+                    {"ano_mes": ano_mes, "meta": nova_meta}
+                )
+            st.success("✅ Meta atualizada com sucesso!")
+            st.rerun()
+
+        # === Registrar Produção Diária ===
+        st.markdown("### 📅 Produção Diária")
+        hoje_str = hoje.strftime("%Y-%m-%d")
+        producao_hoje = st.number_input(
+            f"Produção em {hoje_str} (unidades)",
+            min_value=0,
+            step=10,
+            value=int(df_producao[df_producao["data"] == hoje_str]["quantidade"].sum())
+        )
+        if st.button("➕ Registrar Produção de Hoje"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO producao_diaria (data, quantidade)
+                        VALUES (:data, :qtd)
+                        ON CONFLICT (data) DO UPDATE
+                        SET quantidade = EXCLUDED.quantidade
+                    """),
+                    {"data": hoje_str, "qtd": producao_hoje}
+                )
+            st.success(f"✅ Produção registrada para {hoje_str}!")
+            st.rerun()
+
+        # === Exibir Produção do Mês ===
+        st.markdown("### 📊 Histórico de Produção")
+        st.dataframe(df_producao.rename(
+            columns={"data": "Data", "quantidade": "Unidades"}
+        ), use_container_width=True)
+
+        if st.button("🔙 Voltar ao Painel"):
+            st.session_state.show_config = False
+            st.rerun()
+
 
 import streamlit as st
 from sqlalchemy import text
@@ -2486,8 +2609,8 @@ elif pagina == "Expedição":
     mostrar_expedicao_logistica(df_vendas)
 elif pagina == "Gestão de SKU":
     mostrar_gestao_sku()
-elif pagina == "Gestão de Despesas":
-    mostrar_gestao_despesas()
+elif pagina == "Painel de Metas":
+    mostrar_painel_metas()
 elif pagina == "Supply Chain":
     mostrar_supply_chain()
 elif pagina == "Gestão de Anúncios":
