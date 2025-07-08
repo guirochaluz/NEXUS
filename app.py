@@ -2118,7 +2118,9 @@ from datetime import datetime
 from utils import engine  # 🔥 usa seu engine já configurado
 
 def mostrar_painel_metas():
-    # ======== Helper: Ano-Mês atual ========
+    from datetime import datetime
+
+    # ======== Ano-Mês atual ========
     hoje = datetime.now()
     ano_mes = hoje.strftime("%Y-%m")
 
@@ -2149,104 +2151,59 @@ def mostrar_painel_metas():
     st.markdown("""
         <style>
             body { background-color: #0e1117; color: #fff; }
-            .big-number {
-                font-size: 4rem;
-                font-weight: bold;
-                color: #fff;
+            .container {
+                display: flex;
+                justify-content: space-around;
+                align-items: center;
+                margin-top: 50px;
+            }
+            .card {
+                background-color: #1f2630;
+                border-radius: 20px;
+                padding: 40px;
                 text-align: center;
+                width: 30%;
+                box-shadow: 0 0 30px rgba(0,0,0,0.4);
+            }
+            .card h1 {
+                font-size: 4rem;
+                margin-bottom: 10px;
+                color: #ffffff;
+            }
+            .card p {
+                font-size: 2rem;
+                margin-top: 5px;
+                color: #d1d1d1;
             }
             .percentual {
-                font-size: 5rem;
+                font-size: 6rem;
                 font-weight: bold;
-                color: #2ecc71;
+                color: """ + 
+                ("#2ecc71" if percentual_atingido >= 100 else "#f1c40f" if percentual_atingido >= 50 else "#e74c3c") + 
+                """;
                 text-align: center;
-            }
-            .config-button {
-                position: absolute;
-                top: 10px;
-                right: 10px;
             }
         </style>
     """, unsafe_allow_html=True)
 
-    # ======== Ícone de Configuração ========
-    with st.container():
-        col1, col2, col3 = st.columns([1, 8, 1])
-        with col3:
-            if st.button("⚙️", key="config", help="Configurações"):
-                st.session_state.show_config = True
-
-    # ======== Tela Principal ========
-    st.markdown("<div class='big-number'>🎯 META DO MÊS</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='big-number'>{meta_mensal:,} unidades</div>", unsafe_allow_html=True)
-
-    st.markdown("<div class='big-number'>🏭 PRODUÇÃO ATUAL</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='big-number'>{producao_mes:,} unidades</div>", unsafe_allow_html=True)
-
-    st.markdown("<div class='big-number'>📊 % ATINGIDO</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='percentual'>{percentual_atingido:.1f}%</div>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div class="container">
+            <div class="card">
+                <h1>🎯 Meta do Mês</h1>
+                <p>{meta_mensal:,} unidades</p>
+            </div>
+            <div class="card">
+                <h1>🏭 Produção Atual</h1>
+                <p>{producao_mes:,} unidades</p>
+            </div>
+            <div class="card">
+                <h1>📊 % Atingido</h1>
+                <p class="percentual">{percentual_atingido:.1f}%</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     st.progress(min(percentual_atingido / 100, 1.0))
-
-    # ======== Configuração ========
-    if st.session_state.get("show_config"):
-        st.markdown("---")
-        st.subheader("⚙️ Configurações")
-
-        # === Definir Meta Mensal ===
-        nova_meta = st.number_input(
-            "Definir Meta Mensal (unidades)",
-            min_value=0,
-            value=meta_mensal,
-            step=100
-        )
-        if st.button("💾 Salvar Meta"):
-            with engine.begin() as conn:
-                conn.execute(
-                    text("""
-                        INSERT INTO meta_mensal (ano_mes, meta_unidades)
-                        VALUES (:ano_mes, :meta)
-                        ON CONFLICT (ano_mes) DO UPDATE
-                        SET meta_unidades = EXCLUDED.meta_unidades
-                    """),
-                    {"ano_mes": ano_mes, "meta": nova_meta}
-                )
-            st.success("✅ Meta atualizada com sucesso!")
-            st.rerun()
-
-        # === Registrar Produção Diária ===
-        st.markdown("### 📅 Produção Diária")
-        hoje_str = hoje.strftime("%Y-%m-%d")
-        producao_hoje = st.number_input(
-            f"Produção em {hoje_str} (unidades)",
-            min_value=0,
-            step=10,
-            value=int(df_producao[df_producao["data"] == hoje_str]["quantidade"].sum())
-        )
-        if st.button("➕ Registrar Produção de Hoje"):
-            with engine.begin() as conn:
-                conn.execute(
-                    text("""
-                        INSERT INTO producao_diaria (data, quantidade)
-                        VALUES (:data, :qtd)
-                        ON CONFLICT (data) DO UPDATE
-                        SET quantidade = EXCLUDED.quantidade
-                    """),
-                    {"data": hoje_str, "qtd": producao_hoje}
-                )
-            st.success(f"✅ Produção registrada para {hoje_str}!")
-            st.rerun()
-
-        # === Exibir Produção do Mês ===
-        st.markdown("### 📊 Histórico de Produção")
-        st.dataframe(df_producao.rename(
-            columns={"data": "Data", "quantidade": "Unidades"}
-        ), use_container_width=True)
-
-        if st.button("🔙 Voltar ao Painel"):
-            st.session_state.show_config = False
-            st.rerun()
-
 
 import streamlit as st
 from sqlalchemy import text
