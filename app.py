@@ -2168,38 +2168,28 @@ def mostrar_painel_metas():
             .container {{
                 display: flex;
                 justify-content: space-around;
-                align-items: center;
+                align-items: flex-start;
                 margin-top: 30px;
+            }}
+            .title {{
+                font-size: 1.8rem;
+                text-align: center;
+                margin-bottom: 8px;
+                color: #d1d1d1;
             }}
             .card {{
                 background-color: #1f2630;
                 border-radius: 20px;
-                padding: 40px;
+                padding: 30px;
                 text-align: center;
                 width: 28%;
                 box-shadow: 0 0 30px rgba(0,0,0,0.4);
             }}
-            .card p {{
-                font-size: 5rem;
-                margin: 0;
+            .card-number {{
+                font-size: 4rem;
                 font-weight: bold;
                 color: #ffffff;
-            }}
-            .title {{
-                font-size: 2rem;
-                text-align: center;
-                margin-bottom: 10px;
-                color: #d1d1d1;
-            }}
-            .config-button {{
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                font-size: 24px;
-                background: transparent;
-                color: white;
-                border: none;
-                cursor: pointer;
+                white-space: nowrap;
             }}
         </style>
     """, unsafe_allow_html=True)
@@ -2210,7 +2200,7 @@ def mostrar_painel_metas():
 
     if st.button("⚙️ Configurações", key="config_button"):
         st.session_state.show_config = not st.session_state.get("show_config", False)
-        st.rerun()  # ✅ corrigido: st.rerun()
+        st.rerun()
 
     # ======== Blocos principais ========
     st.markdown(f"""
@@ -2218,19 +2208,19 @@ def mostrar_painel_metas():
             <div>
                 <div class="title">🎯 Meta do Mês</div>
                 <div class="card">
-                    <p>{meta_mensal:,}</p>
+                    <div class="card-number">{meta_mensal:,}</div>
                 </div>
             </div>
             <div>
                 <div class="title">🏭 Produção Atual</div>
                 <div class="card">
-                    <p>{producao_mes:,}</p>
+                    <div class="card-number">{producao_mes:,}</div>
                 </div>
             </div>
             <div>
                 <div class="title">📊 % Atingido</div>
                 <div class="card">
-                    <p style="color:{cor_percentual};">{percentual_atingido:.1f}%</p>
+                    <div class="card-number" style="color:{cor_percentual};">{percentual_atingido:.1f}%</div>
                 </div>
             </div>
         </div>
@@ -2313,7 +2303,7 @@ def mostrar_painel_metas():
                     {"ano_mes": ano_mes, "meta": nova_meta}
                 )
             st.success("✅ Meta atualizada com sucesso!")
-            st.rerun()  # ✅ corrigido aqui também
+            st.rerun()
 
         # Registrar Produção Diária
         hoje_str = hoje.strftime("%Y-%m-%d")
