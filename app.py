@@ -2126,7 +2126,12 @@ def mostrar_painel_metas():
 
     # ======== Ano-Mês atual ========
     hoje = datetime.now()
-    ano_mes = hoje.strftime("%Y-%m")
+    ano_mes_atual = hoje.strftime("%Y-%m")
+
+    # ======== Seletor de Mês/Ano para Meta ========
+    st.markdown("### 📅 Selecione o Mês/Ano")
+    data_meta = st.date_input("Mês/Ano para definir meta", hoje, format="MM/YYYY")
+    ano_mes = data_meta.strftime("%Y-%m")
 
     # ======== Carregar Meta Mensal ========
     with engine.connect() as conn:
@@ -2180,13 +2185,13 @@ def mostrar_painel_metas():
             .card {{
                 background-color: #1f2630;
                 border-radius: 20px;
-                padding: 30px;
+                padding: 20px;
                 text-align: center;
-                width: 28%;
-                box-shadow: 0 0 30px rgba(0,0,0,0.4);
+                width: 25%;
+                box-shadow: 0 0 20px rgba(0,0,0,0.3);
             }}
             .card-number {{
-                font-size: 4rem;
+                font-size: 3rem;
                 font-weight: bold;
                 color: #ffffff;
                 white-space: nowrap;
@@ -2205,23 +2210,17 @@ def mostrar_painel_metas():
     # ======== Blocos principais ========
     st.markdown(f"""
         <div class="container">
-            <div>
+            <div class="card">
                 <div class="title">🎯 Meta do Mês</div>
-                <div class="card">
-                    <div class="card-number">{meta_mensal:,}</div>
-                </div>
+                <div class="card-number">{meta_mensal:,}</div>
             </div>
-            <div>
+            <div class="card">
                 <div class="title">🏭 Produção Atual</div>
-                <div class="card">
-                    <div class="card-number">{producao_mes:,}</div>
-                </div>
+                <div class="card-number">{producao_mes:,}</div>
             </div>
-            <div>
+            <div class="card">
                 <div class="title">📊 % Atingido</div>
-                <div class="card">
-                    <div class="card-number" style="color:{cor_percentual};">{percentual_atingido:.1f}%</div>
-                </div>
+                <div class="card-number" style="color:{cor_percentual};">{percentual_atingido:.1f}%</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -2230,7 +2229,8 @@ def mostrar_painel_metas():
     fig_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=percentual_atingido,
-        title={'text': "Progresso Mensal (%)", 'font': {'size': 30}},
+        number={'font': {'size': 40}},
+        title={'text': "Progresso Mensal (%)", 'font': {'size': 24}},
         gauge={
             'axis': {'range': [0, 100]},
             'bar': {'color': cor_percentual, 'thickness': 0.3},
@@ -2246,49 +2246,41 @@ def mostrar_painel_metas():
             }
         }
     ))
-    fig_gauge.update_layout(margin=dict(t=50, b=0, l=50, r=50))
+    fig_gauge.update_layout(margin=dict(t=30, b=0, l=30, r=30))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # ======== Barra de Progresso ========
     st.markdown(f"""
-        <div style="width: 90%; height: 40px; background-color: #333; border-radius: 20px; margin: 30px auto;">
+        <div style="width: 90%; height: 30px; background-color: #333; border-radius: 15px; margin: 20px auto;">
             <div style="
                 width: {min(percentual_atingido, 100)}%;
                 height: 100%;
                 background-color: {cor_percentual};
-                border-radius: 20px;
+                border-radius: 15px;
                 transition: width 0.5s ease-in-out;">
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    # ======== Gráfico de Produção Diária ========
-    if not df_producao.empty:
-        fig_prod = go.Figure()
-        fig_prod.add_trace(go.Bar(
-            x=pd.to_datetime(df_producao["data"]).dt.strftime("%d/%m"),
-            y=df_producao["quantidade"],
-            marker_color="#3498db"
-        ))
-        fig_prod.update_layout(
-            title="📅 Produção Diária no Mês",
-            xaxis_title="Dia",
-            yaxis_title="Unidades",
-            plot_bgcolor="#0e1117",
-            paper_bgcolor="#0e1117",
-            font_color="white"
-        )
-        st.plotly_chart(fig_prod, use_container_width=True)
-
     # ======== Tela de Configuração ========
     if st.session_state.show_config:
         st.markdown("---")
         st.subheader("⚙️ Configurações")
+
+        # Selecionar mês/ano para meta
+        data_meta_config = st.date_input(
+            "Selecione Mês/Ano para definir meta",
+            hoje,
+            format="MM/YYYY"
+        )
+        ano_mes_config = data_meta_config.strftime("%Y-%m")
+        meta_atual = meta_mensal if ano_mes_config == ano_mes else 0
+
         # Definir Meta Mensal
         nova_meta = st.number_input(
             "Definir Meta Mensal (unidades)",
             min_value=0,
-            value=meta_mensal,
+            value=meta_atual,
             step=100
         )
         if st.button("💾 Salvar Meta"):
@@ -2300,20 +2292,19 @@ def mostrar_painel_metas():
                         ON CONFLICT (ano_mes) DO UPDATE
                         SET meta_unidades = EXCLUDED.meta_unidades
                     """),
-                    {"ano_mes": ano_mes, "meta": nova_meta}
+                    {"ano_mes": ano_mes_config, "meta": nova_meta}
                 )
-            st.success("✅ Meta atualizada com sucesso!")
+            st.success(f"✅ Meta atualizada para {ano_mes_config} com sucesso!")
             st.rerun()
 
-        # Registrar Produção Diária
-        hoje_str = hoje.strftime("%Y-%m-%d")
+        # Selecionar dia para lançar produção
+        data_producao = st.date_input("📅 Data da Produção", hoje)
         producao_hoje = st.number_input(
-            f"Produção em {hoje_str} (unidades)",
+            f"Produção em {data_producao.strftime('%d/%m/%Y')} (unidades)",
             min_value=0,
-            step=10,
-            value=int(df_producao[df_producao["data"] == hoje_str]["quantidade"].sum())
+            step=10
         )
-        if st.button("➕ Registrar Produção de Hoje"):
+        if st.button("➕ Registrar Produção"):
             with engine.begin() as conn:
                 conn.execute(
                     text("""
@@ -2322,14 +2313,21 @@ def mostrar_painel_metas():
                         ON CONFLICT (data) DO UPDATE
                         SET quantidade = EXCLUDED.quantidade
                     """),
-                    {"data": hoje_str, "qtd": producao_hoje}
+                    {"data": data_producao.strftime("%Y-%m-%d"), "qtd": producao_hoje}
                 )
-            st.success(f"✅ Produção registrada para {hoje_str}!")
+            st.success(f"✅ Produção registrada para {data_producao.strftime('%d/%m/%Y')}!")
             st.rerun()
+
+        # Histórico Produção
+        st.markdown("### 📊 Histórico de Produção")
+        st.dataframe(df_producao.rename(
+            columns={"data": "Data", "quantidade": "Unidades"}
+        ), use_container_width=True)
 
         if st.button("🔙 Voltar ao Painel"):
             st.session_state.show_config = False
             st.rerun()
+
 
 
 import streamlit as st
