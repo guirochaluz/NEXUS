@@ -2802,6 +2802,9 @@ def mostrar_gerenciar_cadastros():
 # ----------------- Adicionar página Calculadora -----------------
 def mostrar_calculadora_custos():
     import streamlit as st
+    import pandas as pd
+    from sqlalchemy import text
+    from utils import engine
 
     st.markdown("""
         <style>
@@ -2816,46 +2819,89 @@ def mostrar_calculadora_custos():
         </style>
     """, unsafe_allow_html=True)
 
-    st.header("🧮 Calculadora de Custos")
-    st.info("Aqui você pode calcular o custo total e a margem para seus produtos.")
+    st.header("🧮 Calculadora de Custo Unitário")
+    st.info("Simule o custo unitário do produto informando os insumos e seus detalhes.")
 
-    with st.form("form_calculo_custos"):
-        st.markdown("### 📥 **Dados de Entrada**")
-        with st.container():
-            col1, col2 = st.columns(2)
-            with col1:
-                preco_venda = st.number_input("💵 Preço de Venda (R$)", min_value=0.0, format="%.2f")
-                custo_unitario = st.number_input("🏭 Custo Unitário (R$)", min_value=0.0, format="%.2f")
-                frete = st.number_input("🚚 Frete (R$)", min_value=0.0, format="%.2f")
-            with col2:
-                taxa_plataforma = st.number_input("📉 Taxa da Plataforma (%)", min_value=0.0, max_value=100.0, format="%.2f")
-                outros_custos = st.number_input("📦 Outros Custos (R$)", min_value=0.0, format="%.2f")
+    # 🔄 Carregar opções do banco de dados
+    with engine.connect() as conn:
+        produtos = pd.read_sql(
+            text("SELECT DISTINCT level1 FROM sales WHERE level1 IS NOT NULL ORDER BY level1"),
+            conn
+        )["level1"].tolist()
 
-        quantidade = st.number_input("🔢 Quantidade", min_value=1, step=1)
-
-        submitted = st.form_submit_button("📊 Calcular")
-
-    if submitted:
-        # Calcular custos e margens
-        total_custos = (
-            custo_unitario * quantidade
-            + frete
-            + outros_custos
-            + (preco_venda * (taxa_plataforma / 100) * quantidade)
+        insumos_df = pd.read_sql(
+            text("SELECT id, descricao FROM insumos ORDER BY descricao"),
+            conn
         )
-        receita_total = preco_venda * quantidade
-        margem_bruta = receita_total - total_custos
-        margem_percentual = (margem_bruta / receita_total) * 100 if receita_total else 0
 
-        # Exibir resultados
-        st.markdown("## 📈 **Resultados**")
+    # 🏷️ Selecionar Produto
+    produto = st.selectbox("📦 Selecione o Produto (Level1)", options=produtos)
+
+    # ➕ Adicionar Insumos
+    st.markdown("### ➕ Configurar Insumos")
+    insumos_selecionados = st.multiselect(
+        "Selecione os Insumos utilizados no Produto",
+        options=insumos_df["descricao"].tolist(),
+        key="insumos_produto"
+    )
+
+    # Inputs para Quantidade, Rendimento e Preço de cada insumo
+    insumo_inputs = []
+    for insumo in insumos_selecionados:
+        st.markdown(f"**🔧 Configuração: {insumo}**")
         col1, col2, col3 = st.columns(3)
-        col1.metric("💰 Receita Total", f"R$ {receita_total:,.2f}")
-        col2.metric("📦 Custo Total", f"R$ {total_custos:,.2f}")
-        col3.metric("📊 Margem (%)", f"{margem_percentual:.2f} %")
+        with col1:
+            quantidade = st.number_input(f"Quantidade usada (unidade) - {insumo}", min_value=0.0, step=0.01, key=f"qtd_{insumo}")
+        with col2:
+            rendimento = st.number_input(f"Rendimento (%) - {insumo}", min_value=0.0, max_value=100.0, step=0.1, key=f"rend_{insumo}")
+        with col3:
+            preco = st.number_input(f"Preço do insumo (R$/unidade) - {insumo}", min_value=0.0, step=0.01, key=f"preco_{insumo}")
 
-        st.markdown("---")
-        st.success("✅ Cálculo realizado com sucesso!")
+        insumo_inputs.append({
+            "descricao": insumo,
+            "quantidade": quantidade,
+            "rendimento": rendimento / 100,  # converter para decimal
+            "preco": preco
+        })
+
+    if st.button("📊 Calcular Custo Unitário"):
+        total_custo = 0
+        detalhes = []
+
+        for item in insumo_inputs:
+            insumo_nome = item["descricao"]
+            qtd = item["quantidade"]
+            rendimento = item["rendimento"]
+            preco_insumo = item["preco"]
+
+            custo_total_insumo = qtd * rendimento * preco_insumo
+            total_custo += custo_total_insumo
+
+            detalhes.append({
+                "Insumo": insumo_nome,
+                "Quantidade": qtd,
+                "Rendimento (%)": rendimento * 100,
+                "Preço (R$)": preco_insumo,
+                "Custo Total (R$)": custo_total_insumo
+            })
+
+        # Mostrar resultados
+        st.markdown("## 📈 **Resultado Final**")
+        st.metric("💵 Custo Unitário Total", f"R$ {total_custo:,.2f}")
+
+        df_detalhes = pd.DataFrame(detalhes)
+        st.markdown("### 📋 Detalhamento dos Insumos")
+        st.dataframe(df_detalhes, use_container_width=True)
+
+        # Exportação CSV
+        csv = df_detalhes.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Exportar Detalhamento (CSV)",
+            data=csv,
+            file_name="detalhamento_custo_unitario.csv",
+            mime="text/csv"
+        )
+
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
