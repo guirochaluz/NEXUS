@@ -2126,33 +2126,13 @@ def mostrar_painel_metas():
 
     # ======== Data atual ========
     hoje = datetime.now()
-    ano_atual = hoje.year
-    mes_atual = hoje.month
-
-    # ======== Seletor de Mês/Ano para Meta ========
-    st.markdown("### 📅 Selecione o Mês e Ano para definir meta")
-    col1, col2 = st.columns(2)
-    with col1:
-        mes_selecionado = st.selectbox(
-            "Mês",
-            options=list(range(1, 13)),
-            format_func=lambda x: datetime(1900, x, 1).strftime("%B").capitalize(),
-            index=mes_atual - 1
-        )
-    with col2:
-        ano_selecionado = st.selectbox(
-            "Ano",
-            options=list(range(ano_atual - 5, ano_atual + 6)),
-            index=5  # Default: ano atual
-        )
-
-    ano_mes = f"{ano_selecionado}-{mes_selecionado:02d}"
+    ano_mes_atual = hoje.strftime("%Y-%m")
 
     # ======== Carregar Meta Mensal ========
     with engine.connect() as conn:
         result = conn.execute(
             text("SELECT meta_unidades FROM meta_mensal WHERE ano_mes = :ano_mes"),
-            {"ano_mes": ano_mes}
+            {"ano_mes": ano_mes_atual}
         ).fetchone()
         meta_mensal = result[0] if result else 0
 
@@ -2166,7 +2146,7 @@ def mostrar_painel_metas():
                 ORDER BY data
             """),
             conn,
-            params={"ano_mes": ano_mes}
+            params={"ano_mes": ano_mes_atual}
         )
     producao_mes = df_producao["quantidade"].sum()
     percentual_atingido = (producao_mes / meta_mensal) * 100 if meta_mensal else 0
@@ -2244,7 +2224,7 @@ def mostrar_painel_metas():
     fig_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=percentual_atingido,
-        number={'font': {'size': 40}},
+        number={'suffix': "%", 'font': {'size': 40}},  # ✅ adiciona símbolo %
         title={'text': "Progresso Mensal (%)", 'font': {'size': 24}},
         gauge={
             'axis': {'range': [0, 100]},
@@ -2282,11 +2262,29 @@ def mostrar_painel_metas():
         st.markdown("---")
         st.subheader("⚙️ Configurações")
 
-        # Definir Meta Mensal
+        # ======= Seletor de Mês/Ano para Meta =======
+        st.markdown("#### 📆 Definir Meta Mensal")
+        col1, col2 = st.columns(2)
+        with col1:
+            mes_meta = st.selectbox(
+                "Mês",
+                options=list(range(1, 13)),
+                format_func=lambda x: datetime(1900, x, 1).strftime("%B").capitalize(),
+                index=hoje.month - 1
+            )
+        with col2:
+            ano_meta = st.selectbox(
+                "Ano",
+                options=list(range(hoje.year - 5, hoje.year + 6)),
+                index=5
+            )
+        ano_mes_meta = f"{ano_meta}-{mes_meta:02d}"
+
+        # Input para meta
         nova_meta = st.number_input(
-            f"Definir Meta para {ano_mes} (unidades)",
+            f"Definir Meta para {ano_mes_meta} (unidades)",
             min_value=0,
-            value=meta_mensal,
+            value=meta_mensal if ano_mes_meta == ano_mes_atual else 0,
             step=100
         )
         if st.button("💾 Salvar Meta"):
@@ -2298,12 +2296,13 @@ def mostrar_painel_metas():
                         ON CONFLICT (ano_mes) DO UPDATE
                         SET meta_unidades = EXCLUDED.meta_unidades
                     """),
-                    {"ano_mes": ano_mes, "meta": nova_meta}
+                    {"ano_mes": ano_mes_meta, "meta": nova_meta}
                 )
-            st.success(f"✅ Meta atualizada para {ano_mes} com sucesso!")
+            st.success(f"✅ Meta atualizada para {ano_mes_meta} com sucesso!")
             st.rerun()
 
-        # Selecionar dia para lançar produção
+        # ======= Seletor de Dia para Produção =======
+        st.markdown("#### 🏭 Registrar Produção Diária")
         data_producao = st.date_input("📅 Data da Produção", hoje)
         producao_hoje = st.number_input(
             f"Produção em {data_producao.strftime('%d/%m/%Y')} (unidades)",
@@ -2324,7 +2323,7 @@ def mostrar_painel_metas():
             st.success(f"✅ Produção registrada para {data_producao.strftime('%d/%m/%Y')}!")
             st.rerun()
 
-        # Histórico Produção
+        # ======= Histórico Produção =======
         st.markdown("### 📊 Histórico de Produção")
         st.dataframe(df_producao.rename(
             columns={"data": "Data", "quantidade": "Unidades"}
