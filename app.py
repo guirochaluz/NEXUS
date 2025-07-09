@@ -2813,6 +2813,7 @@ def mostrar_calculadora_custos():
     from sqlalchemy import text
     from datetime import datetime
     from utils import engine
+    from io import BytesIO
 
     st.markdown("""
         <style>
