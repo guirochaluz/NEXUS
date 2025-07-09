@@ -2828,22 +2828,17 @@ def mostrar_calculadora_custos():
     """, unsafe_allow_html=True)
 
     st.header("🧮 Calculadora de Custo Unitário")
-    st.info("Simule o custo unitário do produto informando os insumos e seus detalhes.")
+    st.info("Simule o custo unitário informando os insumos e seus detalhes.")
 
-    # 🔄 Carregar opções do banco de dados
+    # 🔄 Carregar insumos do banco de dados
     with engine.connect() as conn:
-        produtos = pd.read_sql(
-            text("SELECT DISTINCT level1 FROM sales WHERE level1 IS NOT NULL ORDER BY level1"),
-            conn
-        )["level1"].tolist()
-
         insumos_df = pd.read_sql(
             text("SELECT * FROM insumos ORDER BY descricao"),
             conn
         )
 
-    # 🚫 Remover colunas de timestamp se existirem
-    colunas_para_excluir = ["created_at", "updated_at", "data_criacao", "data_modificacao"]
+    # 🚫 Remover colunas desnecessárias (timestamps e ID)
+    colunas_para_excluir = ["id", "created_at", "updated_at", "data_criacao", "data_modificacao"]
     insumos_df = insumos_df.drop(columns=[col for col in colunas_para_excluir if col in insumos_df.columns])
 
     # 🔗 Concatenar todas as colunas restantes para exibir no multiselect
@@ -2852,13 +2847,10 @@ def mostrar_calculadora_custos():
         axis=1
     )
 
-    # 🏷️ Selecionar Produto
-    produto = st.selectbox("📦 Selecione o Produto (Level1)", options=produtos)
-
-    # ➕ Adicionar Insumos
+    # ➕ Seleção de Insumos
     st.markdown("### ➕ Configurar Insumos")
     insumos_selecionados_display = st.multiselect(
-        "Selecione os Insumos utilizados no Produto",
+        "Selecione os Insumos utilizados no cálculo",
         options=insumos_df["insumo_display"].tolist(),
         key="insumos_produto"
     )
@@ -2936,6 +2928,7 @@ def mostrar_calculadora_custos():
             file_name="detalhamento_custo_unitario.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
 
 
 # ----------------- Fluxo Principal -----------------
