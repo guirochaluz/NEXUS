@@ -2811,6 +2811,7 @@ def mostrar_calculadora_custos():
     import streamlit as st
     import pandas as pd
     from sqlalchemy import text
+    from datetime import datetime
     from io import BytesIO
     from utils import engine
 
@@ -2863,7 +2864,7 @@ def mostrar_calculadora_custos():
     # Inputs para Quantidade, Rendimento e Preço de cada insumo
     insumo_inputs = []
     for _, insumo_row in insumos_selecionados.iterrows():
-        insumo_nome = insumo_row["descricao"]  # ou qualquer outra coluna como identificador
+        insumo_nome = insumo_row["descricao"]  # usar descrição como identificador
         st.markdown(f"**🔧 Configuração: {insumo_row['insumo_display']}**")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -2929,6 +2930,29 @@ def mostrar_calculadora_custos():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
+        # Campo para salvar no banco
+        st.markdown("### 💾 **Salvar Simulação**")
+        nome_produto = st.text_input("📦 Nome do Produto Simulado")
+        if st.button("✅ Salvar no banco de dados"):
+            if nome_produto.strip() == "":
+                st.warning("⚠️ Informe o nome do produto para salvar a simulação.")
+            else:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(
+                            text("""
+                                INSERT INTO cotacoes (produto, custo_unitario, data_simulacao)
+                                VALUES (:produto, :custo_unitario, :data_simulacao)
+                            """),
+                            {
+                                "produto": nome_produto,
+                                "custo_unitario": total_custo,
+                                "data_simulacao": datetime.now()
+                            }
+                        )
+                    st.success("✅ Simulação salva na tabela `cotacoes` com sucesso!")
+                except Exception as e:
+                    st.error(f"❌ Erro ao salvar no banco: {e}")
 
 
 # ----------------- Fluxo Principal -----------------
