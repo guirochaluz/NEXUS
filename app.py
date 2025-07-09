@@ -1648,9 +1648,10 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             "Filtrar Período de Expedição",
             [
                 "Período Personalizado",
+                "Ontem",
                 "Hoje",
                 "Amanhã",
-                "Ontem",
+                "Depois de Amanhã",
                 "Próximos 7 Dias",
                 "Este Mês",
                 "Próximos 30 Dias",
@@ -1662,23 +1663,42 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
         # Define intervalo padrão com base no filtro
     import pytz
+    from pandas.tseries.offsets import MonthEnd, YearEnd
+    
+    # Data atual no fuso de SP
     hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
+    
     if periodo == "Hoje":
         de_limite_default = ate_limite_default = min(hoje, data_max_limite)
+    
     elif periodo == "Amanhã":
         de_limite_default = ate_limite_default = hoje + pd.Timedelta(days=1)
+
+    elif periodo == "Depois de Amanhã":
+        de_limite_default = ate_limite_default = hoje + pd.Timedelta(days=2)
+    
     elif periodo == "Ontem":
         de_limite_default = ate_limite_default = hoje - pd.Timedelta(days=1)
+    
     elif periodo == "Próximos 7 Dias":
-        de_limite_default, ate_limite_default = hoje, hoje + pd.Timedelta(days=6)
+        de_limite_default = hoje + pd.Timedelta(days=1)
+        ate_limite_default = de_limite_default + pd.Timedelta(days=6)
+    
     elif periodo == "Próximos 30 Dias":
-        de_limite_default, ate_limite_default = hoje, hoje + pd.Timedelta(days=29)
+        de_limite_default = hoje + pd.Timedelta(days=1)
+        ate_limite_default = de_limite_default + pd.Timedelta(days=29)
+    
     elif periodo == "Este Mês":
-        de_limite_default, ate_limite_default = hoje.replace(day=1), hoje
+        de_limite_default = hoje.replace(day=1)
+        ate_limite_default = (hoje + MonthEnd(0)).date()
+    
     elif periodo == "Este Ano":
-        de_limite_default, ate_limite_default = hoje.replace(month=1, day=1), hoje
-    else:
+        de_limite_default = hoje.replace(month=1, day=1)
+        ate_limite_default = (hoje + YearEnd(0)).date()
+    
+    else:  # Período Personalizado
         de_limite_default, ate_limite_default = data_min_limite, data_max_limite
+
 
 
     # Ajuste para não extrapolar as datas mínimas/máximas disponíveis
