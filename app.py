@@ -2811,6 +2811,7 @@ def mostrar_calculadora_custos():
     import streamlit as st
     import pandas as pd
     from sqlalchemy import text
+    from io import BytesIO
     from utils import engine
 
     st.markdown("""
@@ -2837,37 +2838,49 @@ def mostrar_calculadora_custos():
         )["level1"].tolist()
 
         insumos_df = pd.read_sql(
-            text("SELECT id, descricao FROM insumos ORDER BY descricao"),
+            text("SELECT * FROM insumos ORDER BY descricao"),
             conn
         )
+
+    # 🔗 Concatenar todas as colunas do insumos_df para exibir no multiselect
+    insumos_df["insumo_display"] = insumos_df.apply(
+        lambda row: " ".join(str(row[col]) for col in insumos_df.columns if pd.notna(row[col])),
+        axis=1
+    )
 
     # 🏷️ Selecionar Produto
     produto = st.selectbox("📦 Selecione o Produto (Level1)", options=produtos)
 
     # ➕ Adicionar Insumos
     st.markdown("### ➕ Configurar Insumos")
-    insumos_selecionados = st.multiselect(
+    insumos_selecionados_display = st.multiselect(
         "Selecione os Insumos utilizados no Produto",
-        options=insumos_df["descricao"].tolist(),
+        options=insumos_df["insumo_display"].tolist(),
         key="insumos_produto"
     )
 
+    # Filtrar os insumos reais selecionados
+    insumos_selecionados = insumos_df[
+        insumos_df["insumo_display"].isin(insumos_selecionados_display)
+    ]
+
     # Inputs para Quantidade, Rendimento e Preço de cada insumo
     insumo_inputs = []
-    for insumo in insumos_selecionados:
-        st.markdown(f"**🔧 Configuração: {insumo}**")
+    for _, insumo_row in insumos_selecionados.iterrows():
+        insumo_nome = insumo_row["descricao"]  # ou qualquer outra coluna como identificador
+        st.markdown(f"**🔧 Configuração: {insumo_row['insumo_display']}**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            quantidade = st.number_input(f"Quantidade usada (unidade) - {insumo}", min_value=0.0, step=0.01, key=f"qtd_{insumo}")
+            quantidade = st.number_input(f"Quantidade usada (unidade) - {insumo_nome}", min_value=0.0, step=0.01, key=f"qtd_{insumo_nome}")
         with col2:
-            rendimento = st.number_input(f"Rendimento (%) - {insumo}", min_value=0.0, max_value=100.0, step=0.1, key=f"rend_{insumo}")
+            rendimento = st.number_input(f"Rendimento (quantidade produzida) - {insumo_nome}", min_value=0.01, step=0.01, key=f"rend_{insumo_nome}")
         with col3:
-            preco = st.number_input(f"Preço do insumo (R$/unidade) - {insumo}", min_value=0.0, step=0.01, key=f"preco_{insumo}")
+            preco = st.number_input(f"Preço do insumo (R$/unidade) - {insumo_nome}", min_value=0.0, step=0.01, key=f"preco_{insumo_nome}")
 
         insumo_inputs.append({
-            "descricao": insumo,
+            "descricao": insumo_nome,
             "quantidade": quantidade,
-            "rendimento": rendimento / 100,  # converter para decimal
+            "rendimento": rendimento,
             "preco": preco
         })
 
@@ -2881,15 +2894,19 @@ def mostrar_calculadora_custos():
             rendimento = item["rendimento"]
             preco_insumo = item["preco"]
 
-            custo_total_insumo = qtd * rendimento * preco_insumo
-            total_custo += custo_total_insumo
+            if rendimento == 0:
+                st.error(f"⚠️ O rendimento do insumo {insumo_nome} não pode ser zero.")
+                return
+
+            custo_unitario_insumo = (qtd * preco_insumo) / rendimento
+            total_custo += custo_unitario_insumo
 
             detalhes.append({
                 "Insumo": insumo_nome,
                 "Quantidade": qtd,
-                "Rendimento (%)": rendimento * 100,
+                "Rendimento (unidade)": rendimento,
                 "Preço (R$)": preco_insumo,
-                "Custo Total (R$)": custo_total_insumo
+                "Custo Unitário (R$)": custo_unitario_insumo
             })
 
         # Mostrar resultados
@@ -2900,13 +2917,20 @@ def mostrar_calculadora_custos():
         st.markdown("### 📋 Detalhamento dos Insumos")
         st.dataframe(df_detalhes, use_container_width=True)
 
-        # Exportação CSV
-        csv = df_detalhes.to_csv(index=False).encode("utf-8")
+        # ➡️ Adicionar linha do custo total no Excel
+        df_export = df_detalhes.copy()
+        df_export.loc[len(df_export)] = ["TOTAL", "", "", "", total_custo]
+
+        # Exportação Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df_export.to_excel(writer, index=False, sheet_name="Detalhamento")
+        output.seek(0)
         st.download_button(
-            label="⬇️ Exportar Detalhamento (CSV)",
-            data=csv,
-            file_name="detalhamento_custo_unitario.csv",
-            mime="text/csv"
+            label="⬇️ Exportar Detalhamento (Excel)",
+            data=output,
+            file_name="detalhamento_custo_unitario.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 
