@@ -2590,7 +2590,9 @@ def mostrar_gerenciar_cadastros():
             try:
                 df_upload = pd.read_excel(file)
                 if set(df_modelo.columns).issubset(df_upload.columns):
-                    importar_excel("fornecedores", df_upload)
+                    st.dataframe(df_upload, use_container_width=True)
+                    if st.button("📥 Importar Fornecedores para o Banco"):
+                        importar_excel("fornecedores", df_upload)
                 else:
                     st.error("❌ O arquivo não possui todas as colunas necessárias.")
             except Exception as e:
@@ -2667,7 +2669,9 @@ def mostrar_gerenciar_cadastros():
             try:
                 df_upload = pd.read_excel(file)
                 if set(df_modelo.columns).issubset(df_upload.columns):
-                    importar_excel("stakeholders", df_upload)
+                    st.dataframe(df_upload, use_container_width=True)
+                    if st.button("📥 Importar Stakeholders para o Banco"):
+                        importar_excel("stakeholders", df_upload)
                 else:
                     st.error("❌ O arquivo não possui todas as colunas necessárias.")
             except Exception as e:
@@ -2741,7 +2745,9 @@ def mostrar_gerenciar_cadastros():
             try:
                 df_upload = pd.read_excel(file)
                 if set(df_modelo.columns).issubset(df_upload.columns):
-                    importar_excel("insumos", df_upload)
+                    st.dataframe(df_upload, use_container_width=True)
+                    if st.button("📥 Importar Insumos para o Banco"):
+                        importar_excel("insumos", df_upload)
                 else:
                     st.error("❌ O arquivo não possui todas as colunas necessárias.")
             except Exception as e:
@@ -2798,6 +2804,7 @@ def mostrar_gerenciar_cadastros():
                 st.dataframe(df, use_container_width=True)
         except Exception as e:
             st.error(f"❌ Erro ao carregar insumos: {e}")
+
 
 # ----------------- Adicionar página Calculadora -----------------
 def mostrar_calculadora_custos():
