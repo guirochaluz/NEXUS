@@ -2167,9 +2167,10 @@ def mostrar_painel_metas():
             }}
             .container {{
                 display: flex;
-                justify-content: space-evenly;  /* espaço uniforme entre os cards */
+                justify-content: space-evenly;
                 align-items: flex-start;
-                margin-top: 10px;  /* 🔥 cards grudados no topo */
+                margin-top: -30px;  /* 🔥 cards bem no topo */
+                margin-bottom: 50px;  /* espaço abaixo dos cards */
             }}
             .title {{
                 font-size: 1.6rem;
@@ -2192,7 +2193,7 @@ def mostrar_painel_metas():
                 white-space: nowrap;
             }}
             .config-button {{
-                position: fixed;  /* 🔥 fixa no canto */
+                position: fixed;
                 top: 15px;
                 right: 20px;
                 background: none;
@@ -2230,7 +2231,7 @@ def mostrar_painel_metas():
     fig_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=percentual_atingido,
-        number={'suffix': "%", 'font': {'size': 40}},  # ✅ símbolo %
+        number={'suffix': "%", 'font': {'size': 40}},
         title={'text': "Progresso Mensal (%)", 'font': {'size': 22}},
         gauge={
             'axis': {'range': [0, 100]},
@@ -2247,12 +2248,12 @@ def mostrar_painel_metas():
             }
         }
     ))
-    fig_gauge.update_layout(margin=dict(t=10, b=10, l=30, r=30))
+    fig_gauge.update_layout(margin=dict(t=40, b=40, l=30, r=30))  # 🔥 mais espaço acima/abaixo
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # ======== Barra de Progresso ========
     st.markdown(f"""
-        <div style="width: 85%; height: 25px; background-color: #333; border-radius: 12px; margin: 15px auto;">
+        <div style="width: 85%; height: 25px; background-color: #333; border-radius: 12px; margin: 50px auto 30px auto;">
             <div style="
                 width: {min(percentual_atingido, 100)}%;
                 height: 100%;
@@ -2345,7 +2346,6 @@ def mostrar_painel_metas():
         if st.button("🔙 Voltar ao Painel"):
             st.session_state.show_config = False
             st.rerun()
-
 
 
 import streamlit as st
