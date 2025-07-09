@@ -2509,6 +2509,7 @@ def mostrar_gerenciar_cadastros():
     import streamlit as st
     from sqlalchemy import text
     import pandas as pd
+    from io import BytesIO
 
     st.markdown(
         """
@@ -2531,12 +2532,56 @@ def mostrar_gerenciar_cadastros():
         horizontal=True
     )
 
+    def gerar_excel_modelo(df_modelo, nome_arquivo):
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_modelo.to_excel(writer, index=False, sheet_name="Modelo")
+        output.seek(0)
+        st.download_button(
+            label=f"⬇️ Baixar modelo {nome_arquivo}",
+            data=output,
+            file_name=f"{nome_arquivo}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    def importar_excel(table_name, df_upload):
+        try:
+            df_upload.to_sql(table_name, con=engine, if_exists="append", index=False)
+            st.success("✅ Dados importados com sucesso!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Erro ao importar dados: {e}")
+
     # ==============================
     # FORNECEDORES
     # ==============================
     if aba == "🏢 Fornecedores":
         st.subheader("🏢 Cadastro de Fornecedores")
 
+        # 🔽 Modelo para download
+        df_modelo = pd.DataFrame({
+            "empresa_nome": [""],
+            "cnpj": [""],
+            "referencia_nome": [""],
+            "whatsapp": [""],
+            "endereco_completo": [""],
+            "tipo_insumo": [""]
+        })
+        gerar_excel_modelo(df_modelo, "fornecedores_modelo")
+
+        # 📤 Upload do arquivo Excel
+        file = st.file_uploader("📤 Importar Fornecedores (Excel)", type=["xlsx"])
+        if file:
+            try:
+                df_upload = pd.read_excel(file)
+                if set(df_modelo.columns).issubset(df_upload.columns):
+                    importar_excel("fornecedores", df_upload)
+                else:
+                    st.error("❌ O arquivo não possui todas as colunas necessárias.")
+            except Exception as e:
+                st.error(f"❌ Erro ao ler o arquivo: {e}")
+
+        # === Formulário manual
         with st.form("form_fornecedor", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -2592,6 +2637,28 @@ def mostrar_gerenciar_cadastros():
     elif aba == "👥 Stakeholders":
         st.subheader("👥 Cadastro de Stakeholders")
 
+        # 🔽 Modelo para download
+        df_modelo = pd.DataFrame({
+            "relacao": [""],
+            "nome": [""],
+            "whatsapp": [""],
+            "observacao": [""]
+        })
+        gerar_excel_modelo(df_modelo, "stakeholders_modelo")
+
+        # 📤 Upload do arquivo Excel
+        file = st.file_uploader("📤 Importar Stakeholders (Excel)", type=["xlsx"])
+        if file:
+            try:
+                df_upload = pd.read_excel(file)
+                if set(df_modelo.columns).issubset(df_upload.columns):
+                    importar_excel("stakeholders", df_upload)
+                else:
+                    st.error("❌ O arquivo não possui todas as colunas necessárias.")
+            except Exception as e:
+                st.error(f"❌ Erro ao ler o arquivo: {e}")
+
+        # === Formulário manual
         with st.form("form_stakeholder", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -2641,6 +2708,31 @@ def mostrar_gerenciar_cadastros():
     elif aba == "🧱 Insumos":
         st.subheader("🧱 Cadastro de Insumos")
 
+        # 🔽 Modelo para download
+        df_modelo = pd.DataFrame({
+            "descricao": [""],
+            "categoria": [""],
+            "classificacao": [""],
+            "unidade_medida": [""],
+            "medida": [""],
+            "cores": [""],
+            "observacao": [""]
+        })
+        gerar_excel_modelo(df_modelo, "insumos_modelo")
+
+        # 📤 Upload do arquivo Excel
+        file = st.file_uploader("📤 Importar Insumos (Excel)", type=["xlsx"])
+        if file:
+            try:
+                df_upload = pd.read_excel(file)
+                if set(df_modelo.columns).issubset(df_upload.columns):
+                    importar_excel("insumos", df_upload)
+                else:
+                    st.error("❌ O arquivo não possui todas as colunas necessárias.")
+            except Exception as e:
+                st.error(f"❌ Erro ao ler o arquivo: {e}")
+
+        # === Formulário manual
         with st.form("form_insumo", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -2648,7 +2740,7 @@ def mostrar_gerenciar_cadastros():
                 categoria = st.text_input("Categoria do Insumo")
                 classificacao = st.selectbox("Classificação", ["Bruto", "Acabado"])
             with col2:
-                unidade_medida = st.selectbox("Unidade de Medida *",["mm", "cm", "m", "und", "L", "Kg"])
+                unidade_medida = st.selectbox("Unidade de Medida *", ["mm", "cm", "m", "und", "L", "Kg"])
                 medida = st.text_input("Medida")
                 cores = st.text_input("Cor(es) (separadas por vírgula)")
             observacao = st.text_area("Observações")
@@ -2691,6 +2783,7 @@ def mostrar_gerenciar_cadastros():
                 st.dataframe(df, use_container_width=True)
         except Exception as e:
             st.error(f"❌ Erro ao carregar insumos: {e}")
+
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
