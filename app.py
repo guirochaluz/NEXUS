@@ -2124,14 +2124,29 @@ def mostrar_painel_metas():
     from sqlalchemy import text
     import plotly.graph_objects as go
 
-    # ======== Ano-Mês atual ========
+    # ======== Data atual ========
     hoje = datetime.now()
-    ano_mes_atual = hoje.strftime("%Y-%m")
+    ano_atual = hoje.year
+    mes_atual = hoje.month
 
     # ======== Seletor de Mês/Ano para Meta ========
-    st.markdown("### 📅 Selecione o Mês/Ano")
-    data_meta = st.date_input("Mês/Ano para definir meta", hoje, format="MM/YYYY")
-    ano_mes = data_meta.strftime("%Y-%m")
+    st.markdown("### 📅 Selecione o Mês e Ano para definir meta")
+    col1, col2 = st.columns(2)
+    with col1:
+        mes_selecionado = st.selectbox(
+            "Mês",
+            options=list(range(1, 13)),
+            format_func=lambda x: datetime(1900, x, 1).strftime("%B").capitalize(),
+            index=mes_atual - 1
+        )
+    with col2:
+        ano_selecionado = st.selectbox(
+            "Ano",
+            options=list(range(ano_atual - 5, ano_atual + 6)),
+            index=5  # Default: ano atual
+        )
+
+    ano_mes = f"{ano_selecionado}-{mes_selecionado:02d}"
 
     # ======== Carregar Meta Mensal ========
     with engine.connect() as conn:
@@ -2267,20 +2282,11 @@ def mostrar_painel_metas():
         st.markdown("---")
         st.subheader("⚙️ Configurações")
 
-        # Selecionar mês/ano para meta
-        data_meta_config = st.date_input(
-            "Selecione Mês/Ano para definir meta",
-            hoje,
-            format="MM/YYYY"
-        )
-        ano_mes_config = data_meta_config.strftime("%Y-%m")
-        meta_atual = meta_mensal if ano_mes_config == ano_mes else 0
-
         # Definir Meta Mensal
         nova_meta = st.number_input(
-            "Definir Meta Mensal (unidades)",
+            f"Definir Meta para {ano_mes} (unidades)",
             min_value=0,
-            value=meta_atual,
+            value=meta_mensal,
             step=100
         )
         if st.button("💾 Salvar Meta"):
@@ -2292,9 +2298,9 @@ def mostrar_painel_metas():
                         ON CONFLICT (ano_mes) DO UPDATE
                         SET meta_unidades = EXCLUDED.meta_unidades
                     """),
-                    {"ano_mes": ano_mes_config, "meta": nova_meta}
+                    {"ano_mes": ano_mes, "meta": nova_meta}
                 )
-            st.success(f"✅ Meta atualizada para {ano_mes_config} com sucesso!")
+            st.success(f"✅ Meta atualizada para {ano_mes} com sucesso!")
             st.rerun()
 
         # Selecionar dia para lançar produção
@@ -2327,7 +2333,6 @@ def mostrar_painel_metas():
         if st.button("🔙 Voltar ao Painel"):
             st.session_state.show_config = False
             st.rerun()
-
 
 
 import streamlit as st
