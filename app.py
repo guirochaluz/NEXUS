@@ -2167,40 +2167,46 @@ def mostrar_painel_metas():
             }}
             .container {{
                 display: flex;
-                justify-content: space-around;
+                justify-content: space-evenly;  /* espaço uniforme entre os cards */
                 align-items: flex-start;
-                margin-top: 30px;
+                margin-top: 10px;  /* 🔥 cards grudados no topo */
             }}
             .title {{
-                font-size: 1.8rem;
+                font-size: 1.6rem;
                 text-align: center;
-                margin-bottom: 8px;
+                margin-bottom: 6px;
                 color: #d1d1d1;
             }}
             .card {{
                 background-color: #1f2630;
-                border-radius: 20px;
-                padding: 20px;
+                border-radius: 16px;
+                padding: 16px;
                 text-align: center;
                 width: 25%;
-                box-shadow: 0 0 20px rgba(0,0,0,0.3);
+                box-shadow: 0 0 12px rgba(0,0,0,0.3);
             }}
             .card-number {{
-                font-size: 3rem;
+                font-size: 2.8rem;
                 font-weight: bold;
                 color: #ffffff;
                 white-space: nowrap;
             }}
+            .config-button {{
+                position: fixed;  /* 🔥 fixa no canto */
+                top: 15px;
+                right: 20px;
+                background: none;
+                border: none;
+                font-size: 28px;
+                color: #aaa;
+                cursor: pointer;
+                z-index: 10;
+            }}
+            .config-button:hover {{
+                color: #fff;
+            }}
         </style>
     """, unsafe_allow_html=True)
-
-    # ======== Botão de Configuração ========
-    if "show_config" not in st.session_state:
-        st.session_state.show_config = False
-
-    if st.button("⚙️ Configurações", key="config_button"):
-        st.session_state.show_config = not st.session_state.get("show_config", False)
-        st.rerun()
 
     # ======== Blocos principais ========
     st.markdown(f"""
@@ -2224,8 +2230,8 @@ def mostrar_painel_metas():
     fig_gauge = go.Figure(go.Indicator(
         mode="gauge+number",
         value=percentual_atingido,
-        number={'suffix': "%", 'font': {'size': 40}},  # ✅ adiciona símbolo %
-        title={'text': "Progresso Mensal (%)", 'font': {'size': 24}},
+        number={'suffix': "%", 'font': {'size': 40}},  # ✅ símbolo %
+        title={'text': "Progresso Mensal (%)", 'font': {'size': 22}},
         gauge={
             'axis': {'range': [0, 100]},
             'bar': {'color': cor_percentual, 'thickness': 0.3},
@@ -2241,28 +2247,36 @@ def mostrar_painel_metas():
             }
         }
     ))
-    fig_gauge.update_layout(margin=dict(t=30, b=0, l=30, r=30))
+    fig_gauge.update_layout(margin=dict(t=10, b=10, l=30, r=30))
     st.plotly_chart(fig_gauge, use_container_width=True)
 
     # ======== Barra de Progresso ========
     st.markdown(f"""
-        <div style="width: 90%; height: 30px; background-color: #333; border-radius: 15px; margin: 20px auto;">
+        <div style="width: 85%; height: 25px; background-color: #333; border-radius: 12px; margin: 15px auto;">
             <div style="
                 width: {min(percentual_atingido, 100)}%;
                 height: 100%;
                 background-color: {cor_percentual};
-                border-radius: 15px;
+                border-radius: 12px;
                 transition: width 0.5s ease-in-out;">
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    # ======== Tela de Configuração ========
+    # ======== Botão de Configuração ========
+    if "show_config" not in st.session_state:
+        st.session_state.show_config = False
+
+    st.markdown(
+        "<button class='config-button' onclick='window.parent.postMessage({isStreamlitMessage: true, type: \"rerunScript\"}, \"*\")'>⚙️</button>",
+        unsafe_allow_html=True
+    )
+
     if st.session_state.show_config:
         st.markdown("---")
         st.subheader("⚙️ Configurações")
 
-        # ======= Seletor de Mês/Ano para Meta =======
+        # ======= Seleção de Mês/Ano para Meta =======
         st.markdown("#### 📆 Definir Meta Mensal")
         col1, col2 = st.columns(2)
         with col1:
@@ -2280,7 +2294,6 @@ def mostrar_painel_metas():
             )
         ano_mes_meta = f"{ano_meta}-{mes_meta:02d}"
 
-        # Input para meta
         nova_meta = st.number_input(
             f"Definir Meta para {ano_mes_meta} (unidades)",
             min_value=0,
@@ -2301,7 +2314,7 @@ def mostrar_painel_metas():
             st.success(f"✅ Meta atualizada para {ano_mes_meta} com sucesso!")
             st.rerun()
 
-        # ======= Seletor de Dia para Produção =======
+        # ======= Seleção de Dia para Produção =======
         st.markdown("#### 🏭 Registrar Produção Diária")
         data_producao = st.date_input("📅 Data da Produção", hoje)
         producao_hoje = st.number_input(
@@ -2332,6 +2345,7 @@ def mostrar_painel_metas():
         if st.button("🔙 Voltar ao Painel"):
             st.session_state.show_config = False
             st.rerun()
+
 
 
 import streamlit as st
