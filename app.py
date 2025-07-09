@@ -2534,7 +2534,7 @@ def mostrar_gerenciar_cadastros():
 
     def gerar_excel_modelo(df_modelo, nome_arquivo):
         output = BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df_modelo.to_excel(writer, index=False, sheet_name="Modelo")
         output.seek(0)
         st.download_button(
