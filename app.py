@@ -297,27 +297,21 @@ def render_sidebar():
     with st.sidebar:
         selected = option_menu(
             menu_title=None,
-            options = [
-                "Dashboard",              # Visão geral do sistema
-                "Contas Cadastradas",     # Usuários conectados
-                "Relatórios",             # Relatórios de vendas e métricas
-                "Expedição",              # Controle de envios
-                "Gestão de SKU",          # Controle de produtos/SKUs
-                "Painel de Metas",        # Painel de Meta de Produção
-                "Supply Chain",           # Compras e cadeia de suprimentos
-                "Gestão de Anúncios",     # Anúncios e marketplace
-                "Gerenciar Cadastros"     # Cadastros gerais
+            options=[
+                "Dashboard",              # Visão geral
+                "Contas Cadastradas",     # Contas conectadas
+                "Relatórios",             # Relatórios
+                "Expedição",              # Expedição
+                "Gestão de SKU",          # Produtos/SKUs
+                "Painel de Metas",        # Produção
+                "Supply Chain",           # Compras
+                "Gestão de Anúncios",     # Marketplace
+                "Gerenciar Cadastros",    # Cadastros
+                "Calculadora de Custos"   # ✅ Nova página
             ],
-            icons = [
-                "speedometer",           # Dashboard (painel principal, velocidade)
-                "people",                # Contas Cadastradas (ícone de grupo de pessoas)
-                "bar-chart",             # Relatórios (gráficos)
-                "truck",                 # Expedição (caminhão de entregas)
-                "box",                   # Gestão de SKU (caixa/produto)
-                "bullseye",              # Painel de Metas
-                "link-45deg",            # Supply Chain (cadeia/conexões)
-                "megaphone",             # Gestão de Anúncios (megafone/publicidade)
-                "journal-plus"           # Gerenciar Cadastros (ícone de cadastro/documento)
+            icons=[
+                "speedometer", "people", "bar-chart", "truck", "box", "bullseye",
+                "link-45deg", "megaphone", "journal-plus", "calculator"
             ],
             menu_icon="list",
             default_index=[
@@ -329,7 +323,8 @@ def render_sidebar():
                 "Painel de Metas",
                 "Supply Chain",
                 "Gestão de Anúncios",
-                "Gerenciar Cadastros"
+                "Gerenciar Cadastros",
+                "Calculadora de Custos"
             ].index(st.session_state.get("page", "Dashboard")),
             orientation="vertical",
             styles={
@@ -2804,6 +2799,63 @@ def mostrar_gerenciar_cadastros():
         except Exception as e:
             st.error(f"❌ Erro ao carregar insumos: {e}")
 
+# ----------------- Adicionar página Calculadora -----------------
+def mostrar_calculadora_custos():
+    import streamlit as st
+
+    st.markdown("""
+        <style>
+        .block-container { padding-top: 0rem; }
+        .input-container {
+            background-color: #1f2630;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.header("🧮 Calculadora de Custos")
+    st.info("Aqui você pode calcular o custo total e a margem para seus produtos.")
+
+    with st.form("form_calculo_custos"):
+        st.markdown("### 📥 **Dados de Entrada**")
+        with st.container():
+            col1, col2 = st.columns(2)
+            with col1:
+                preco_venda = st.number_input("💵 Preço de Venda (R$)", min_value=0.0, format="%.2f")
+                custo_unitario = st.number_input("🏭 Custo Unitário (R$)", min_value=0.0, format="%.2f")
+                frete = st.number_input("🚚 Frete (R$)", min_value=0.0, format="%.2f")
+            with col2:
+                taxa_plataforma = st.number_input("📉 Taxa da Plataforma (%)", min_value=0.0, max_value=100.0, format="%.2f")
+                outros_custos = st.number_input("📦 Outros Custos (R$)", min_value=0.0, format="%.2f")
+
+        quantidade = st.number_input("🔢 Quantidade", min_value=1, step=1)
+
+        submitted = st.form_submit_button("📊 Calcular")
+
+    if submitted:
+        # Calcular custos e margens
+        total_custos = (
+            custo_unitario * quantidade
+            + frete
+            + outros_custos
+            + (preco_venda * (taxa_plataforma / 100) * quantidade)
+        )
+        receita_total = preco_venda * quantidade
+        margem_bruta = receita_total - total_custos
+        margem_percentual = (margem_bruta / receita_total) * 100 if receita_total else 0
+
+        # Exibir resultados
+        st.markdown("## 📈 **Resultados**")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("💰 Receita Total", f"R$ {receita_total:,.2f}")
+        col2.metric("📦 Custo Total", f"R$ {total_custos:,.2f}")
+        col3.metric("📊 Margem (%)", f"{margem_percentual:.2f} %")
+
+        st.markdown("---")
+        st.success("✅ Cálculo realizado com sucesso!")
 
 # ----------------- Fluxo Principal -----------------
 if "code" in st.query_params:
@@ -2830,3 +2882,5 @@ elif pagina == "Gestão de Anúncios":
     mostrar_anuncios()
 elif pagina == "Gerenciar Cadastros":
     mostrar_gerenciar_cadastros()
+elif pagina == "Calculadora de Custos":
+    mostrar_calculadora_custos()
