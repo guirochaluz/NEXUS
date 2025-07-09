@@ -2842,7 +2842,11 @@ def mostrar_calculadora_custos():
             conn
         )
 
-    # 🔗 Concatenar todas as colunas do insumos_df para exibir no multiselect
+    # 🚫 Remover colunas de timestamp se existirem
+    colunas_para_excluir = ["created_at", "updated_at", "data_criacao", "data_modificacao"]
+    insumos_df = insumos_df.drop(columns=[col for col in colunas_para_excluir if col in insumos_df.columns])
+
+    # 🔗 Concatenar todas as colunas restantes para exibir no multiselect
     insumos_df["insumo_display"] = insumos_df.apply(
         lambda row: " ".join(str(row[col]) for col in insumos_df.columns if pd.notna(row[col])),
         axis=1
