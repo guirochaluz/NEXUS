@@ -2829,130 +2829,138 @@ def mostrar_calculadora_custos():
     """, unsafe_allow_html=True)
 
     st.header("🧮 Calculadora de Custo Unitário")
-    st.info("Simule o custo unitário informando os insumos e seus detalhes.")
+    st.info("Simule o custo unitário do produto informando os insumos e seus detalhes.")
 
     # 🔄 Carregar insumos do banco de dados
     with engine.connect() as conn:
         insumos_df = pd.read_sql(
-            text("SELECT * FROM insumos ORDER BY descricao"),
+            text("SELECT id, descricao, categoria, classificacao, unidade_medida, medida FROM insumos ORDER BY descricao"),
             conn
         )
 
-    # 🚫 Remover colunas desnecessárias (timestamps e ID)
-    colunas_para_excluir = ["id", "created_at", "updated_at", "data_criacao", "data_modificacao"]
-    insumos_df = insumos_df.drop(columns=[col for col in colunas_para_excluir if col in insumos_df.columns])
-
-    # 🔗 Concatenar todas as colunas restantes para exibir no multiselect
-    insumos_df["insumo_display"] = insumos_df.apply(
-        lambda row: " ".join(str(row[col]) for col in insumos_df.columns if pd.notna(row[col])),
-        axis=1
+    # Preparar display do insumo
+    insumos_df["insumo_display"] = (
+        insumos_df["descricao"] + " | " +
+        insumos_df["categoria"].fillna("") + " | " +
+        insumos_df["classificacao"].fillna("") + " | " +
+        insumos_df["medida"].fillna("") + insumos_df["unidade_medida"].fillna("")
     )
 
-    # ➕ Seleção de Insumos
-    st.markdown("### ➕ Configurar Insumos")
-    insumos_selecionados_display = st.multiselect(
-        "Selecione os Insumos utilizados no cálculo",
-        options=insumos_df["insumo_display"].tolist(),
-        key="insumos_produto"
-    )
+    # Campo para nome do produto simulado
+    produto_nome = st.text_input("📄 Nome do Produto Simulado")
 
-    # Filtrar os insumos reais selecionados
-    insumos_selecionados = insumos_df[
-        insumos_df["insumo_display"].isin(insumos_selecionados_display)
-    ]
+    st.markdown("### ➕ Adicionar Insumos")
+    if "insumo_counter" not in st.session_state:
+        st.session_state.insumo_counter = 1  # contador para garantir keys únicas
+    if "insumo_entries" not in st.session_state:
+        st.session_state.insumo_entries = []  # lista com todos os insumos adicionados
 
-    # Inputs para Quantidade, Rendimento e Preço de cada insumo
-    insumo_inputs = []
-    for _, insumo_row in insumos_selecionados.iterrows():
-        insumo_nome = insumo_row["descricao"]  # usar descrição como identificador
-        st.markdown(f"**🔧 Configuração: {insumo_row['insumo_display']}**")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            quantidade = st.number_input(f"Quantidade usada (unidade) - {insumo_nome}", min_value=0.0, step=0.01, key=f"qtd_{insumo_nome}")
-        with col2:
-            rendimento = st.number_input(f"Rendimento (quantidade produzida) - {insumo_nome}", min_value=0.01, step=0.01, key=f"rend_{insumo_nome}")
-        with col3:
-            preco = st.number_input(f"Preço do insumo (R$/unidade) - {insumo_nome}", min_value=0.0, step=0.01, key=f"preco_{insumo_nome}")
-
-        insumo_inputs.append({
-            "descricao": insumo_nome,
-            "quantidade": quantidade,
-            "rendimento": rendimento,
-            "preco": preco
+    # Botão para adicionar novo insumo
+    if st.button("➕ Adicionar novo insumo"):
+        st.session_state.insumo_entries.append({
+            "key": st.session_state.insumo_counter
         })
+        st.session_state.insumo_counter += 1
 
-    if st.button("📊 Calcular Custo Unitário"):
-        total_custo = 0
-        detalhes = []
+    insumo_inputs = []
+    for entry in st.session_state.insumo_entries:
+        unique_key = entry["key"]
+        with st.container():
+            st.markdown(f"**🔧 Configuração do Insumo #{unique_key}**")
+            col1, col2 = st.columns(2)
+            with col1:
+                insumo_selecionado = st.selectbox(
+                    "Selecione o Insumo",
+                    options=insumos_df["insumo_display"].tolist(),
+                    key=f"insumo_select_{unique_key}"
+                )
+            with col2:
+                remove = st.button(f"❌ Remover", key=f"remove_{unique_key}")
+            if remove:
+                st.session_state.insumo_entries = [
+                    i for i in st.session_state.insumo_entries if i["key"] != unique_key
+                ]
+                st.experimental_rerun()
 
-        for item in insumo_inputs:
-            insumo_nome = item["descricao"]
-            qtd = item["quantidade"]
-            rendimento = item["rendimento"]
-            preco_insumo = item["preco"]
+            col3, col4, col5 = st.columns(3)
+            with col3:
+                quantidade = st.number_input(
+                    "Quantidade usada (unidade)", min_value=0.0, step=0.01, key=f"qtd_{unique_key}"
+                )
+            with col4:
+                rendimento = st.number_input(
+                    "Rendimento (quantidade produzida)", min_value=0.01, step=0.01, key=f"rend_{unique_key}"
+                )
+            with col5:
+                preco = st.number_input(
+                    "Preço do insumo (R$/unidade)", min_value=0.0, step=0.01, key=f"preco_{unique_key}"
+                )
 
-            if rendimento == 0:
-                st.error(f"⚠️ O rendimento do insumo {insumo_nome} não pode ser zero.")
-                return
-
-            custo_unitario_insumo = (qtd * preco_insumo) / rendimento
-            total_custo += custo_unitario_insumo
-
-            detalhes.append({
-                "Insumo": insumo_nome,
-                "Quantidade": qtd,
-                "Rendimento (unidade)": rendimento,
-                "Preço (R$)": preco_insumo,
-                "Custo Unitário (R$)": custo_unitario_insumo
+            insumo_inputs.append({
+                "descricao": insumo_selecionado,
+                "quantidade": quantidade,
+                "rendimento": rendimento,
+                "preco": preco
             })
 
-        # Mostrar resultados
-        st.markdown("## 📈 **Resultado Final**")
-        st.metric("💵 Custo Unitário Total", f"R$ {total_custo:,.2f}")
+    if st.button("📊 Calcular e Salvar no Banco"):
+        if produto_nome.strip() == "":
+            st.warning("⚠️ Informe o nome do produto para salvar no banco.")
+        else:
+            total_custo = 0
+            detalhes = []
 
-        df_detalhes = pd.DataFrame(detalhes)
-        st.markdown("### 📋 Detalhamento dos Insumos")
-        st.dataframe(df_detalhes, use_container_width=True)
+            for idx, item in enumerate(insumo_inputs, start=1):
+                insumo_nome = item["descricao"]
+                qtd = item["quantidade"]
+                rendimento = item["rendimento"]
+                preco_insumo = item["preco"]
 
-        # ➡️ Adicionar linha do custo total no Excel
-        df_export = df_detalhes.copy()
-        df_export.loc[len(df_export)] = ["TOTAL", "", "", "", total_custo]
+                custo_total_insumo = qtd / rendimento * preco_insumo
+                total_custo += custo_total_insumo
 
-        # Exportação Excel
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df_export.to_excel(writer, index=False, sheet_name="Detalhamento")
-        output.seek(0)
-        st.download_button(
-            label="⬇️ Exportar Detalhamento (Excel)",
-            data=output,
-            file_name="detalhamento_custo_unitario.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+                detalhes.append({
+                    "Insumo": insumo_nome,
+                    "Quantidade": qtd,
+                    "Rendimento (unidade)": rendimento,
+                    "Preço (R$)": preco_insumo,
+                    "Custo Total (R$)": custo_total_insumo
+                })
 
-        # Campo para salvar no banco
-        st.markdown("### 💾 **Salvar Simulação**")
-        nome_produto = st.text_input("📦 Nome do Produto Simulado")
-        if st.button("✅ Salvar no banco de dados"):
-            if nome_produto.strip() == "":
-                st.warning("⚠️ Informe o nome do produto para salvar a simulação.")
-            else:
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(
-                            text("""
-                                INSERT INTO cotacoes (produto, custo_unitario, data_simulacao)
-                                VALUES (:produto, :custo_unitario, :data_simulacao)
-                            """),
-                            {
-                                "produto": nome_produto,
-                                "custo_unitario": total_custo,
-                                "data_simulacao": datetime.now()
-                            }
-                        )
-                    st.success("✅ Simulação salva na tabela `cotacoes` com sucesso!")
-                except Exception as e:
-                    st.error(f"❌ Erro ao salvar no banco: {e}")
+            # Mostrar resultados
+            st.markdown("## 📈 **Resultado Final**")
+            st.metric("💵 Custo Unitário Total", f"R$ {total_custo:,.2f}")
+
+            df_detalhes = pd.DataFrame(detalhes)
+            st.markdown("### 📋 Detalhamento dos Insumos")
+            st.dataframe(df_detalhes, use_container_width=True)
+
+            # Exportação Excel
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                df_detalhes.to_excel(writer, index=False, sheet_name="Detalhes")
+                pd.DataFrame([{"Custo Unitário Total (R$)": total_custo}]).to_excel(
+                    writer, index=False, sheet_name="Resumo"
+                )
+            excel_buffer.seek(0)
+            st.download_button(
+                label="⬇️ Exportar Detalhamento (Excel)",
+                data=excel_buffer,
+                file_name="detalhamento_custo_unitario.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            # Salvar no banco
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    INSERT INTO cotacoes (data_simulacao, produto_simulado, custo_unitario)
+                    VALUES (:data_simulacao, :produto_simulado, :custo_unitario)
+                """), {
+                    "data_simulacao": datetime.now(),
+                    "produto_simulado": produto_nome,
+                    "custo_unitario": total_custo
+                })
+            st.success("✅ Simulação salva com sucesso no banco!")
 
 
 # ----------------- Fluxo Principal -----------------
