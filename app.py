@@ -1362,7 +1362,6 @@ def mostrar_gestao_sku():
     else:
         df = st.session_state["df_gestao_sku"]
 
-
     # === Métricas ===
     with engine.begin() as conn:
         vendas_sem_sku = conn.execute(text("SELECT COUNT(*) FROM sales WHERE seller_sku IS NULL")).scalar()
@@ -1470,8 +1469,6 @@ def mostrar_gestao_sku():
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
 
-
-
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
     st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
@@ -1497,9 +1494,9 @@ def mostrar_gestao_sku():
                 try:
                     df_novo["quantity"] = df_novo["quantity"].fillna(0).astype(int)
                     df_novo["custo_unitario"] = df_novo["custo_unitario"].fillna(0).astype(float)
-                    df_novo["seller_sku"] = df_novo["seller_sku"].astype(str).str.strip()
-                    df_novo["level1"] = df_novo["level1"].astype(str).str.strip()
-                    df_novo["level2"] = df_novo["level2"].astype(str).str.strip()
+                    df_novo["seller_sku"] = df_novo["seller_sku"].astype(str).strip()
+                    df_novo["level1"] = df_novo["level1"].astype(str).strip()
+                    df_novo["level2"] = df_novo["level2"].astype(str).strip()
 
                     with engine.begin() as conn:
                         for _, row in df_novo.iterrows():
@@ -1543,6 +1540,65 @@ def mostrar_gestao_sku():
 
                 except Exception as e:
                     st.error(f"❌ Erro ao processar: {e}")
+
+    # 6️⃣ Adição manual de SKU dentro de um expander
+    st.markdown("---")
+    with st.expander("➕ Adicionar SKU Manualmente"):
+        st.markdown("Preencha os campos abaixo para cadastrar um novo SKU diretamente na base:")
+
+        with st.form("adicionar_sku_form"):
+            seller_sku_manual = st.text_input("🔑 Seller SKU *", "")
+            level1_manual = st.text_input("📂 Level 1", "")
+            level2_manual = st.text_input("📂 Level 2", "")
+            custo_manual = st.number_input("💲 Custo Unitário", min_value=0.0, step=0.01, format="%.2f")
+            quantity_manual = st.number_input("📦 Quantidade", min_value=0, step=1)
+            submitted = st.form_submit_button("✅ Cadastrar SKU")
+
+            if submitted:
+                if not seller_sku_manual.strip():
+                    st.error("❌ O campo 'Seller SKU' é obrigatório.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(text("""
+                                INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
+                                VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW())
+                                ON CONFLICT (sku) DO UPDATE
+                                SET
+                                    level1 = EXCLUDED.level1,
+                                    level2 = EXCLUDED.level2,
+                                    custo_unitario = EXCLUDED.custo_unitario,
+                                    quantity = EXCLUDED.quantity
+                            """), {
+                                "sku": seller_sku_manual.strip(),
+                                "level1": level1_manual.strip() or None,
+                                "level2": level2_manual.strip() or None,
+                                "custo": custo_manual,
+                                "quantidade": quantity_manual
+                            })
+
+                            # Atualizar tabela de vendas
+                            conn.execute(text("""
+                                UPDATE sales s
+                                SET
+                                    level1 = sku.level1,
+                                    level2 = sku.level2,
+                                    custo_unitario = sku.custo_unitario,
+                                    quantity_sku = sku.quantity
+                                FROM (
+                                    SELECT DISTINCT ON (sku) * FROM sku
+                                    ORDER BY sku, date_created DESC
+                                ) sku
+                                WHERE s.seller_sku = sku.sku
+                            """))
+
+                        st.success("✅ SKU adicionado com sucesso!")
+                        st.session_state["atualizar_gestao_sku"] = True
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ Erro ao adicionar SKU: {e}")
+
 
 def mostrar_expedicao_logistica(df: pd.DataFrame):
     import streamlit as st
