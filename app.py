@@ -1473,22 +1473,23 @@ def mostrar_gestao_sku():
     st.markdown("---")
     st.markdown("### 📋 MLBs sem SKU (Editar e Salvar)")
     
-    # Carrega os MLBs sem SKU e monta descrição com level1 + level2
+    # Carrega os MLBs sem SKU e traz título do anúncio e a conta (nickname)
     df_sem_sku = pd.read_sql(text("""
         SELECT 
-            s.item_id,
-            COALESCE(sk.level1 || ' - ' || sk.level2, 'SKU NÃO CADASTRADO') AS descricao_produto,
-            s.quantity_sku,
-            s.date_adjusted,
-            s.seller_sku
+            s.item_id AS "ID do Anúncio",
+            s.item_title AS "Título do Anúncio",
+            ut.nickname AS "Conta",
+            s.quantity_sku AS "Quantidade",
+            s.date_adjusted AS "Data do Pedido",
+            s.seller_sku AS "SKU (Preencher)"
         FROM sales s
-        LEFT JOIN sku sk ON s.seller_sku = sk.sku
+        LEFT JOIN user_tokens ut ON s.ml_user_id = ut.ml_user_id
         WHERE s.seller_sku IS NULL
         ORDER BY s.date_adjusted DESC
     """), engine)
     
-    # Define colunas editáveis
-    colunas_editaveis_sem_sku = ["seller_sku"]
+    # Define colunas editáveis (somente SKU pode ser editado)
+    colunas_editaveis_sem_sku = ["SKU (Preencher)"]
     
     # Tabela editável
     df_sem_sku_editado = st.data_editor(
@@ -1504,14 +1505,14 @@ def mostrar_gestao_sku():
         try:
             with engine.begin() as conn:
                 for _, row in df_sem_sku_editado.iterrows():
-                    if row["seller_sku"]:  # Apenas atualiza se o SKU foi preenchido
+                    if row["SKU (Preencher)"]:  # Apenas atualiza se o SKU foi preenchido
                         # Valida se o SKU existe na tabela sku
                         sku_info = conn.execute(text("""
                             SELECT level1, level2, custo_unitario, quantity
                             FROM sku
                             WHERE sku = :seller_sku
                             LIMIT 1
-                        """), {"seller_sku": row["seller_sku"].strip()}).fetchone()
+                        """), {"seller_sku": row["SKU (Preencher)"].strip()}).fetchone()
     
                         if sku_info:
                             # Atualiza sales com o SKU e dados relacionados
@@ -1525,15 +1526,15 @@ def mostrar_gestao_sku():
                                     quantity_sku = :quantity
                                 WHERE item_id = :item_id
                             """), {
-                                "seller_sku": row["seller_sku"].strip(),
+                                "seller_sku": row["SKU (Preencher)"].strip(),
                                 "level1": sku_info.level1,
                                 "level2": sku_info.level2,
                                 "custo_unitario": sku_info.custo_unitario,
                                 "quantity": sku_info.quantity,
-                                "item_id": row["item_id"]
+                                "item_id": row["ID do Anúncio"]
                             })
                         else:
-                            st.warning(f"⚠️ SKU '{row['seller_sku']}' não encontrado na base de SKUs. Corrija antes de salvar.")
+                            st.warning(f"⚠️ SKU '{row['SKU (Preencher)']}' não encontrado na base de SKUs. Corrija antes de salvar.")
     
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
