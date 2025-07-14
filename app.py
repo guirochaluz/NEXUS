@@ -1473,19 +1473,18 @@ def mostrar_gestao_sku():
     st.markdown("---")
     st.markdown("### 📋 MLBs sem SKU (Editar e Salvar)")
     
-    # Carrega os MLBs sem SKU e tenta puxar uma descrição com level1 e level2
+    # Carrega os MLBs sem SKU e monta descrição com level1 + level2
     df_sem_sku = pd.read_sql(text("""
         SELECT 
             s.item_id,
             COALESCE(sk.level1 || ' - ' || sk.level2, 'SKU NÃO CADASTRADO') AS descricao_produto,
-            s.price,
-            s.quantity,
-            s.date_created,
+            s.quantity_sku,
+            s.date_adjusted,
             s.seller_sku
         FROM sales s
         LEFT JOIN sku sk ON s.seller_sku = sk.sku
         WHERE s.seller_sku IS NULL
-        ORDER BY s.date_created DESC
+        ORDER BY s.date_adjusted DESC
     """), engine)
     
     # Define colunas editáveis
@@ -1541,6 +1540,7 @@ def mostrar_gestao_sku():
             st.rerun()
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
+
 
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
