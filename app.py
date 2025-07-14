@@ -1298,7 +1298,7 @@ def mostrar_relatorios():
     df["SKU DO PRODUTO"]         = df["seller_sku"]
     df["HIERARQUIA 1"]           = df["level1"]
     df["HIERARQUIA 2"]           = df["level2"]
-    df["QUANTIDADE DO SKU"] = df["quantity_sku"] * df["quantity"]
+    df["QUANTIDADE"]             = df["quantity_sku"] * df["quantity"]
     df["VALOR DA VENDA"]         = df["total_amount"]
     df["TAXA DA PLATAFORMA"] = df["ml_fee"].fillna(0) * -1
     df["CUSTO DE FRETE"]     = df["frete_adjust"].fillna(0) * -1
@@ -1309,9 +1309,9 @@ def mostrar_relatorios():
     ) * -1
     df["MARGEM DE CONTRIBUIÇÃO"] = (
         df["VALOR DA VENDA"]
-        - df["TAXA DA PLATAFORMA"]
-        - df["CUSTO DE FRETE"]
-        - df["CMV"]
+        + df["TAXA DA PLATAFORMA"]
+        + df["CUSTO DE FRETE"]
+        + df["CMV"]
     )
 
     cols_final = [
