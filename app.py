@@ -574,7 +574,7 @@ def mostrar_dashboard():
     frete               = df["frete_adjust"].fillna(0).sum()
     taxa_mktplace       = -df["ml_fee"].fillna(0).sum()
     cmv                 = -((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
-    margem_operacional  = total_valor - frete - taxa_mktplace - cmv
+    margem_operacional  = total_valor + frete + taxa_mktplace + cmv
     colunas_chk = ["level1", "level2", "custo_unitario", "quantity_sku"]
     
     # Filtra linhas onde seller_sku NÃO é nulo e pelo menos uma coluna está nula
