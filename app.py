@@ -2199,6 +2199,10 @@ def mostrar_painel_metas():
     hoje = datetime.now()
     ano_mes_atual = hoje.strftime("%Y-%m")
 
+    if st.button("⚙️ Configurações", key="config_btn"):
+        st.session_state.show_config = True
+        st.rerun()
+
     # ======== Carregar Meta Mensal ========
     with engine.connect() as conn:
         result = conn.execute(
@@ -2263,20 +2267,6 @@ def mostrar_painel_metas():
                 color: #ffffff;
                 white-space: nowrap;
             }}
-            .config-button {{
-                position: fixed;
-                top: 15px;
-                right: 20px;
-                background: none;
-                border: none;
-                font-size: 28px;
-                color: #aaa;
-                cursor: pointer;
-                z-index: 10;
-            }}
-            .config-button:hover {{
-                color: #fff;
-            }}
         </style>
     """, unsafe_allow_html=True)
 
@@ -2339,10 +2329,6 @@ def mostrar_painel_metas():
     if "show_config" not in st.session_state:
         st.session_state.show_config = False
 
-    st.markdown(
-        "<button class='config-button' onclick='window.parent.postMessage({isStreamlitMessage: true, type: \"rerunScript\"}, \"*\")'>⚙️</button>",
-        unsafe_allow_html=True
-    )
 
     if st.session_state.show_config:
         st.markdown("---")
