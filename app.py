@@ -1469,6 +1469,74 @@ def mostrar_gestao_sku():
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
 
+    # === Mostrar MLBs sem SKU com edição ===
+    st.markdown("---")
+    st.markdown("### 📋 MLBs sem SKU (Editar e Salvar)")
+    
+    # Carrega os MLBs sem SKU
+    df_sem_sku = pd.read_sql(text("""
+        SELECT item_id, title, price, quantity, date_created, seller_sku
+        FROM sales
+        WHERE seller_sku IS NULL
+        ORDER BY date_created DESC
+    """), engine)
+    
+    # Define colunas editáveis
+    colunas_editaveis_sem_sku = ["seller_sku"]
+    
+    # Tabela editável
+    df_sem_sku_editado = st.data_editor(
+        df_sem_sku,
+        use_container_width=True,
+        disabled=[col for col in df_sem_sku.columns if col not in colunas_editaveis_sem_sku],
+        num_rows="dynamic",
+        key="editor_sem_sku"
+    )
+    
+    # Botão para salvar alterações
+    if st.button("💾 Salvar Alterações nos MLBs sem SKU"):
+        try:
+            with engine.begin() as conn:
+                for _, row in df_sem_sku_editado.iterrows():
+                    if row["seller_sku"]:  # Apenas atualiza se o SKU foi preenchido
+                        # Valida se o SKU existe na tabela sku
+                        sku_info = conn.execute(text("""
+                            SELECT level1, level2, custo_unitario, quantity
+                            FROM sku
+                            WHERE sku = :seller_sku
+                            LIMIT 1
+                        """), {"seller_sku": row["seller_sku"].strip()}).fetchone()
+    
+                        if sku_info:
+                            # Atualiza sales com o SKU e dados relacionados
+                            conn.execute(text("""
+                                UPDATE sales
+                                SET
+                                    seller_sku = :seller_sku,
+                                    level1 = :level1,
+                                    level2 = :level2,
+                                    custo_unitario = :custo_unitario,
+                                    quantity_sku = :quantity
+                                WHERE item_id = :item_id
+                            """), {
+                                "seller_sku": row["seller_sku"].strip(),
+                                "level1": sku_info.level1,
+                                "level2": sku_info.level2,
+                                "custo_unitario": sku_info.custo_unitario,
+                                "quantity": sku_info.quantity,
+                                "item_id": row["item_id"]
+                            })
+                        else:
+                            st.warning(f"⚠️ SKU '{row['seller_sku']}' não encontrado na base de SKUs. Corrija antes de salvar.")
+    
+            st.success("✅ Alterações salvas com sucesso!")
+            st.session_state["atualizar_gestao_sku"] = True
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Erro ao salvar alterações: {e}")
+
+
+
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
     st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
