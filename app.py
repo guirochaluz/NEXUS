@@ -1298,15 +1298,15 @@ def mostrar_relatorios():
     df["SKU DO PRODUTO"]         = df["seller_sku"]
     df["HIERARQUIA 1"]           = df["level1"]
     df["HIERARQUIA 2"]           = df["level2"]
-    df["QUANTIDADE DO SKU"]      = df["quantity_sku"].fillna(0).astype(int)
+    df["QUANTIDADE DO SKU"] = df["quantity_sku"] * df["quantity"]
     df["VALOR DA VENDA"]         = df["total_amount"]
-    df["TAXA DA PLATAFORMA"]     = df["ml_fee"].fillna(0)
-    df["CUSTO DE FRETE"]         = df["frete_adjust"].fillna(0)
-    df["CMV"]                    = (
+    df["TAXA DA PLATAFORMA"] = df["ml_fee"].fillna(0) * -1
+    df["CUSTO DE FRETE"]     = df["frete_adjust"].fillna(0) * -1
+    df["CMV"]                = (
         df["quantity_sku"].fillna(0)
         * df["quantity"].fillna(0)
         * df["custo_unitario"].fillna(0)
-    )
+    ) * -1
     df["MARGEM DE CONTRIBUIÇÃO"] = (
         df["VALOR DA VENDA"]
         - df["TAXA DA PLATAFORMA"]
@@ -1708,7 +1708,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
                 "Próximos 30 Dias",
                 "Este Ano"
             ],
-            index=1,
+            index=2,
             key="filtro_expedicao_periodo"
         )
     
@@ -2447,7 +2447,12 @@ def mostrar_supply_chain():
                 fornecedor = st.selectbox("Fornecedor *", ["Selecione um Fornecedor"] + get_fornecedores())
             
             with col2:
-                insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + get_insumos())
+                insumos_df = get_insumos_df()
+                insumo_options = [
+                    f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.medida}{row.unidade_medida}"
+                    for _, row in insumos_df.iterrows()
+                ]
+                insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + insumo_options)
             
             with col3:
                 quantidade = st.number_input("Quantidade *", min_value=1, step=1)
@@ -2489,7 +2494,7 @@ def mostrar_supply_chain():
                             )
                         """), {
                             "fornecedor": fornecedor,
-                            "insumo": insumo,
+                            "insumo": insumo.split(" | ")[0],  # pega só a descrição
                             "quantidade": quantidade,
                             "preco_unitario": preco_unitario,
                             "total_compra": quantidade * preco_unitario,
@@ -2510,7 +2515,12 @@ def mostrar_supply_chain():
     with col1:
         filtro_fornecedor = st.selectbox("Fornecedor", ["Todos"] + get_fornecedores())
     with col2:
-        filtro_insumo = st.selectbox("Insumo", ["Todos"] + get_insumos())
+        insumos_df = get_insumos_df()
+        insumo_options = [
+            f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.medida}{row.unidade_medida}"
+            for _, row in insumos_df.iterrows()
+        ]
+        filtro_insumo = st.selectbox("Insumo", ["Todos"] + insumo_options)
     with col3:
         filtro_data_inicio = st.date_input("Data Início", value=datetime.today())
     
@@ -2533,10 +2543,13 @@ def get_fornecedores():
     df = pd.read_sql(query, engine)
     return df["empresa_nome"].tolist()
 
-def get_insumos():
-    query = "SELECT descricao FROM insumos ORDER BY descricao"
-    df = pd.read_sql(query, engine)
-    return df["descricao"].tolist()
+def get_insumos_df():
+    query = """
+        SELECT descricao, categoria, classificacao, medida, unidade_medida
+        FROM insumos
+        ORDER BY descricao
+    """
+    return pd.read_sql(query, engine)
 
 def get_compras(fornecedor, insumo, data_inicio, data_fim):
     query = """
@@ -2554,10 +2567,11 @@ def get_compras(fornecedor, insumo, data_inicio, data_fim):
     if fornecedor != "Todos":
         query += " AND f.empresa_nome = :fornecedor"
         params["fornecedor"] = fornecedor
-
+    
     if insumo != "Todos":
+        insumo_descricao = insumo.split(" | ")[0]  # pega só a descrição
         query += " AND i.descricao = :insumo"
-        params["insumo"] = insumo
+        params["insumo"] = insumo_descricao
 
     return pd.read_sql(text(query), engine, params=params)
 
