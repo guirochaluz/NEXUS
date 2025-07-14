@@ -1301,7 +1301,7 @@ def mostrar_relatorios():
     df["QUANTIDADE"]             = df["quantity_sku"] * df["quantity"]
     df["VALOR DA VENDA"]         = df["total_amount"]
     df["TAXA DA PLATAFORMA"] = df["ml_fee"].fillna(0) * -1
-    df["CUSTO DE FRETE"]     = df["frete_adjust"].fillna(0) * -1
+    df["CUSTO DE FRETE"]     = df["frete_adjust"].fillna(0) 
     df["CMV"]                = (
         df["quantity_sku"].fillna(0)
         * df["quantity"].fillna(0)
