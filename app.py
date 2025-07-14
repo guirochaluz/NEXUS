@@ -1316,7 +1316,7 @@ def mostrar_relatorios():
 
     cols_final = [
         "ID DA VENDA","CONTA","Data","TÍTULO DO ANÚNCIO","SKU DO PRODUTO",
-        "HIERARQUIA 1","HIERARQUIA 2","QUANTIDADE DO SKU","VALOR DA VENDA",
+        "HIERARQUIA 1","HIERARQUIA 2","QUANTIDADE","VALOR DA VENDA",
         "TAXA DA PLATAFORMA","CUSTO DE FRETE","CMV","MARGEM DE CONTRIBUIÇÃO"
     ]
     st.dataframe(df[cols_final], use_container_width=True)
