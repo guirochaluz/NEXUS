@@ -2523,7 +2523,7 @@ def mostrar_supply_chain():
             with col2:
                 insumos_df = get_insumos_df()
                 insumo_options = [
-                    f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.medida}{row.unidade_medida}"
+                    f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.cores} | {row.medida}{row.unidade_medida}"
                     for _, row in insumos_df.iterrows()
                 ]
                 insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + insumo_options)
@@ -2531,22 +2531,17 @@ def mostrar_supply_chain():
             with col3:
                 quantidade = st.number_input("Quantidade *", min_value=1, step=1)
             
+            col1, col2 = st.columns(2)
             with col1:
                 preco_unitario = st.number_input("Preço Unitário *", format="%.2f", min_value=0.0)
             
             with col2:
-                parcelas = st.number_input("Parcelas", min_value=1, step=1)
+                data_compra = st.date_input("Data da Compra *", value=datetime.today())
             
-            with col3:
-                forma_pagamento = st.selectbox("Forma de Pagamento *", ["Selecione", "Boleto", "Cartão de Crédito", "Transferência", "Pix"])
-
-            # Data da compra e entrega esperada na mesma linha
             col1, col2 = st.columns(2)
             with col1:
-                data_compra = st.date_input("Data da Compra *", value=datetime.today())
-            with col2:
                 data_entrega = st.date_input("Data de Entrega Esperada", value=datetime.today())
-
+            
             observacoes = st.text_area("Observações")
             
             submitted = st.form_submit_button("💾 Salvar Compra")
@@ -2591,7 +2586,7 @@ def mostrar_supply_chain():
     with col2:
         insumos_df = get_insumos_df()
         insumo_options = [
-            f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.medida}{row.unidade_medida}"
+            f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.cores} | {row.medida}{row.unidade_medida}"
             for _, row in insumos_df.iterrows()
         ]
         filtro_insumo = st.selectbox("Insumo", ["Todos"] + insumo_options)
@@ -3007,7 +3002,7 @@ def mostrar_calculadora_custos():
 
             # Dropdown concatenado com as colunas relevantes
             insumo_options = [
-                f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.medida}{row.unidade_medida}"
+                f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.cores} | {row.medida}{row.unidade_medida}"
                 for _, row in insumos_df.iterrows()
             ]
             selected_insumo = st.selectbox(
