@@ -2485,11 +2485,6 @@ import pandas as pd
 from datetime import datetime
 
 def mostrar_supply_chain():
-    import streamlit as st
-    from datetime import datetime
-    from sqlalchemy import text
-    import pandas as pd
-
     st.markdown(
         """
         <style>
@@ -2523,7 +2518,7 @@ def mostrar_supply_chain():
             with col2:
                 insumos_df = get_insumos_df()
                 insumo_options = [
-                    f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.cores} | {row.medida}{row.unidade_medida}"
+                    f"{row['descricao']} | {row['categoria']} | {row['classificacao']} | {row['cores']} | {row['medida']}{row['unidade_medida']}"
                     for _, row in insumos_df.iterrows()
                 ]
                 insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + insumo_options)
@@ -2552,14 +2547,12 @@ def mostrar_supply_chain():
                         conn.execute(text("""
                             INSERT INTO compras_insumos (
                                 fornecedor_id, insumo_id, quantidade, preco_unitario,
-                                total_compra, forma_pagamento, parcelas,
-                                data_compra, data_entrega_esperada, observacoes
+                                total_compra, data_compra, data_entrega_esperada, observacoes
                             ) VALUES (
                                 (SELECT id FROM fornecedores WHERE empresa_nome = :fornecedor),
                                 (SELECT id FROM insumos WHERE descricao = :insumo),
                                 :quantidade, :preco_unitario,
-                                :total_compra, :forma_pagamento, :parcelas,
-                                :data_compra, :data_entrega, :observacoes
+                                :total_compra, :data_compra, :data_entrega, :observacoes
                             )
                         """), {
                             "fornecedor": fornecedor,
@@ -2567,8 +2560,6 @@ def mostrar_supply_chain():
                             "quantidade": quantidade,
                             "preco_unitario": preco_unitario,
                             "total_compra": quantidade * preco_unitario,
-                            "forma_pagamento": forma_pagamento,
-                            "parcelas": parcelas,
                             "data_compra": data_compra,
                             "data_entrega": data_entrega,
                             "observacoes": observacoes
@@ -2586,7 +2577,7 @@ def mostrar_supply_chain():
     with col2:
         insumos_df = get_insumos_df()
         insumo_options = [
-            f"{row.descricao} | {row.categoria} | {row.classificacao} | {row.cores} | {row.medida}{row.unidade_medida}"
+            f"{row['descricao']} | {row['categoria']} | {row['classificacao']} | {row['cores']} | {row['medida']}{row['unidade_medida']}"
             for _, row in insumos_df.iterrows()
         ]
         filtro_insumo = st.selectbox("Insumo", ["Todos"] + insumo_options)
@@ -2614,7 +2605,7 @@ def get_fornecedores():
 
 def get_insumos_df():
     query = """
-        SELECT descricao, categoria, classificacao, medida, unidade_medida
+        SELECT descricao, categoria, classificacao, cores, medida, unidade_medida
         FROM insumos
         ORDER BY descricao
     """
@@ -2624,8 +2615,7 @@ def get_compras(fornecedor, insumo, data_inicio, data_fim):
     query = """
         SELECT ci.id, f.empresa_nome AS fornecedor, i.descricao AS insumo,
                ci.quantidade, ci.preco_unitario, ci.total_compra,
-               ci.forma_pagamento, ci.parcelas, ci.data_compra,
-               ci.data_entrega_esperada, ci.observacoes
+               ci.data_compra, ci.data_entrega_esperada, ci.observacoes
         FROM compras_insumos ci
         JOIN fornecedores f ON ci.fornecedor_id = f.id
         JOIN insumos i ON ci.insumo_id = i.id
@@ -2643,7 +2633,6 @@ def get_compras(fornecedor, insumo, data_inicio, data_fim):
         params["insumo"] = insumo_descricao
 
     return pd.read_sql(text(query), engine, params=params)
-
 
 def mostrar_gerenciar_cadastros():
     import streamlit as st
