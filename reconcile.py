@@ -100,7 +100,7 @@ def reconciliar_vendas(
         mapper = inspect(Sale)
         cols_to_check = {
             c.key for c in mapper.attrs
-            if c.key not in {"id", "order_id", "ml_user_id"}
+            if c.key not in {"id", "order_id", "ml_user_id", "seller_sku"}
         }
 
         for chunk_idx in range(0, len(order_ids), CHUNK_SIZE):
