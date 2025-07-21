@@ -1222,8 +1222,8 @@ def mostrar_relatorios():
     if selecionadas:
         df_full = df_full[df_full["nickname"].isin(selecionadas)]
 
-    # --- Filtro Rápido | De | Até | Status | Tipo de Envio ---
-    col1, col2, col3, col4, col5 = st.columns([1.5, 1.2, 1.2, 1.5, 1.5])
+    # --- Filtro Rápido | De | Até | Status | Tipo de Envio | Categoria de Preço ---
+    col1, col2, col3, col4, col5, col6 = st.columns([1.5, 1.2, 1.2, 1.5, 1.5, 1.8])
     hoje      = pd.Timestamp.now(tz="America/Sao_Paulo").date()
     data_min  = df_full["date_adjusted"].dt.date.min()
     data_max  = df_full["date_adjusted"].dt.date.max()
@@ -1240,6 +1240,15 @@ def mostrar_relatorios():
             case _: return 'outros'
     
     df_full["Tipo de Envio"] = df_full["shipment_logistic_type"].apply(mapear_tipo)
+    
+    # --- Categoria de Preço ---
+    def categorizar_preco(valor):
+        if valor < 79:
+            return "LOW TICKET (< R$79)"
+        else:
+            return "HIGH TICKET (> R$79)"
+    
+    df_full["Categoria de Preço"] = df_full["order_cost"].apply(categorizar_preco)
     
     # --- Filtros ---
     with col1:
@@ -1276,6 +1285,9 @@ def mostrar_relatorios():
     with col5:
         envio_opts = ["Todos"] + sorted(df_full["Tipo de Envio"].dropna().unique())
         tipo_envio_sel = st.selectbox("Tipo de Envio", envio_opts, index=0, key="rel_tipo_envio")
+    with col6:
+        preco_opts = ["Todos"] + df_full["Categoria de Preço"].unique().tolist()
+        preco_sel = st.selectbox("Categoria de Preço", preco_opts, index=0, key="rel_cat_preco")
     
     # --- Aplicação dos filtros ---
     df = df_full[
@@ -1286,6 +1298,9 @@ def mostrar_relatorios():
         df = df[df["status"] == status_sel]
     if tipo_envio_sel != "Todos":
         df = df[df["Tipo de Envio"] == tipo_envio_sel]
+    if preco_sel != "Todos":
+        df = df[df["Categoria de Preço"] == preco_sel]
+
 
 
     # --- Filtros Avançados: Hierarquia 1 e 2 ---
