@@ -438,9 +438,9 @@ def mostrar_dashboard():
         df_full = df_full[df_full["nickname"].isin(selecionadas)]
 
 
-    # --- Linha única de filtros: Rápido | De | Até | Status ---
-    col1, col2, col3, col4 = st.columns([1.5, 1.2, 1.2, 1.5])
-
+    # --- Linha única de filtros: Rápido | De | Até | Status | Tipo de Envio | Categoria de Preço ---
+    col1, col2, col3, col4, col5, col6 = st.columns([1.5, 1.2, 1.2, 1.5, 1.5, 1.8])
+    
     with col1:
         filtro_rapido = st.selectbox(
             "Filtrar Período",
@@ -456,6 +456,7 @@ def mostrar_dashboard():
             index=1,
             key="filtro_quick"
         )
+    
     import pytz
     hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
     data_min = df_full["date_adjusted"].dt.date.min()
@@ -490,13 +491,48 @@ def mostrar_dashboard():
         index_padrao = status_opcoes.index("Pago") if "Pago" in status_opcoes else 0
         status_selecionado = st.selectbox("Status", status_opcoes, index=index_padrao)
     
-    # Aplica filtros finais
+    # === Novo filtro: Tipo de Envio ===
+    def mapear_tipo(valor):
+        match valor:
+            case 'fulfillment': return 'FULL'
+            case 'self_service': return 'FLEX'
+            case 'drop_off': return 'Correios'
+            case 'xd_drop_off': return 'Agência'
+            case 'cross_docking': return 'Coleta'
+            case 'me2': return 'Envio Padrão'
+            case _: return 'outros'
+    
+    df_full["Tipo de Envio"] = df_full["shipment_logistic_type"].apply(mapear_tipo)
+    
+    with col5:
+        envio_opcoes = ["Todos"] + sorted(df_full["Tipo de Envio"].dropna().unique())
+        tipo_envio_sel = st.selectbox("Tipo de Envio", envio_opcoes, index=0, key="tipo_envio_q")
+    
+    # === Novo filtro: Categoria de Preço ===
+    def categorizar_preco(valor):
+        if valor < 79:
+            return "LOW TICKET (< R$79)"
+        else:
+            return "HIGH TICKET (> R$79)"
+    
+    df_full["Categoria de Preço"] = df_full["order_cost"].apply(categorizar_preco)
+    
+    with col6:
+        preco_opcoes = ["Todos"] + df_full["Categoria de Preço"].dropna().unique().tolist()
+        preco_sel = st.selectbox("Categoria de Preço", preco_opcoes, index=0, key="preco_q")
+    
+    # --- Aplicação dos filtros ---
     df = df_full[
         (df_full["date_adjusted"].dt.date >= de) &
         (df_full["date_adjusted"].dt.date <= ate)
     ]
     if status_selecionado != "Todos":
         df = df[df["status"] == status_selecionado]
+    if tipo_envio_sel != "Todos":
+        df = df[df["Tipo de Envio"] == tipo_envio_sel]
+    if preco_sel != "Todos":
+        df = df[df["Categoria de Preço"] == preco_sel]
+
 
     
     # --- Filtros Avançados com checkbox dentro de Expander ---
