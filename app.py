@@ -1222,18 +1222,33 @@ def mostrar_relatorios():
     if selecionadas:
         df_full = df_full[df_full["nickname"].isin(selecionadas)]
 
-    # --- Filtro Rápido | De | Até | Status ---
-    col1, col2, col3, col4 = st.columns([1.5,1.2,1.2,1.5])
+    # --- Filtro Rápido | De | Até | Status | Tipo de Envio ---
+    col1, col2, col3, col4, col5 = st.columns([1.5, 1.2, 1.2, 1.5, 1.5])
     hoje      = pd.Timestamp.now(tz="America/Sao_Paulo").date()
     data_min  = df_full["date_adjusted"].dt.date.min()
     data_max  = df_full["date_adjusted"].dt.date.max()
-
+    
+    # === Mapeamentos e cálculos iniciais ===
+    def mapear_tipo(valor):
+        match valor:
+            case 'fulfillment': return 'FULL'
+            case 'self_service': return 'FLEX'
+            case 'drop_off': return 'Correios'
+            case 'xd_drop_off': return 'Agência'
+            case 'cross_docking': return 'Coleta'
+            case 'me2': return 'Envio Padrão'
+            case _: return 'outros'
+    
+    df_full["Tipo de Envio"] = df_full["shipment_logistic_type"].apply(mapear_tipo)
+    
+    # --- Filtros ---
     with col1:
         filtro = st.selectbox(
             "📅 Período",
-            ["Personalizado","Hoje","Ontem","Últimos 7 Dias","Este Mês","Últimos 30 Dias","Este Ano"],
+            ["Personalizado", "Hoje", "Ontem", "Últimos 7 Dias", "Este Mês", "Últimos 30 Dias", "Este Ano"],
             index=1, key="rel_filtro_quick"
         )
+    
     if filtro == "Hoje":
         de = ate = min(hoje, data_max)
     elif filtro == "Ontem":
@@ -1248,23 +1263,30 @@ def mostrar_relatorios():
         de, ate = hoje.replace(month=1, day=1), hoje
     else:
         de, ate = data_min, data_max
-
+    
     custom = (filtro == "Personalizado")
     with col2:
-        de = st.date_input("De",  value=de,  min_value=data_min, max_value=data_max, disabled=not custom, key="rel_de")
+        de = st.date_input("De", value=de, min_value=data_min, max_value=data_max, disabled=not custom, key="rel_de")
     with col3:
-        ate= st.date_input("Até", value=ate, min_value=data_min, max_value=data_max, disabled=not custom, key="rel_ate")
+        ate = st.date_input("Até", value=ate, min_value=data_min, max_value=data_max, disabled=not custom, key="rel_ate")
     with col4:
         opts = ["Todos"] + df_full["status"].dropna().unique().tolist()
-        idx  = opts.index("Pago") if "Pago" in opts else 0
+        idx = opts.index("Pago") if "Pago" in opts else 0
         status_sel = st.selectbox("Status", opts, index=idx, key="rel_status")
-
+    with col5:
+        envio_opts = ["Todos"] + sorted(df_full["Tipo de Envio"].dropna().unique())
+        tipo_envio_sel = st.selectbox("Tipo de Envio", envio_opts, index=0, key="rel_tipo_envio")
+    
+    # --- Aplicação dos filtros ---
     df = df_full[
         (df_full["date_adjusted"].dt.date >= de) &
         (df_full["date_adjusted"].dt.date <= ate)
     ]
     if status_sel != "Todos":
         df = df[df["status"] == status_sel]
+    if tipo_envio_sel != "Todos":
+        df = df[df["Tipo de Envio"] == tipo_envio_sel]
+
 
     # --- Filtros Avançados: Hierarquia 1 e 2 ---
     with st.expander("🔍 Filtros Avançados", expanded=False):
