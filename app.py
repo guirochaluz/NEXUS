@@ -466,7 +466,7 @@ def mostrar_dashboard():
     elif filtro_rapido == "Ontem":
         de = ate = hoje - pd.Timedelta(days=1)
     elif filtro_rapido == "Últimos 7 Dias":
-        de, ate = hoje - pd.Timedelta(days=7), hoje
+        de, ate = hoje - pd.Timedelta(days=6), hoje
     elif filtro_rapido == "Últimos 30 Dias":
         de, ate = hoje - pd.Timedelta(days=30), hoje
     elif filtro_rapido == "Este Mês":
@@ -1239,7 +1239,7 @@ def mostrar_relatorios():
     elif filtro == "Ontem":
         de = ate = hoje - pd.Timedelta(days=1)
     elif filtro == "Últimos 7 Dias":
-        de, ate = hoje - pd.Timedelta(days=7), hoje
+        de, ate = hoje - pd.Timedelta(days=6), hoje
     elif filtro == "Últimos 30 Dias":
         de, ate = hoje - pd.Timedelta(days=30), hoje
     elif filtro == "Este Mês":
