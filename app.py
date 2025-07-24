@@ -509,13 +509,17 @@ def mostrar_dashboard():
         tipo_envio_sel = st.selectbox("Tipo de Envio", envio_opcoes, index=0, key="tipo_envio_q")
     
     # === Novo filtro: Categoria de Preço ===
-    def categorizar_preco(valor):
-        if valor < 79:
-            return "LOW TICKET (< R$79)"
-        else:
-            return "HIGH TICKET (> R$79)"
+    def categorizar_preco(linha):
+        try:
+            preco_unitario = linha["order_cost"] / linha["quantity"]
+            if preco_unitario < 79:
+                return "LOW TICKET (< R$79)"
+            else:
+                return "HIGH TICKET (> R$79)"
+        except:
+            return "outros"
     
-    df_full["Categoria de Preço"] = df_full["order_cost"].apply(categorizar_preco)
+    df_full["Categoria de Preço"] = df_full.apply(categorizar_preco, axis=1)
     
     with col6:
         preco_opcoes = ["Todos"] + df_full["Categoria de Preço"].dropna().unique().tolist()
@@ -1278,13 +1282,18 @@ def mostrar_relatorios():
     df_full["Tipo de Envio"] = df_full["shipment_logistic_type"].apply(mapear_tipo)
     
     # --- Categoria de Preço ---
-    def categorizar_preco(valor):
-        if valor < 79:
-            return "LOW TICKET (< R$79)"
-        else:
-            return "HIGH TICKET (> R$79)"
+    def categorizar_preco(linha):
+        try:
+            preco_unitario = linha["order_cost"] / linha["quantity"]
+            if preco_unitario < 79:
+                return "LOW TICKET (< R$79)"
+            else:
+                return "HIGH TICKET (> R$79)"
+        except:
+            return "outros"
     
-    df_full["Categoria de Preço"] = df_full["order_cost"].apply(categorizar_preco)
+    df_full["Categoria de Preço"] = df_full.apply(categorizar_preco, axis=1)
+
     
     # --- Filtros ---
     with col1:
