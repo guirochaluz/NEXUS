@@ -2699,8 +2699,8 @@ def get_compras(fornecedor, insumo, data_inicio, data_fim):
                ci.quantidade, ci.preco_unitario, ci.total_compra,
                ci.data_compra, ci.data_entrega_esperada, ci.observacoes
         FROM compras_insumos ci
-        JOIN fornecedores f ON ci.fornecedor_id = f.id
-        JOIN insumos i ON ci.insumo_id = i.id
+        LEFT JOIN fornecedores f ON ci.fornecedor_id = f.id
+        LEFT JOIN insumos i ON ci.insumo_id = i.id
         WHERE ci.data_compra BETWEEN :data_inicio AND :data_fim
     """
     params = {"data_inicio": data_inicio, "data_fim": data_fim}
