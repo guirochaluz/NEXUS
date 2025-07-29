@@ -1513,23 +1513,49 @@ def mostrar_gestao_sku():
         try:
             with engine.begin() as conn:
                 for _, row in df_editado.iterrows():
-                    conn.execute(text("""
-                        INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                        VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW())
-                        ON CONFLICT (sku) DO UPDATE
-                        SET
-                            level1 = EXCLUDED.level1,
-                            level2 = EXCLUDED.level2,
-                            custo_unitario = EXCLUDED.custo_unitario,
-                            quantity = EXCLUDED.quantity
-                    """), {
-                        "sku": row["seller_sku"],
-                        "level1": row["level1"],
-                        "level2": row["level2"],
-                        "custo": row["custo_unitario"],
-                        "quantidade": row["quantity_sku"]
-                    })
-
+                    sku = row["seller_sku"]
+                    novo_custo = float(row["custo_unitario"]) if row["custo_unitario"] is not None else None
+    
+                    # Puxa o último registro do SKU
+                    ultimo = conn.execute(text("""
+                        SELECT custo_unitario
+                        FROM sku
+                        WHERE sku = :sku
+                        ORDER BY date_created DESC
+                        LIMIT 1
+                    """), {"sku": sku}).fetchone()
+    
+                    if not ultimo or float(ultimo.custo_unitario or 0) != novo_custo:
+                        # Inserir nova linha se o custo foi alterado ou não existir
+                        conn.execute(text("""
+                            INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
+                            VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW())
+                        """), {
+                            "sku": sku,
+                            "level1": row["level1"],
+                            "level2": row["level2"],
+                            "custo": novo_custo,
+                            "quantidade": row["quantity_sku"]
+                        })
+                    else:
+                        # Atualiza a linha mais recente se o custo não mudou
+                        conn.execute(text("""
+                            UPDATE sku
+                            SET level1 = :level1,
+                                level2 = :level2,
+                                quantity = :quantidade
+                            WHERE sku = :sku
+                              AND date_created = (
+                                  SELECT MAX(date_created) FROM sku WHERE sku = :sku
+                              )
+                        """), {
+                            "sku": sku,
+                            "level1": row["level1"],
+                            "level2": row["level2"],
+                            "quantidade": row["quantity_sku"]
+                        })
+    
+                # Atualiza a tabela de vendas com os dados mais recentes de SKU
                 conn.execute(text("""
                     UPDATE sales s
                     SET
@@ -1543,13 +1569,14 @@ def mostrar_gestao_sku():
                     ) sku
                     WHERE s.seller_sku = sku.sku
                 """))
-
+    
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
             st.rerun()
-
+    
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
+
 
     # === Mostrar MLBs sem SKU com edição ===
     st.markdown("---")
