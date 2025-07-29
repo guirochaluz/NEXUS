@@ -2664,7 +2664,7 @@ def mostrar_supply_chain():
         ]
         filtro_insumo = st.selectbox("Insumo", ["Todos"] + insumo_options)
     with col3:
-        filtro_data_inicio = st.date_input("Data Início", value=datetime.today())
+        filtro_data_inicio = st.date_input("Data Início", value=datetime.today() - timedelta(days=30))
     
     # Data fim em linha abaixo
     filtro_data_fim = st.date_input("Data Fim", value=datetime.today())
