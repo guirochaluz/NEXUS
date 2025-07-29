@@ -1626,18 +1626,17 @@ def mostrar_gestao_sku():
                     if row["SKU (Preencher)"]:  # Apenas atualiza se o SKU foi preenchido
                         # Valida se o SKU existe na tabela sku
                         sku_info = conn.execute(text("""
-                            sku_info = conn.execute(text("""
-                                SELECT *
-                                FROM sku
-                                WHERE sku = :seller_sku
-                                  AND date_created <= :data_venda
-                                ORDER BY date_created DESC
-                                LIMIT 1
-                            """), {
-                                "seller_sku": row["SKU (Preencher)"].strip(),
-                                "data_venda": row["Data do Pedido"]
-                            }).fetchone()
-    
+                            SELECT *
+                            FROM sku
+                            WHERE sku = :seller_sku
+                              AND date_created <= :data_venda
+                            ORDER BY date_created DESC
+                            LIMIT 1
+                        """), {
+                            "seller_sku": row["SKU (Preencher)"].strip(),
+                            "data_venda": row["Data do Pedido"]
+                        }).fetchone()
+
                         if sku_info:
                             # Atualiza sales com o SKU e dados relacionados
                             conn.execute(text("""
@@ -1659,13 +1658,12 @@ def mostrar_gestao_sku():
                             })
                         else:
                             st.warning(f"⚠️ SKU '{row['SKU (Preencher)']}' não encontrado na base de SKUs. Corrija antes de salvar.")
-    
+
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
             st.rerun()
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
-
 
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
