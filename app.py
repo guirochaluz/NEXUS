@@ -2695,7 +2695,7 @@ def get_insumos_df():
 
 def get_compras(fornecedor, insumo, data_inicio, data_fim):
     query = """
-        SELECT ci.id, f.empresa_nome AS fornecedor, i.descricao AS insumo,
+        SELECT ci.id, f.empresa_nome AS fornecedor,        (i.descricao || ' | ' || i.categoria || ' | ' || i.classificacao || ' | ' || i.cores || ' | ' || i.medida || i.unidade_medida) AS insumo,
                ci.quantidade, ci.preco_unitario, ci.total_compra,
                ci.data_compra, ci.data_entrega_esperada, ci.observacoes
         FROM compras_insumos ci
