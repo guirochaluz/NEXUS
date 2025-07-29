@@ -1564,11 +1564,20 @@ def mostrar_gestao_sku():
                         custo_unitario = sku.custo_unitario,
                         quantity_sku = sku.quantity
                     FROM (
-                        SELECT DISTINCT ON (sku) * FROM sku
-                        ORDER BY sku, date_created DESC
+                        SELECT s.id AS sale_id, sku.*
+                        FROM sales s
+                        JOIN LATERAL (
+                            SELECT *
+                            FROM sku
+                            WHERE sku.sku = s.seller_sku
+                              AND sku.date_created <= s.date_adjusted
+                            ORDER BY date_created DESC
+                            LIMIT 1
+                        ) sku ON true
                     ) sku
-                    WHERE s.seller_sku = sku.sku
+                    WHERE s.id = sku.sale_id
                 """))
+
     
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
@@ -1617,11 +1626,17 @@ def mostrar_gestao_sku():
                     if row["SKU (Preencher)"]:  # Apenas atualiza se o SKU foi preenchido
                         # Valida se o SKU existe na tabela sku
                         sku_info = conn.execute(text("""
-                            SELECT level1, level2, custo_unitario, quantity
-                            FROM sku
-                            WHERE sku = :seller_sku
-                            LIMIT 1
-                        """), {"seller_sku": row["SKU (Preencher)"].strip()}).fetchone()
+                            sku_info = conn.execute(text("""
+                                SELECT *
+                                FROM sku
+                                WHERE sku = :seller_sku
+                                  AND date_created <= :data_venda
+                                ORDER BY date_created DESC
+                                LIMIT 1
+                            """), {
+                                "seller_sku": row["SKU (Preencher)"].strip(),
+                                "data_venda": row["Data do Pedido"]
+                            }).fetchone()
     
                         if sku_info:
                             # Atualiza sales com o SKU e dados relacionados
@@ -1709,12 +1724,19 @@ def mostrar_gestao_sku():
                                 custo_unitario = sku.custo_unitario,
                                 quantity_sku = sku.quantity
                             FROM (
-                                SELECT DISTINCT ON (sku) *
-                                FROM sku
-                                ORDER BY sku, date_created DESC
+                                SELECT s.id AS sale_id, sku.*
+                                FROM sales s
+                                JOIN LATERAL (
+                                    SELECT *
+                                    FROM sku
+                                    WHERE sku.sku = s.seller_sku
+                                      AND sku.date_created <= s.date_adjusted
+                                    ORDER BY date_created DESC
+                                    LIMIT 1
+                                ) sku ON true
                             ) sku
-                            WHERE s.seller_sku = sku.sku
-                        """))
+                            WHERE s.id = sku.sale_id
+
 
                     # Recarregar métricas e dados
                     st.session_state["atualizar_gestao_sku"] = True
@@ -1769,11 +1791,19 @@ def mostrar_gestao_sku():
                                     custo_unitario = sku.custo_unitario,
                                     quantity_sku = sku.quantity
                                 FROM (
-                                    SELECT DISTINCT ON (sku) * FROM sku
-                                    ORDER BY sku, date_created DESC
+                                    SELECT s.id AS sale_id, sku.*
+                                    FROM sales s
+                                    JOIN LATERAL (
+                                        SELECT *
+                                        FROM sku
+                                        WHERE sku.sku = s.seller_sku
+                                          AND sku.date_created <= s.date_adjusted
+                                        ORDER BY date_created DESC
+                                        LIMIT 1
+                                    ) sku ON true
                                 ) sku
-                                WHERE s.seller_sku = sku.sku
-                            """))
+                                WHERE s.id = sku.sale_id
+
 
                         st.success("✅ SKU adicionado com sucesso!")
                         st.session_state["atualizar_gestao_sku"] = True
