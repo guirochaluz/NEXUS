@@ -1889,7 +1889,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     else:
         df["data_limite"] = pd.NaT
     
-    import pytz
     hoje = pd.Timestamp.now(tz="America/Sao_Paulo").date()
 
     data_min_venda = df["data_venda"].dropna().min()
