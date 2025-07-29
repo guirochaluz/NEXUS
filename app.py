@@ -1734,6 +1734,7 @@ def mostrar_gestao_sku():
                                 ) sku ON true
                             ) sku
                             WHERE s.id = sku.sale_id
+                        """))
 
 
                     # Recarregar métricas e dados
@@ -1801,6 +1802,8 @@ def mostrar_gestao_sku():
                                     ) sku ON true
                                 ) sku
                                 WHERE s.id = sku.sale_id
+                            """))
+                            
 
 
                         st.success("✅ SKU adicionado com sucesso!")
