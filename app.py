@@ -2624,6 +2624,11 @@ import pandas as pd
 from datetime import datetime
 
 def mostrar_supply_chain():
+    import streamlit as st
+    from datetime import datetime, timedelta
+    import pandas as pd
+    from sqlalchemy import text
+
     st.markdown(
         """
         <style>
@@ -2642,77 +2647,17 @@ def mostrar_supply_chain():
         """,
         unsafe_allow_html=True,
     )
-    
+
     st.header("🚚 Supply Chain - Compra de Insumos")
     st.info("Aqui você pode registrar e analisar as compras de insumos.")
 
-    # === Formulário de Compra de Insumo (dentro de expander) ===
-    with st.expander("➕ Registrar Nova Compra", expanded=False):
-        with st.form("form_compra_insumo", clear_on_submit=True):
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                fornecedor = st.selectbox("Fornecedor *", ["Selecione um Fornecedor"] + get_fornecedores())
-            
-            with col2:
-                insumos_df = get_insumos_df()
-                insumo_options = [
-                    f"{row['descricao']} | {row['categoria']} | {row['classificacao']} | {row['cores']} | {row['medida']}{row['unidade_medida']}"
-                    for _, row in insumos_df.iterrows()
-                ]
-                insumo = st.selectbox("Insumo *", ["Selecione um Insumo"] + insumo_options)
-            
-            with col3:
-                quantidade = st.number_input("Quantidade *", min_value=1, step=1)
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                preco_unitario = st.number_input("Preço Unitário *", format="%.2f", min_value=0.0)
-            
-            with col2:
-                data_compra = st.date_input("Data da Compra *", value=datetime.today())
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                data_entrega = st.date_input("Data de Entrega Esperada", value=datetime.today())
-            
-            observacoes = st.text_area("Observações")
-            
-            submitted = st.form_submit_button("💾 Salvar Compra")
-            
-            if submitted:
-                try:
-                    with engine.begin() as conn:
-                        conn.execute(text("""
-                            INSERT INTO compras_insumos (
-                                fornecedor_id, insumo_id, quantidade, preco_unitario,
-                                total_compra, data_compra, data_entrega_esperada, observacoes
-                            ) VALUES (
-                                (SELECT id FROM fornecedores WHERE empresa_nome = :fornecedor),
-                                (SELECT id FROM insumos WHERE descricao = :insumo),
-                                :quantidade, :preco_unitario,
-                                :total_compra, :data_compra, :data_entrega, :observacoes
-                            )
-                        """), {
-                            "fornecedor": fornecedor,
-                            "insumo": insumo.split(" | ")[0],  # pega só a descrição
-                            "quantidade": quantidade,
-                            "preco_unitario": preco_unitario,
-                            "total_compra": quantidade * preco_unitario,
-                            "data_compra": data_compra,
-                            "data_entrega": data_entrega,
-                            "observacoes": observacoes
-                        })
-                    st.success("✅ Compra registrada com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao registrar compra: {e}")
-
     # === Filtros ===
     st.markdown("### 🔍 Filtros de Pesquisa")
+
     col1, col2, col3 = st.columns(3)
     with col1:
         filtro_fornecedor = st.selectbox("Fornecedor", ["Todos"] + get_fornecedores())
+
     with col2:
         insumos_df = get_insumos_df()
         insumo_options = [
@@ -2720,23 +2665,69 @@ def mostrar_supply_chain():
             for _, row in insumos_df.iterrows()
         ]
         filtro_insumo = st.selectbox("Insumo", ["Todos"] + insumo_options)
-    with col3:
-        filtro_data_inicio = st.date_input("Data Início", value=datetime.today() - timedelta(days=30))
-    
-    # Data fim em linha abaixo
-    filtro_data_fim = st.date_input("Data Fim", value=datetime.today())
 
-    # === Consultar e Exibir Compras ===
+    with col3:
+        periodo = st.selectbox("📆 Período da Compra", [
+            "Últimos 30 dias", "Hoje", "Ontem", "Personalizado"
+        ])
+
+    if periodo == "Últimos 30 dias":
+        data_inicio = datetime.today() - timedelta(days=30)
+        data_fim = datetime.today()
+    elif periodo == "Hoje":
+        data_inicio = data_fim = datetime.today()
+    elif periodo == "Ontem":
+        data_inicio = data_fim = datetime.today() - timedelta(days=1)
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            data_inicio = st.date_input("Data Início", value=datetime.today() - timedelta(days=30))
+        with col2:
+            data_fim = st.date_input("Data Fim", value=datetime.today())
+
+    st.markdown("### 🗓️ Previsão de Entrega")
+    entrega_opcao = st.selectbox("Filtrar por previsão de entrega", [
+        "Todos", "Amanhã", "Próximos 7 dias", "Próximos 15 dias", "Próximos 30 dias", "Este mês"
+    ])
+
+    hoje = datetime.today()
+    if entrega_opcao == "Amanhã":
+        entrega_inicio = entrega_fim = hoje + timedelta(days=1)
+    elif entrega_opcao == "Próximos 7 dias":
+        entrega_inicio = hoje
+        entrega_fim = hoje + timedelta(days=7)
+    elif entrega_opcao == "Próximos 15 dias":
+        entrega_inicio = hoje
+        entrega_fim = hoje + timedelta(days=15)
+    elif entrega_opcao == "Próximos 30 dias":
+        entrega_inicio = hoje
+        entrega_fim = hoje + timedelta(days=30)
+    elif entrega_opcao == "Este mês":
+        entrega_inicio = hoje.replace(day=1)
+        next_month = (hoje.replace(day=28) + timedelta(days=4)).replace(day=1)
+        entrega_fim = next_month - timedelta(days=1)
+    else:
+        entrega_inicio = datetime(2000, 1, 1)
+        entrega_fim = datetime(2100, 1, 1)
+
+    # === Resultado filtrado
     try:
-        compras = get_compras(filtro_fornecedor, filtro_insumo, filtro_data_inicio, filtro_data_fim)
+        compras = get_compras(
+            fornecedor=filtro_fornecedor,
+            insumo=filtro_insumo,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            entrega_inicio=entrega_inicio,
+            entrega_fim=entrega_fim
+        )
+
         if compras.empty:
             st.info("📭 Nenhuma compra encontrada com os filtros aplicados.")
         else:
+            st.markdown("### 📄 Registro de Compras")
             st.dataframe(compras, use_container_width=True)
     except Exception as e:
         st.error(f"❌ Erro ao carregar compras: {e}")
-
-# === Funções auxiliares ===
 def get_fornecedores():
     query = "SELECT empresa_nome FROM fornecedores ORDER BY empresa_nome"
     df = pd.read_sql(query, engine)
@@ -2750,28 +2741,46 @@ def get_insumos_df():
     """
     return pd.read_sql(query, engine)
 
-def get_compras(fornecedor, insumo, data_inicio, data_fim):
+def get_compras(fornecedor, insumo, data_inicio, data_fim, entrega_inicio, entrega_fim):
     query = """
-        SELECT ci.id, f.empresa_nome AS fornecedor,        (i.descricao || ' | ' || i.categoria || ' | ' || i.classificacao || ' | ' || i.cores || ' | ' || i.medida || i.unidade_medida) AS insumo,
-               ci.quantidade, ci.preco_unitario, ci.total_compra,
-               ci.data_compra, ci.data_entrega_esperada, ci.observacoes
+        SELECT 
+            ci.id, 
+            f.empresa_nome AS fornecedor,
+            i.descricao,
+            i.categoria,
+            i.classificacao,
+            i.cores AS cor,
+            CONCAT(i.medida, i.unidade_medida) AS medida,
+            ci.quantidade, 
+            ci.preco_unitario, 
+            ci.total_compra,
+            ci.data_compra AS date_adjusted,
+            ci.data_entrega_esperada AS previsao_entrega,
+            ci.observacoes
         FROM compras_insumos ci
         LEFT JOIN fornecedores f ON ci.fornecedor_id = f.id
         LEFT JOIN insumos i ON ci.insumo_id = i.id
         WHERE ci.data_compra BETWEEN :data_inicio AND :data_fim
+          AND ci.data_entrega_esperada BETWEEN :entrega_inicio AND :entrega_fim
     """
-    params = {"data_inicio": data_inicio, "data_fim": data_fim}
+    params = {
+        "data_inicio": data_inicio,
+        "data_fim": data_fim,
+        "entrega_inicio": entrega_inicio,
+        "entrega_fim": entrega_fim
+    }
 
     if fornecedor != "Todos":
         query += " AND f.empresa_nome = :fornecedor"
         params["fornecedor"] = fornecedor
     
     if insumo != "Todos":
-        insumo_descricao = insumo.split(" | ")[0]  # pega só a descrição
+        insumo_descricao = insumo.split(" | ")[0]
         query += " AND i.descricao = :insumo"
         params["insumo"] = insumo_descricao
 
     return pd.read_sql(text(query), engine, params=params)
+
 
 def mostrar_gerenciar_cadastros():
     import streamlit as st
