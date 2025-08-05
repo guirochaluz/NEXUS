@@ -2842,6 +2842,7 @@ def mostrar_gerenciar_cadastros():
         if file:
             try:
                 df_upload = pd.read_excel(file)
+                df_upload["cnpj"] = df_upload["cnpj"].apply(lambda x: None if pd.isna(x) or str(x).strip() == "" else x)
                 if set(df_modelo.columns).issubset(df_upload.columns):
                     st.dataframe(df_upload, use_container_width=True)
                     if st.button("📥 Importar Fornecedores para o Banco"):
@@ -2880,7 +2881,7 @@ def mostrar_gerenciar_cadastros():
                                 )
                             """), {
                                 "empresa_nome": empresa_nome,
-                                "cnpj": cnpj,
+                                "cnpj": cnpj if cnpj.strip() != "" else None,
                                 "referencia_nome": referencia_nome,
                                 "whatsapp": whatsapp,
                                 "endereco_completo": endereco_completo,
