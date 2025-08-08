@@ -1423,21 +1423,30 @@ def mostrar_gestao_sku():
     if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
         df = pd.read_sql(text("""
             SELECT
-                seller_sku,
-                level1,
-                level2,
-                custo_unitario,
-                quantity_sku,
-                COUNT(DISTINCT item_id) AS qtde_vendas
-            FROM sales
-            WHERE seller_sku IS NOT NULL
-            GROUP BY
-                seller_sku,
-                level1,
-                level2,
-                custo_unitario,
-                quantity_sku
-            ORDER BY seller_sku
+                s.sku AS seller_sku,
+                s.level1,
+                s.level2,
+                s.custo_unitario,
+                s.quantity AS quantity_sku,
+                COALESCE(v.qtde_vendas, 0) AS qtde_vendas
+            FROM (
+                SELECT DISTINCT ON (sku)
+                    sku,
+                    level1,
+                    level2,
+                    custo_unitario,
+                    quantity,
+                    date_created
+                FROM sku
+                ORDER BY sku, date_created DESC
+            ) s
+            LEFT JOIN (
+                SELECT seller_sku, COUNT(DISTINCT item_id) AS qtde_vendas
+                FROM sales
+                WHERE seller_sku IS NOT NULL
+                GROUP BY seller_sku
+            ) v ON v.seller_sku = s.sku
+            ORDER BY s.sku
         """), engine)
         st.session_state["df_gestao_sku"] = df
         st.session_state["atualizar_gestao_sku"] = False
