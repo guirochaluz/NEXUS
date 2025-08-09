@@ -1239,6 +1239,16 @@ def mostrar_relatorios():
 
     # --- carga e tradução de status ---
     df_full = carregar_vendas(None)
+    # Garantir coluna shipment_flex_cost (fallback se não vier do banco)
+    if "shipment_flex_cost" not in df_full.columns:
+        df_full["shipment_flex_cost"] = (
+            df_full["shipment_logistic_type"]
+            .fillna("")
+            .str.lower()
+            .eq("self_service")
+            .astype(float) * 12.97
+        )
+
     if df_full.empty:
         st.warning("Nenhum dado encontrado.")
         return
