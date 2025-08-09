@@ -1677,7 +1677,7 @@ def mostrar_gestao_sku():
     # 5️⃣ Atualização da base SKU via planilha
     st.markdown("---")
     st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
-
+    
     modelo = pd.DataFrame(columns=["seller_sku", "level1", "level2", "custo_unitario", "quantity"])
     buffer = io.BytesIO()
     modelo.to_excel(buffer, index=False, engine="openpyxl")
@@ -1687,7 +1687,7 @@ def mostrar_gestao_sku():
         file_name="modelo_sku.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
+    
     arquivo = st.file_uploader("Selecione um arquivo Excel (.xlsx)", type=["xlsx"])
     if arquivo is not None:
         df_novo = pd.read_excel(arquivo)
@@ -1697,31 +1697,41 @@ def mostrar_gestao_sku():
         else:
             if st.button("✅ Processar Planilha e Atualizar"):
                 try:
-                    df_novo["quantity"] = df_novo["quantity"].fillna(0).astype(int)
-                    df_novo["custo_unitario"] = df_novo["custo_unitario"].fillna(0).astype(float)
-                    df_novo["seller_sku"] = df_novo["seller_sku"].astype(str).strip()
-                    df_novo["level1"] = df_novo["level1"].astype(str).strip()
-                    df_novo["level2"] = df_novo["level2"].astype(str).strip()
-
+                    # Conversões numéricas com segurança
+                    df_novo["quantity"] = pd.to_numeric(df_novo["quantity"], errors="coerce").fillna(0).astype(int)
+                    df_novo["custo_unitario"] = pd.to_numeric(df_novo["custo_unitario"], errors="coerce").fillna(0).astype(float)
+    
+                    # Limpeza e normalização de textos
+                    for col in ["seller_sku", "level1", "level2"]:
+                        df_novo[col] = (
+                            df_novo[col]
+                            .astype(str)          # converte para string
+                            .replace({"nan": ""}) # limpa string 'nan'
+                            .str.strip()          # remove espaços
+                        )
+    
+                    # Converte strings vazias para None (vai virar NULL no banco)
+                    df_novo = df_novo.replace({"": None})
+    
                     with engine.begin() as conn:
                         for _, row in df_novo.iterrows():
                             row_dict = row.to_dict()
                             result = conn.execute(text("""
                                 SELECT 1 FROM sku
                                 WHERE sku = :seller_sku
-                                  AND TRIM(level1) = :level1
-                                  AND TRIM(level2) = :level2
+                                  AND COALESCE(TRIM(level1), '') = COALESCE(TRIM(:level1), '')
+                                  AND COALESCE(TRIM(level2), '') = COALESCE(TRIM(:level2), '')
                                   AND ROUND(CAST(custo_unitario AS numeric), 2) = ROUND(CAST(:custo_unitario AS numeric), 2)
                                   AND quantity = :quantity
                                 LIMIT 1
                             """), row_dict).fetchone()
-
+    
                             if result is None:
                                 conn.execute(text("""
                                     INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
                                     VALUES (:seller_sku, :level1, :level2, :custo_unitario, :quantity, NOW())
                                 """), row_dict)
-
+    
                         # Atualizar tabela de vendas
                         conn.execute(text("""
                             UPDATE sales s
@@ -1744,15 +1754,15 @@ def mostrar_gestao_sku():
                             ) sku
                             WHERE s.id = sku.sale_id
                         """))
-
-
+    
                     # Recarregar métricas e dados
                     st.session_state["atualizar_gestao_sku"] = True
                     st.success("✅ Planilha importada, vendas atualizadas, métricas e tabela recarregadas!")
                     st.rerun()
-
+    
                 except Exception as e:
                     st.error(f"❌ Erro ao processar: {e}")
+
 
     # 6️⃣ Adição manual de SKU dentro de um expander
     st.markdown("---")
