@@ -1394,7 +1394,7 @@ def mostrar_relatorios():
     df["VALOR DA VENDA"]         = df["total_amount"]
     df["TAXA DA PLATAFORMA"] = df["ml_fee"].fillna(0) * -1
     df["CUSTO DE FRETE"]     = df["frete_adjust"].fillna(0) 
-    df["CUSTO DE FLEX"]      = df["shipment_flex_cost"].fillna(0)
+    df["CUSTO DE FLEX"]      = df["shipment_flex_cost"].fillna(0) * -1
     df["CMV"]                = (
         df["quantity_sku"].fillna(0)
         * df["quantity"].fillna(0)
@@ -1404,7 +1404,7 @@ def mostrar_relatorios():
         df["VALOR DA VENDA"]
         + df["TAXA DA PLATAFORMA"]
         + df["CUSTO DE FRETE"]
-        - df["CUSTO DE FLEX"]      # subtrai o FLEX
+        + df["CUSTO DE FLEX"]      # subtrai o FLEX
         + df["CMV"]
     )
 
