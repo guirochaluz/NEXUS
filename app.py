@@ -615,6 +615,12 @@ def mostrar_dashboard():
     taxa_mktplace       = -df["ml_fee"].fillna(0).sum()
     cmv                 = -((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
     margem_operacional  = total_valor + frete + taxa_mktplace + cmv
+    # Custo de FLEX (fallback se a coluna não vier do banco)
+    if "shipment_flex_cost" not in df.columns:
+        df["shipment_flex_cost"] = (
+            df["shipment_logistic_type"].fillna("").str.lower().eq("self_service").astype(float) * 12.97
+        )
+    flex = -df["shipment_flex_cost"].fillna(0).sum()
     colunas_chk = ["level1", "level2", "custo_unitario", "quantity_sku"]
     
     # Filtra linhas onde seller_sku NÃO é nulo e pelo menos uma coluna está nula
@@ -627,12 +633,14 @@ def mostrar_dashboard():
 
     # Bloco 1: Indicadores Financeiros
     st.markdown("### 💼 Indicadores Financeiros")
-    row1 = st.columns(5)
+    row1 = st.columns(6)
     kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
     kpi_card(row1[1], "🚚 Frete Total", f"{format_currency(frete)} {pct(frete)}")
     kpi_card(row1[2], "📉 Taxa Marketplace", f"{format_currency(taxa_mktplace)} {pct(taxa_mktplace)}")
     kpi_card(row1[3], "📦 CMV", f"{format_currency(cmv)} {pct(cmv)}")
     kpi_card(row1[4], "💵 Margem Operacional", f"{format_currency(margem_operacional)} {pct(margem_operacional)}")
+    kpi_card(row1[5], "🚀 Custo de FLEX", format_currency(flex))
+
     
     # Bloco 2: Indicadores de Vendas
     st.markdown("### 📊 Indicadores de Vendas")
