@@ -1709,30 +1709,22 @@ def mostrar_gestao_sku():
 
     df_sem_sku = pd.read_sql(text("""
         SELECT 
-            s.item_id       AS "ID do Anúncio",
-            s.item_title    AS "Título do Anúncio",
-            ut.nickname     AS "Conta",
-            s.quantity_sku  AS "Quantidade",
-            s.date_adjusted AS "Data do Pedido",
-            s.seller_sku    AS "SKU (Preencher)",
-            CASE
-                WHEN s.seller_sku IS NULL OR btrim(s.seller_sku) = '' THEN 'Sem SKU'
-                ELSE 'SKU não cadastrado'
-            END             AS "Status"
+            s.item_id      AS "ID do Anúncio",
+            s.item_title   AS "Título do Anúncio",
+            ut.nickname    AS "Conta",
+            s.quantity_sku AS "Quantidade",
+            s.seller_sku   AS "SKU (Preencher)"
         FROM sales s
         LEFT JOIN user_tokens ut ON s.ml_user_id = ut.ml_user_id
         WHERE
-            -- 1) Não tem SKU (NULL ou vazio)
-            (s.seller_sku IS NULL OR btrim(s.seller_sku) = '')
-            OR
-            -- 2) Tem SKU, mas não existe na base sku
-            (
-                s.seller_sku IS NOT NULL
-                AND btrim(s.seller_sku) <> ''
-                AND NOT EXISTS (SELECT 1 FROM sku k WHERE k.sku = s.seller_sku)
+            s.seller_sku IS NOT NULL
+            AND btrim(s.seller_sku) <> ''
+            AND NOT EXISTS (
+                SELECT 1 FROM sku k WHERE k.sku = s.seller_sku
             )
         ORDER BY s.date_adjusted DESC
     """), engine)
+
 
 
     colunas_editaveis_sem_sku = ["SKU (Preencher)"]
