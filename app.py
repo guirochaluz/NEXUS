@@ -1426,11 +1426,14 @@ def mostrar_relatorios():
 
 
 def mostrar_gestao_sku():
+    import io
+    import pandas as pd
+    import streamlit as st
+    from sqlalchemy import text
+
     st.markdown("""
         <style>
-        .block-container {
-            padding-top: 0rem;
-        }
+        .block-container { padding-top: 0rem; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -1439,57 +1442,52 @@ def mostrar_gestao_sku():
     if st.button("🔄 Recarregar Dados"):
         st.session_state["atualizar_gestao_sku"] = True
 
-    # === Consulta de combinações únicas ===
-    if st.session_state.get("atualizar_gestao_sku", False) or "df_gestao_sku" not in st.session_state:
-        df = pd.read_sql(text("""
-            SELECT
-                s.sku AS seller_sku,
-                s.level1,
-                s.level2,
-                s.custo_unitario,
-                s.quantity AS quantity_sku,
-                s.is_active,
-                s.date_created,
-                COALESCE(v.qtde_vendas, 0) AS qtde_vendas
-            FROM (
-                SELECT DISTINCT ON (sku)
-                    sku,
-                    level1,
-                    level2,
-                    custo_unitario,
-                    quantity,
-                    date_created,
-                    is_active
-                FROM sku
-                ORDER BY sku, date_created DESC
-            ) s
-            LEFT JOIN (
+    # === Carregamento dos dados (todas as versões + últimas por SKU) ===
+    if st.session_state.get("atualizar_gestao_sku", False) \
+       or "df_sku_all_versions" not in st.session_state \
+       or "df_sku_latest" not in st.session_state:
+
+        # 1) Todas as versões de SKU (para permitir filtrar 'Ultrapassado')
+        df_all = pd.read_sql(text("""
+            WITH vendas AS (
                 SELECT seller_sku, COUNT(DISTINCT item_id) AS qtde_vendas
                 FROM sales
                 WHERE seller_sku IS NOT NULL
                 GROUP BY seller_sku
-            ) v ON v.seller_sku = s.sku
-            ORDER BY s.sku
+            )
+            SELECT
+                s.sku              AS seller_sku,
+                s.level1,
+                s.level2,
+                s.custo_unitario,
+                s.quantity         AS quantity_sku,
+                s.is_active,
+                s.date_created,
+                COALESCE(v.qtde_vendas, 0) AS qtde_vendas
+            FROM sku s
+            LEFT JOIN vendas v ON v.seller_sku = s.sku
+            ORDER BY s.sku, s.date_created DESC
         """), engine)
-    
-        # Converter para datetime SP e criar flag amigável
-        ts = pd.to_datetime(df["date_created"], errors="coerce", utc=True)
-        df["Criado em"] = ts.dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y %H:%M:%S")
-        df["Ativo?"] = df["is_active"].map({True: "Ativo", False: "Ultrapassado"})
-    
-        # Reordenar colunas (mantendo is_active e date_created para filtros)
-        df = df[[
-            "seller_sku", "level1", "level2", "custo_unitario", "quantity_sku",
-            "is_active", "date_created",  # <- mantém para filtros
-            "Ativo?", "Criado em", "qtde_vendas"
-        ]]
 
-    
-        st.session_state["df_gestao_sku"] = df
+        # Conversões de data/fuso
+        ts_all = pd.to_datetime(df_all["date_created"], errors="coerce", utc=True)
+        df_all["Criado em"] = ts_all.dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y %H:%M:%S")
+
+        # Label amigável de status
+        df_all["Ativo?"] = df_all["is_active"].map({True: "Ativo", False: "Ultrapassado"})
+
+        # 2) Última versão por SKU (vigente)
+        # Agrupa por SKU, pega o índice da data máxima e recupera a linha
+        idx_latest = df_all.groupby("seller_sku")["date_created"].idxmax().dropna()
+        df_latest = df_all.loc[idx_latest].copy().sort_values(["seller_sku"])
+
+        # Guarda em sessão
+        st.session_state["df_sku_all_versions"] = df_all
+        st.session_state["df_sku_latest"] = df_latest
         st.session_state["atualizar_gestao_sku"] = False
-    else:
-        df = st.session_state["df_gestao_sku"]
 
+    df_all = st.session_state["df_sku_all_versions"].copy()
+    df_latest = st.session_state["df_sku_latest"].copy()
 
     # === Métricas ===
     with engine.begin() as conn:
@@ -1513,85 +1511,119 @@ def mostrar_gestao_sku():
 
     # === Filtros ===
     colf1, colf2, colf3, colf4, colf5 = st.columns([1.2, 1.2, 1.2, 1.2, 2])
-    op_sku     = colf1.selectbox("Seller SKU", ["Todos", "Nulo", "Não Nulo"])
-    op_level1  = colf2.selectbox("Hierarquia 1", ["Todos", "Nulo", "Não Nulo"])
-    op_level2  = colf3.selectbox("Hierarquia 2", ["Todos", "Nulo", "Não Nulo"])
-    op_preco   = colf4.selectbox("Preço Unitário", ["Todos", "Nulo", "Não Nulo"])
-    filtro_txt = colf5.text_input("🔎 Pesquisa (SKU, Hierarquias)")
+    op_sku     = colf1.selectbox("SKU", ["Todos", "Nulo", "Não Nulo"])
+    op_level1  = colf2.selectbox("Categoria 1", ["Todos", "Nulo", "Não Nulo"])
+    op_level2  = colf3.selectbox("Categoria 2", ["Todos", "Nulo", "Não Nulo"])
+    op_preco   = colf4.selectbox("Custo Unitário", ["Todos", "Nulo", "Não Nulo"])
+    filtro_txt = colf5.text_input("🔎 Pesquisa (SKU, Categorias, Status)")
 
-    # ---- Novos filtros: Status do SKU e intervalo de criação (SP) ----
     colg1, colg2, colg3 = st.columns([1.2, 1.2, 1.2])
-    
-    # Status do SKU (usa a coluna booleana is_active)
     op_status_sku = colg1.selectbox("Status do SKU", ["Todos", "Ativo", "Ultrapassado"])
-    
-    # Preparar datas em fuso de São Paulo para filtrar por criação
-    ts_local = pd.to_datetime(df["date_created"], errors="coerce", utc=True).dt.tz_convert("America/Sao_Paulo")
-    min_sp = ts_local.min().date() if not ts_local.isna().all() else pd.Timestamp.today(tz="America/Sao_Paulo").date()
-    max_sp = ts_local.max().date() if not ts_local.isna().all() else pd.Timestamp.today(tz="America/Sao_Paulo").date()
-    
+
+    # Intervalo de criação (fuso SP) – base para limites: todas as versões
+    ts_local_all = pd.to_datetime(df_all["date_created"], errors="coerce", utc=True).dt.tz_convert("America/Sao_Paulo")
+    min_sp = ts_local_all.min().date() if not ts_local_all.isna().all() else pd.Timestamp.today(tz="America/Sao_Paulo").date()
+    max_sp = ts_local_all.max().date() if not ts_local_all.isna().all() else pd.Timestamp.today(tz="America/Sao_Paulo").date()
     de_sp  = colg2.date_input("Criado a partir de", value=min_sp, min_value=min_sp, max_value=max_sp, key="sku_de_sp")
     ate_sp = colg3.date_input("Criado até",       value=max_sp, min_value=min_sp, max_value=max_sp, key="sku_ate_sp")
 
+    # === Escolha do conjunto base conforme Status ===
+    if op_status_sku == "Ativo":
+        base = df_all[df_all["is_active"] == True].copy()
+        # se houver mais de uma versão ativa (não deveria), mantém a mais recente por SKU
+        if not base.empty:
+            idx = base.groupby("seller_sku")["date_created"].idxmax()
+            base = base.loc[idx]
+    elif op_status_sku == "Ultrapassado":
+        base = df_all[df_all["is_active"] == False].copy()
+    else:  # "Todos" -> somente última versão por SKU (vigente)
+        base = df_latest.copy()
 
     # === Aplicar filtros ===
-    if op_sku == "Nulo":
-        df = df[df["seller_sku"].isna()]
-    elif op_sku == "Não Nulo":
-        df = df[df["seller_sku"].notna()]
-    if op_level1 == "Nulo":
-        df = df[df["level1"].isna()]
-    elif op_level1 == "Não Nulo":
-        df = df[df["level1"].notna()]
-    if op_level2 == "Nulo":
-        df = df[df["level2"].isna()]
-    elif op_level2 == "Não Nulo":
-        df = df[df["level2"].notna()]
-    if op_preco == "Nulo":
-        df = df[df["custo_unitario"].isna()]
-    elif op_preco == "Não Nulo":
-        df = df[df["custo_unitario"].notna()]
-    if filtro_txt:
-        filtro_txt = filtro_txt.lower()
-        df = df[df.apply(lambda row: filtro_txt in str(row["seller_sku"]).lower()
-                         or filtro_txt in str(row["level1"]).lower()
-                         or filtro_txt in str(row["level2"]).lower(), axis=1)]
-    # Status do SKU
-    if op_status_sku == "Ativo":
-        df = df[df["Ativo?"] == "Ativo"]
-    elif op_status_sku == "Ultrapassado":
-        df = df[df["Ativo?"] == "Ultrapassado"]
-    
-    # Intervalo de criação no fuso de SP
-    ts_local = pd.to_datetime(df["date_created"], errors="coerce", utc=True).dt.tz_convert("America/Sao_Paulo")
-    df = df[(ts_local.dt.date >= de_sp) & (ts_local.dt.date <= ate_sp)]
+    df_view = base
 
+    if op_sku == "Nulo":
+        df_view = df_view[df_view["seller_sku"].isna()]
+    elif op_sku == "Não Nulo":
+        df_view = df_view[df_view["seller_sku"].notna()]
+
+    if op_level1 == "Nulo":
+        df_view = df_view[df_view["level1"].isna()]
+    elif op_level1 == "Não Nulo":
+        df_view = df_view[df_view["level1"].notna()]
+
+    if op_level2 == "Nulo":
+        df_view = df_view[df_view["level2"].isna()]
+    elif op_level2 == "Não Nulo":
+        df_view = df_view[df_view["level2"].notna()]
+
+    if op_preco == "Nulo":
+        df_view = df_view[df_view["custo_unitario"].isna()]
+    elif op_preco == "Não Nulo":
+        df_view = df_view[df_view["custo_unitario"].notna()]
+
+    # Intervalo de criação (SP)
+    ts_local_view = pd.to_datetime(df_view["date_created"], errors="coerce", utc=True).dt.tz_convert("America/Sao_Paulo")
+    df_view = df_view[(ts_local_view.dt.date >= de_sp) & (ts_local_view.dt.date <= ate_sp)]
+
+    # Texto livre
+    if filtro_txt:
+        f = filtro_txt.lower()
+        df_view = df_view[df_view.apply(
+            lambda r: (f in str(r["seller_sku"]).lower()) or
+                      (f in str(r["level1"]).lower()) or
+                      (f in str(r["level2"]).lower()) or
+                      (f in str(r["Ativo?"]).lower()),
+            axis=1
+        )]
 
     # === Tabela editável ===
     st.markdown("### 📝 Editar Cadastro de SKUs")
 
+    # Mantemos os nomes internos; apenas renomeamos visualmente via column_config.
     colunas_editaveis = ["level1", "level2", "custo_unitario", "quantity_sku"]
 
-    df_editado = st.data_editor(
-        df,
-        use_container_width=True,
-        disabled=[col for col in df.columns if col not in colunas_editaveis],
-        num_rows="fixed",
-        key="editor_sku"
-    )
+    # Ordem e exibição (não mostrar is_active e date_created)
+    column_order = [
+        "seller_sku", "level1", "level2", "custo_unitario", "quantity_sku",
+        "Ativo?", "Criado em", "qtde_vendas"
+    ]
 
+    df_editado = st.data_editor(
+        df_view,
+        use_container_width=True,
+        disabled=[col for col in df_view.columns if col not in colunas_editaveis],
+        num_rows="fixed",
+        key="editor_sku",
+        column_order=column_order,
+        column_config={
+            "seller_sku": st.column_config.TextColumn("SKU"),
+            "level1":     st.column_config.TextColumn("Categoria 1"),
+            "level2":     st.column_config.TextColumn("Categoria 2"),
+            "custo_unitario": st.column_config.NumberColumn("Custo Unitário (R$)", format="R$ %.2f"),
+            "quantity_sku":   st.column_config.NumberColumn("Quantidade"),
+            "Ativo?":     st.column_config.TextColumn("Status"),
+            "Criado em":  st.column_config.TextColumn("Criado em (SP)"),
+            "qtde_vendas":st.column_config.NumberColumn("Qtd. Vendas"),
+        }
+    )
 
     # === Salvar alterações ===
     if st.button("💾 Salvar Alterações"):
         try:
             with engine.begin() as conn:
                 for _, row in df_editado.iterrows():
-                    sku = row["seller_sku"]
+                    sku = row.get("seller_sku")
                     if pd.isna(sku) or str(sku).strip() == "":
                         continue
-                    novo_custo = None if pd.isna(row["custo_unitario"]) else float(row["custo_unitario"])
-    
-                    # Puxa o último registro do SKU
+
+                    novo_custo = None if pd.isna(row.get("custo_unitario")) else float(row["custo_unitario"])
+                    level1_val = (row.get("level1") or None)
+                    level2_val = (row.get("level2") or None)
+                    q_val = row.get("quantity_sku")
+                    q_val = None if pd.isna(q_val) else int(q_val)
+
+                    # Último registro do SKU
                     ultimo = conn.execute(text("""
                         SELECT custo_unitario
                         FROM sku
@@ -1610,24 +1642,21 @@ def mostrar_gestao_sku():
                         except Exception:
                             return True
 
-    
                     if (not ultimo) or custo_diferente(ultimo.custo_unitario, novo_custo):
-                        # Inserir nova linha se o custo foi alterado ou não existir
+                        # Nova versão ativa se custo mudou ou SKU inexistente
                         conn.execute(text("""
                             UPDATE sku SET is_active = FALSE WHERE sku = :sku;
-                            
                             INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created, is_active)
                             VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW(), TRUE);
-
                         """), {
                             "sku": sku,
-                            "level1": row["level1"],
-                            "level2": row["level2"],
+                            "level1": level1_val,
+                            "level2": level2_val,
                             "custo": novo_custo,
-                            "quantidade": row["quantity_sku"]
+                            "quantidade": q_val
                         })
                     else:
-                        # Atualiza a linha mais recente se o custo não mudou
+                        # Atualiza a linha mais recente se o custo NÃO mudou
                         conn.execute(text("""
                             UPDATE sku
                             SET level1 = :level1,
@@ -1639,12 +1668,12 @@ def mostrar_gestao_sku():
                               )
                         """), {
                             "sku": sku,
-                            "level1": row["level1"],
-                            "level2": row["level2"],
-                            "quantidade": row["quantity_sku"]
+                            "level1": level1_val,
+                            "level2": level2_val,
+                            "quantidade": q_val
                         })
-    
-                # Atualiza a tabela de vendas com os dados mais recentes de SKU
+
+                # Atualiza tabela de vendas com os dados históricos corretos
                 conn.execute(text("""
                     UPDATE sales s
                     SET
@@ -1667,86 +1696,81 @@ def mostrar_gestao_sku():
                     WHERE s.id = sku.sale_id
                 """))
 
-    
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
             st.rerun()
-    
+
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
 
-
-    # === Mostrar MLBs sem SKU com edição ===
+    # === MLBs sem SKU (Editar e Salvar) ===
     st.markdown("---")
     st.markdown("### 📋 MLBs sem SKU (Editar e Salvar)")
-    
-    # Carrega os MLBs sem SKU e traz título do anúncio e a conta (nickname)
+
     df_sem_sku = pd.read_sql(text("""
         SELECT 
-            s.item_id AS "ID do Anúncio",
-            s.item_title AS "Título do Anúncio",
-            ut.nickname AS "Conta",
+            s.item_id      AS "ID do Anúncio",
+            s.item_title   AS "Título do Anúncio",
+            ut.nickname    AS "Conta",
             s.quantity_sku AS "Quantidade",
             s.date_adjusted AS "Data do Pedido",
-            s.seller_sku AS "SKU (Preencher)"
+            s.seller_sku   AS "SKU (Preencher)"
         FROM sales s
         LEFT JOIN user_tokens ut ON s.ml_user_id = ut.ml_user_id
         WHERE s.seller_sku IS NULL
         ORDER BY s.date_adjusted DESC
     """), engine)
-    
-    # Define colunas editáveis (somente SKU pode ser editado)
+
     colunas_editaveis_sem_sku = ["SKU (Preencher)"]
-    
-    # Tabela editável
     df_sem_sku_editado = st.data_editor(
         df_sem_sku,
         use_container_width=True,
-        disabled=[col for col in df_sem_sku.columns if col not in colunas_editaveis_sem_sku],
+        disabled=[c for c in df_sem_sku.columns if c not in colunas_editaveis_sem_sku],
         num_rows="dynamic",
         key="editor_sem_sku"
     )
-    
-    # Botão para salvar alterações
+
     if st.button("💾 Salvar Alterações nos MLBs sem SKU"):
         try:
             with engine.begin() as conn:
                 for _, row in df_sem_sku_editado.iterrows():
-                    if (not pd.isna(row["SKU (Preencher)"])) and (str(row["SKU (Preencher)"]).strip() != ""):
-                        # Valida se o SKU existe na tabela sku
-                        sku_info = conn.execute(text("""
-                            SELECT *
-                            FROM sku
-                            WHERE sku = :seller_sku
-                              AND date_created <= :data_venda
-                            ORDER BY date_created DESC
-                            LIMIT 1
-                        """), {
-                            "seller_sku": row["SKU (Preencher)"].strip(),
-                            "data_venda": row["Data do Pedido"]
-                        }).fetchone()
+                    sku_fill = row.get("SKU (Preencher)")
+                    if (pd.isna(sku_fill)) or (str(sku_fill).strip() == ""):
+                        continue
 
-                        if sku_info:
-                            # Atualiza sales com o SKU e dados relacionados
-                            conn.execute(text("""
-                                UPDATE sales
-                                SET
-                                    seller_sku = :seller_sku,
-                                    level1 = :level1,
-                                    level2 = :level2,
-                                    custo_unitario = :custo_unitario,
-                                    quantity_sku = :quantity
-                                WHERE item_id = :item_id
-                            """), {
-                                "seller_sku": row["SKU (Preencher)"].strip(),
-                                "level1": sku_info.level1,
-                                "level2": sku_info.level2,
-                                "custo_unitario": sku_info.custo_unitario,
-                                "quantity": sku_info.quantity,
-                                "item_id": row["ID do Anúncio"]
-                            })
-                        else:
-                            st.warning(f"⚠️ SKU '{row['SKU (Preencher)']}' não encontrado na base de SKUs. Corrija antes de salvar.")
+                    # Valida SKU na data do pedido
+                    sku_info = conn.execute(text("""
+                        SELECT *
+                        FROM sku
+                        WHERE sku = :seller_sku
+                          AND date_created <= :data_venda
+                        ORDER BY date_created DESC
+                        LIMIT 1
+                    """), {
+                        "seller_sku": str(sku_fill).strip(),
+                        "data_venda": row["Data do Pedido"]
+                    }).fetchone()
+
+                    if sku_info:
+                        conn.execute(text("""
+                            UPDATE sales
+                            SET
+                                seller_sku    = :seller_sku,
+                                level1        = :level1,
+                                level2        = :level2,
+                                custo_unitario= :custo_unitario,
+                                quantity_sku  = :quantity
+                            WHERE item_id = :item_id
+                        """), {
+                            "seller_sku": str(sku_fill).strip(),
+                            "level1": sku_info.level1,
+                            "level2": sku_info.level2,
+                            "custo_unitario": sku_info.custo_unitario,
+                            "quantity": sku_info.quantity,
+                            "item_id": row["ID do Anúncio"]
+                        })
+                    else:
+                        st.warning(f"⚠️ SKU '{sku_fill}' não encontrado (ou sem versão válida até a data do pedido). Corrija antes de salvar.")
 
             st.success("✅ Alterações salvas com sucesso!")
             st.session_state["atualizar_gestao_sku"] = True
@@ -1754,10 +1778,11 @@ def mostrar_gestao_sku():
         except Exception as e:
             st.error(f"❌ Erro ao salvar alterações: {e}")
 
-    # 5️⃣ Atualização da base SKU via planilha
+    # === Importar planilha de SKUs ===
     st.markdown("---")
     st.markdown("### 📥 Atualizar Base de SKUs via Planilha")
-    
+
+    import io
     modelo = pd.DataFrame(columns=["seller_sku", "level1", "level2", "custo_unitario", "quantity"])
     buffer = io.BytesIO()
     modelo.to_excel(buffer, index=False, engine="openpyxl")
@@ -1767,7 +1792,7 @@ def mostrar_gestao_sku():
         file_name="modelo_sku.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    
+
     arquivo = st.file_uploader("Selecione um arquivo Excel (.xlsx)", type=["xlsx"])
     if arquivo is not None:
         df_novo = pd.read_excel(arquivo)
@@ -1777,28 +1802,21 @@ def mostrar_gestao_sku():
         else:
             if st.button("✅ Processar Planilha e Atualizar"):
                 try:
-                    # Conversões numéricas com segurança
                     df_novo["quantity"] = pd.to_numeric(df_novo["quantity"], errors="coerce").fillna(0).astype(int)
                     df_novo["custo_unitario"] = pd.to_numeric(df_novo["custo_unitario"], errors="coerce").fillna(0).astype(float)
-    
-                    # Limpeza e normalização de textos
+
                     for col in ["seller_sku", "level1", "level2"]:
                         df_novo[col] = (
-                            df_novo[col]
-                            .astype(str)          # converte para string
-                            .replace({"nan": ""}) # limpa string 'nan'
-                            .str.strip()          # remove espaços
+                            df_novo[col].astype(str).replace({"nan": ""}).str.strip()
                         )
-    
-                    # Converte strings vazias para None (vai virar NULL no banco)
+
                     df_novo = df_novo.replace({"": None})
                     df_novo = df_novo[df_novo["seller_sku"].notna() & (df_novo["seller_sku"].astype(str).str.strip() != "")]
 
-    
                     with engine.begin() as conn:
                         for _, row in df_novo.iterrows():
                             row_dict = row.to_dict()
-                            result = conn.execute(text("""
+                            exists = conn.execute(text("""
                                 SELECT 1 FROM sku
                                 WHERE sku = :seller_sku
                                   AND COALESCE(TRIM(level1), '') = COALESCE(TRIM(:level1), '')
@@ -1807,17 +1825,15 @@ def mostrar_gestao_sku():
                                   AND quantity = :quantity
                                 LIMIT 1
                             """), row_dict).fetchone()
-    
-                            if result is None:
-                                conn.execute(text("""
 
+                            if exists is None:
+                                conn.execute(text("""
                                     UPDATE sku SET is_active = FALSE WHERE sku = :seller_sku;
-                                    
                                     INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created, is_active)
                                     VALUES (:seller_sku, :level1, :level2, :custo_unitario, :quantity, NOW(), TRUE);
                                 """), row_dict)
-    
-                        # Atualizar tabela de vendas
+
+                        # Atualiza vendas com versão válida até a data do pedido
                         conn.execute(text("""
                             UPDATE sales s
                             SET
@@ -1839,52 +1855,44 @@ def mostrar_gestao_sku():
                             ) sku
                             WHERE s.id = sku.sale_id
                         """))
-    
-                    # Recarregar métricas e dados
+
                     st.session_state["atualizar_gestao_sku"] = True
                     st.success("✅ Planilha importada, vendas atualizadas, métricas e tabela recarregadas!")
                     st.rerun()
-    
                 except Exception as e:
                     st.error(f"❌ Erro ao processar: {e}")
 
-
-    # 6️⃣ Adição manual de SKU dentro de um expander
+    # === Adição manual de SKU ===
     st.markdown("---")
     with st.expander("➕ Adicionar SKU Manualmente"):
         st.markdown("Preencha os campos abaixo para cadastrar um novo SKU diretamente na base:")
 
         with st.form("adicionar_sku_form"):
-            seller_sku_manual = st.text_input("🔑 Seller SKU *", "")
-            level1_manual = st.text_input("📂 Level 1", "")
-            level2_manual = st.text_input("📂 Level 2", "")
-            custo_manual = st.number_input("💲 Custo Unitário", min_value=0.0, step=0.01, format="%.2f")
+            seller_sku_manual = st.text_input("🔑 SKU *", "")
+            level1_manual = st.text_input("📂 Categoria 1", "")
+            level2_manual = st.text_input("📂 Categoria 2", "")
+            custo_manual = st.number_input("💲 Custo Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
             quantity_manual = st.number_input("📦 Quantidade", min_value=0, step=1)
             submitted = st.form_submit_button("✅ Cadastrar SKU")
 
             if submitted:
                 if not seller_sku_manual.strip():
-                    st.error("❌ O campo 'Seller SKU' é obrigatório.")
+                    st.error("❌ O campo 'SKU' é obrigatório.")
                 else:
                     try:
                         with engine.begin() as conn:
                             conn.execute(text("""
-                                -- desativa versões antigas
                                 UPDATE sku SET is_active = FALSE WHERE sku = :sku;
-                                
-                                -- insere nova versão como ativa
                                 INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created, is_active)
                                 VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW(), TRUE);
-
                             """), {
                                 "sku": seller_sku_manual.strip(),
                                 "level1": level1_manual.strip() or None,
                                 "level2": level2_manual.strip() or None,
-                                "custo": custo_manual,
-                                "quantidade": quantity_manual
+                                "custo": float(custo_manual),
+                                "quantidade": int(quantity_manual)
                             })
 
-                            # Atualizar tabela de vendas
                             conn.execute(text("""
                                 UPDATE sales s
                                 SET
@@ -1906,15 +1914,13 @@ def mostrar_gestao_sku():
                                 ) sku
                                 WHERE s.id = sku.sale_id
                             """))
-                            
-
 
                         st.success("✅ SKU adicionado com sucesso!")
                         st.session_state["atualizar_gestao_sku"] = True
                         st.rerun()
-
                     except Exception as e:
                         st.error(f"❌ Erro ao adicionar SKU: {e}")
+
 
 
 def mostrar_expedicao_logistica(df: pd.DataFrame):
