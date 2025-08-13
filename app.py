@@ -1474,14 +1474,14 @@ def mostrar_gestao_sku():
     
         # Converter para datetime SP e criar flag amigável
         ts = pd.to_datetime(df["date_created"], errors="coerce", utc=True)
-        df["Criado (SP)"] = ts.dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y %H:%M:%S")
+        df["Criado em"] = ts.dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y %H:%M:%S")
         df["Ativo?"] = df["is_active"].map({True: "Ativo", False: "Ultrapassado"})
     
         # Reordenar colunas (mantendo is_active e date_created para filtros)
         df = df[[
             "seller_sku", "level1", "level2", "custo_unitario", "quantity_sku",
             "is_active", "date_created",  # <- mantém para filtros
-            "Ativo?", "Criado (SP)", "qtde_vendas"
+            "Ativo?", "Criado em", "qtde_vendas"
         ]]
 
     
@@ -1576,9 +1576,10 @@ def mostrar_gestao_sku():
         df,
         use_container_width=True,
         disabled=[col for col in df.columns if col not in colunas_editaveis],
-        num_rows="dynamic",
+        num_rows="fixed",
         key="editor_sku"
     )
+
 
     # === Salvar alterações ===
     if st.button("💾 Salvar Alterações"):
@@ -1586,7 +1587,9 @@ def mostrar_gestao_sku():
             with engine.begin() as conn:
                 for _, row in df_editado.iterrows():
                     sku = row["seller_sku"]
-                    novo_custo = float(row["custo_unitario"]) if row["custo_unitario"] is not None else None
+                    if pd.isna(sku) or str(sku).strip() == "":
+                        continue
+                    novo_custo = None if pd.isna(row["custo_unitario"]) else float(row["custo_unitario"])
     
                     # Puxa o último registro do SKU
                     ultimo = conn.execute(text("""
@@ -1596,8 +1599,19 @@ def mostrar_gestao_sku():
                         ORDER BY date_created DESC
                         LIMIT 1
                     """), {"sku": sku}).fetchone()
+
+                    def custo_diferente(c1, c2, eps=1e-6):
+                        if c1 is None and c2 is None:
+                            return False
+                        if c1 is None or c2 is None:
+                            return True
+                        try:
+                            return abs(float(c1) - float(c2)) > eps
+                        except Exception:
+                            return True
+
     
-                    if not ultimo or float(ultimo.custo_unitario or 0) != novo_custo:
+                    if (not ultimo) or custo_diferente(ultimo.custo_unitario, novo_custo):
                         # Inserir nova linha se o custo foi alterado ou não existir
                         conn.execute(text("""
                             UPDATE sku SET is_active = FALSE WHERE sku = :sku;
@@ -1698,7 +1712,7 @@ def mostrar_gestao_sku():
         try:
             with engine.begin() as conn:
                 for _, row in df_sem_sku_editado.iterrows():
-                    if row["SKU (Preencher)"]:  # Apenas atualiza se o SKU foi preenchido
+                    if (not pd.isna(row["SKU (Preencher)"])) and (str(row["SKU (Preencher)"]).strip() != ""):
                         # Valida se o SKU existe na tabela sku
                         sku_info = conn.execute(text("""
                             SELECT *
@@ -1778,6 +1792,8 @@ def mostrar_gestao_sku():
     
                     # Converte strings vazias para None (vai virar NULL no banco)
                     df_novo = df_novo.replace({"": None})
+                    df_novo = df_novo[df_novo["seller_sku"].notna() & (df_novo["seller_sku"].astype(str).str.strip() != "")]
+
     
                     with engine.begin() as conn:
                         for _, row in df_novo.iterrows():
