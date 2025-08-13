@@ -1448,6 +1448,8 @@ def mostrar_gestao_sku():
                 s.level2,
                 s.custo_unitario,
                 s.quantity AS quantity_sku,
+                s.is_active,
+                s.date_created,
                 COALESCE(v.qtde_vendas, 0) AS qtde_vendas
             FROM (
                 SELECT DISTINCT ON (sku)
@@ -1456,7 +1458,8 @@ def mostrar_gestao_sku():
                     level2,
                     custo_unitario,
                     quantity,
-                    date_created
+                    date_created,
+                    is_active
                 FROM sku
                 ORDER BY sku, date_created DESC
             ) s
@@ -1468,10 +1471,25 @@ def mostrar_gestao_sku():
             ) v ON v.seller_sku = s.sku
             ORDER BY s.sku
         """), engine)
+    
+        # Converter para datetime SP e criar flag amigável
+        ts = pd.to_datetime(df["date_created"], errors="coerce", utc=True)
+        df["Criado (SP)"] = ts.dt.tz_convert("America/Sao_Paulo").dt.strftime("%d/%m/%Y %H:%M:%S")
+        df["Ativo?"] = df["is_active"].map({True: "Ativo", False: "Ultrapassado"})
+    
+        # Reordenar colunas (mantendo is_active e date_created para filtros)
+        df = df[[
+            "seller_sku", "level1", "level2", "custo_unitario", "quantity_sku",
+            "is_active", "date_created",  # <- mantém para filtros
+            "Ativo?", "Criado (SP)", "qtde_vendas"
+        ]]
+
+    
         st.session_state["df_gestao_sku"] = df
         st.session_state["atualizar_gestao_sku"] = False
     else:
         df = st.session_state["df_gestao_sku"]
+
 
     # === Métricas ===
     with engine.begin() as conn:
@@ -1497,9 +1515,24 @@ def mostrar_gestao_sku():
     colf1, colf2, colf3, colf4, colf5 = st.columns([1.2, 1.2, 1.2, 1.2, 2])
     op_sku     = colf1.selectbox("Seller SKU", ["Todos", "Nulo", "Não Nulo"])
     op_level1  = colf2.selectbox("Hierarquia 1", ["Todos", "Nulo", "Não Nulo"])
-    op_level2  = colf3.selectbox("Hierarquia ", ["Todos", "Nulo", "Não Nulo"])
+    op_level2  = colf3.selectbox("Hierarquia 2", ["Todos", "Nulo", "Não Nulo"])
     op_preco   = colf4.selectbox("Preço Unitário", ["Todos", "Nulo", "Não Nulo"])
     filtro_txt = colf5.text_input("🔎 Pesquisa (SKU, Hierarquias)")
+
+    # ---- Novos filtros: Status do SKU e intervalo de criação (SP) ----
+    colg1, colg2, colg3 = st.columns([1.2, 1.2, 1.2])
+    
+    # Status do SKU (usa a coluna booleana is_active)
+    op_status_sku = colg1.selectbox("Status do SKU", ["Todos", "Ativo", "Ultrapassado"])
+    
+    # Preparar datas em fuso de São Paulo para filtrar por criação
+    ts_local = pd.to_datetime(df["date_created"], errors="coerce", utc=True).dt.tz_convert("America/Sao_Paulo")
+    min_sp = ts_local.min().date() if not ts_local.isna().all() else pd.Timestamp.today(tz="America/Sao_Paulo").date()
+    max_sp = ts_local.max().date() if not ts_local.isna().all() else pd.Timestamp.today(tz="America/Sao_Paulo").date()
+    
+    de_sp  = colg2.date_input("Criado a partir de", value=min_sp, min_value=min_sp, max_value=max_sp, key="sku_de_sp")
+    ate_sp = colg3.date_input("Criado até",       value=max_sp, min_value=min_sp, max_value=max_sp, key="sku_ate_sp")
+
 
     # === Aplicar filtros ===
     if op_sku == "Nulo":
@@ -1523,6 +1556,16 @@ def mostrar_gestao_sku():
         df = df[df.apply(lambda row: filtro_txt in str(row["seller_sku"]).lower()
                          or filtro_txt in str(row["level1"]).lower()
                          or filtro_txt in str(row["level2"]).lower(), axis=1)]
+    # Status do SKU
+    if op_status_sku == "Ativo":
+        df = df[df["Ativo?"] == "Ativo"]
+    elif op_status_sku == "Ultrapassado":
+        df = df[df["Ativo?"] == "Ultrapassado"]
+    
+    # Intervalo de criação no fuso de SP
+    ts_local = pd.to_datetime(df["date_created"], errors="coerce", utc=True).dt.tz_convert("America/Sao_Paulo")
+    df = df[(ts_local.dt.date >= de_sp) & (ts_local.dt.date <= ate_sp)]
+
 
     # === Tabela editável ===
     st.markdown("### 📝 Editar Cadastro de SKUs")
@@ -1557,14 +1600,17 @@ def mostrar_gestao_sku():
                     if not ultimo or float(ultimo.custo_unitario or 0) != novo_custo:
                         # Inserir nova linha se o custo foi alterado ou não existir
                         conn.execute(text("""
-                            INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                            VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW())
+                            UPDATE sku SET is_active = FALSE WHERE sku = :sku;
+                            
+                            INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created, is_active)
+                            VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW(), TRUE);
+
                         """), {
                             "sku": sku,
                             "level1": row["level1"],
                             "level2": row["level2"],
                             "custo": novo_custo,
-                            "quantidade": (int(row["quantity_sku"]) if not pd.isna(row["quantity_sku"]) else None)
+                            "quantidade": row["quantity_sku"]
                         })
                     else:
                         # Atualiza a linha mais recente se o custo não mudou
@@ -1581,7 +1627,7 @@ def mostrar_gestao_sku():
                             "sku": sku,
                             "level1": row["level1"],
                             "level2": row["level2"],
-                            "quantidade": (int(row["quantity_sku"]) if not pd.isna(row["quantity_sku"]) else None)
+                            "quantidade": row["quantity_sku"]
                         })
     
                 # Atualiza a tabela de vendas com os dados mais recentes de SKU
@@ -1748,8 +1794,11 @@ def mostrar_gestao_sku():
     
                             if result is None:
                                 conn.execute(text("""
-                                    INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                                    VALUES (:seller_sku, :level1, :level2, :custo_unitario, :quantity, NOW())
+
+                                    UPDATE sku SET is_active = FALSE WHERE sku = :seller_sku;
+                                    
+                                    INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created, is_active)
+                                    VALUES (:seller_sku, :level1, :level2, :custo_unitario, :quantity, NOW(), TRUE);
                                 """), row_dict)
     
                         # Atualizar tabela de vendas
@@ -1804,14 +1853,13 @@ def mostrar_gestao_sku():
                     try:
                         with engine.begin() as conn:
                             conn.execute(text("""
-                                INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created)
-                                VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW())
-                                ON CONFLICT (sku) DO UPDATE
-                                SET
-                                    level1 = EXCLUDED.level1,
-                                    level2 = EXCLUDED.level2,
-                                    custo_unitario = EXCLUDED.custo_unitario,
-                                    quantity = EXCLUDED.quantity
+                                -- desativa versões antigas
+                                UPDATE sku SET is_active = FALSE WHERE sku = :sku;
+                                
+                                -- insere nova versão como ativa
+                                INSERT INTO sku (sku, level1, level2, custo_unitario, quantity, date_created, is_active)
+                                VALUES (:sku, :level1, :level2, :custo, :quantidade, NOW(), TRUE);
+
                             """), {
                                 "sku": seller_sku_manual.strip(),
                                 "level1": level1_manual.strip() or None,
