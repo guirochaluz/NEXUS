@@ -1564,7 +1564,7 @@ def mostrar_gestao_sku():
                             "level1": row["level1"],
                             "level2": row["level2"],
                             "custo": novo_custo,
-                            "quantidade": row["quantity_sku"]
+                            "quantidade": (int(row["quantity_sku"]) if not pd.isna(row["quantity_sku"]) else None)
                         })
                     else:
                         # Atualiza a linha mais recente se o custo não mudou
@@ -1581,7 +1581,7 @@ def mostrar_gestao_sku():
                             "sku": sku,
                             "level1": row["level1"],
                             "level2": row["level2"],
-                            "quantidade": row["quantity_sku"]
+                            "quantidade": (int(row["quantity_sku"]) if not pd.isna(row["quantity_sku"]) else None)
                         })
     
                 # Atualiza a tabela de vendas com os dados mais recentes de SKU
