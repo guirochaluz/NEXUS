@@ -666,38 +666,89 @@ def mostrar_dashboard():
     import plotly.express as px
 
     # =================== Gráfico de Linha + Barra de Proporção ===================
+    # === Título
     st.markdown("### 💵 Total Vendido por Período")
     
-    # 🔘 Seletor de período + agrupamento + métrica lado a lado
+    # === CSS para estilizar os radios como botões/pills
+    st.markdown("""
+        <style>
+            /* Container de cada grupo */
+            .pill-group {
+                background-color: rgba(255,255,255,0.03);
+                border-radius: 10px;
+                padding: 10px;
+            }
+            /* Label do grupo */
+            .pill-label {
+                font-weight: 600;
+                font-size: 15px;
+                margin-bottom: 6px;
+                display: block;
+            }
+            /* Radio horizontal */
+            div[data-baseweb="radio"] {
+                display: flex !important;
+                gap: 8px !important;
+                flex-wrap: wrap;
+            }
+            /* Botões/pills */
+            div[data-baseweb="radio"] label {
+                background: rgba(255,255,255,0.08);
+                padding: 6px 14px;
+                border-radius: 999px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
+                color: #fff;
+                border: 1px solid rgba(255,255,255,0.1);
+                transition: all 0.15s ease-in-out;
+            }
+            /* Hover */
+            div[data-baseweb="radio"] label:hover {
+                background: rgba(255,255,255,0.15);
+            }
+            /* Ativo */
+            div[data-baseweb="radio"] input:checked + div {
+                background: #27ae60 !important;
+                color: white !important;
+                border: 1px solid #27ae60 !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    # === Seletores lado a lado
     colsel1, colsel2, colsel3 = st.columns([1.2, 1.6, 1.6])
     
     with colsel1:
-        st.markdown("**📆 Período**")
+        st.markdown('<div class="pill-group"><span class="pill-label">📆 Período</span>', unsafe_allow_html=True)
         tipo_visualizacao = st.radio(
             label="",
             options=["Diário", "Semanal", "Quinzenal", "Mensal"],
             horizontal=True,
             key="periodo"
         )
+        st.markdown('</div>', unsafe_allow_html=True)
     
     with colsel2:
-        st.markdown("**👥 Agrupamento**")
-        # ➕ Adiciona "Por Modo de Envio"
+        st.markdown('<div class="pill-group"><span class="pill-label">👥 Agrupamento</span>', unsafe_allow_html=True)
         modo_agregacao = st.radio(
             label="",
             options=["Por Conta", "Por Modo de Envio", "Total Geral"],
             horizontal=True,
             key="modo_agregacao"
         )
+        st.markdown('</div>', unsafe_allow_html=True)
     
     with colsel3:
-        st.markdown("**📏 Métrica da Barra**")
+        st.markdown('<div class="pill-group"><span class="pill-label">📏 Métrica da Barra</span>', unsafe_allow_html=True)
         metrica_barra = st.radio(
-            "Métrica",
-            ["Faturamento", "Qtd. Vendas", "Qtd. Unidades"],
+            label="",
+            options=["Faturamento", "Qtd. Vendas", "Qtd. Unidades"],
             horizontal=True,
             key="metrica_barra"
         )
+        st.markdown('</div>', unsafe_allow_html=True)
+
     
     # =================== Preparação de dados ===================
     df_plot = df.copy()
