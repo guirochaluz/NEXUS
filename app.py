@@ -2838,17 +2838,9 @@ def mostrar_supply_chain():
     st.markdown(
         """
         <style>
-        .block-container {
-            padding-top: 0rem;
-        }
-        .stTextInput, .stSelectbox, .stDateInput {
-            width: 100%;
-        }
-        .stForm {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
+        .block-container { padding-top: 0rem; }
+        .stTextInput, .stSelectbox, .stDateInput { width: 100%; }
+        .stForm { display: flex; flex-wrap: wrap; gap: 1rem; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -2873,9 +2865,7 @@ def mostrar_supply_chain():
         filtro_insumo = st.selectbox("Insumo", ["Todos"] + insumo_options)
 
     with col3:
-        periodo = st.selectbox("📆 Período da Compra", [
-            "Últimos 30 dias", "Hoje", "Ontem", "Personalizado"
-        ])
+        periodo = st.selectbox("📆 Período da Compra", ["Últimos 30 dias", "Hoje", "Ontem", "Personalizado"])
 
     if periodo == "Últimos 30 dias":
         data_inicio = datetime.today() - timedelta(days=30)
@@ -2900,14 +2890,11 @@ def mostrar_supply_chain():
     if entrega_opcao == "Amanhã":
         entrega_inicio = entrega_fim = hoje + timedelta(days=1)
     elif entrega_opcao == "Próximos 7 dias":
-        entrega_inicio = hoje
-        entrega_fim = hoje + timedelta(days=7)
+        entrega_inicio = hoje; entrega_fim = hoje + timedelta(days=7)
     elif entrega_opcao == "Próximos 15 dias":
-        entrega_inicio = hoje
-        entrega_fim = hoje + timedelta(days=15)
+        entrega_inicio = hoje; entrega_fim = hoje + timedelta(days=15)
     elif entrega_opcao == "Próximos 30 dias":
-        entrega_inicio = hoje
-        entrega_fim = hoje + timedelta(days=30)
+        entrega_inicio = hoje; entrega_fim = hoje + timedelta(days=30)
     elif entrega_opcao == "Este mês":
         entrega_inicio = hoje.replace(day=1)
         next_month = (hoje.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -2934,6 +2921,90 @@ def mostrar_supply_chain():
             st.dataframe(compras, use_container_width=True)
     except Exception as e:
         st.error(f"❌ Erro ao carregar compras: {e}")
+
+    # === Ações ===
+    st.markdown("### ✍️ Ações")
+    if "show_form_compra" not in st.session_state:
+        st.session_state.show_form_compra = False
+
+    if st.button("➕ Cadastrar Compra"):
+        st.session_state.show_form_compra = not st.session_state.show_form_compra
+
+    if st.session_state.show_form_compra:
+        st.markdown("#### Nova Compra de Insumo")
+        with st.form("form_nova_compra", clear_on_submit=False):
+            # Dados-base (DFs com IDs para gravar no banco)
+            fornecedores_df = get_fornecedores_df()   # id + nome
+            insumos_full_df = get_insumos_df_full()   # id + atributos
+
+            # Selects
+            colf1, colf2 = st.columns([1, 2])
+            fornecedor_nome = colf1.selectbox(
+                "Fornecedor",
+                fornecedores_df["empresa_nome"].tolist(),
+                index=0 if not fornecedores_df.empty else None
+            )
+            fornecedor_id = int(
+                fornecedores_df.loc[fornecedores_df["empresa_nome"] == fornecedor_nome, "id"].iloc[0]
+            ) if not fornecedores_df.empty else None
+
+            insumo_opts = (
+                insumos_full_df
+                .assign(
+                    rotulo=lambda d: d["descricao"] + " | " + d["categoria"] + " | " + d["classificacao"] + " | "
+                                     + d["cores"].fillna("") + " | " + (d["medida"].astype(str) + d["unidade_medida"])
+                )[["id", "rotulo"]]
+            )
+            insumo_label = colf2.selectbox(
+                "Insumo",
+                insumo_opts["rotulo"].tolist(),
+                index=0 if not insumo_opts.empty else None
+            )
+            insumo_id = int(insumo_opts.loc[insumo_opts["rotulo"] == insumo_label, "id"].iloc[0]) if not insumo_opts.empty else None
+
+            colq1, colq2, colq3 = st.columns([1,1,1])
+            quantidade = colq1.number_input("Quantidade", min_value=1, step=1, value=1)
+            preco_unit = colq2.number_input("Preço Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
+            total_calc = quantidade * preco_unit
+            colq3.metric("Total", f"R$ {total_calc:,.2f}".replace(",", "v").replace(".", ",").replace("v", "."))
+
+            cold1, cold2 = st.columns(2)
+            data_compra = cold1.date_input("Data da Compra", value=datetime.today())
+            data_entrega = cold2.date_input("Previsão de Entrega", value=datetime.today())
+
+            observacoes = st.text_area("Observações", placeholder="Opcional")
+
+            submitted = st.form_submit_button("💾 Salvar Compra")
+            if submitted:
+                if not fornecedor_id or not insumo_id:
+                    st.error("Selecione fornecedor e insumo válidos.")
+                else:
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text("""
+                                    INSERT INTO compras_insumos
+                                        (fornecedor_id, insumo_id, quantidade, preco_unitario, total_compra, data_compra, data_entrega_esperada, observacoes)
+                                    VALUES
+                                        (:fornecedor_id, :insumo_id, :quantidade, :preco_unitario, :total_compra, :data_compra, :data_entrega_esperada, :observacoes)
+                                """),
+                                {
+                                    "fornecedor_id": fornecedor_id,
+                                    "insumo_id": insumo_id,
+                                    "quantidade": int(quantidade),
+                                    "preco_unitario": float(preco_unit),
+                                    "total_compra": float(total_calc),
+                                    "data_compra": datetime.combine(data_compra, datetime.min.time()),
+                                    "data_entrega_esperada": datetime.combine(data_entrega, datetime.min.time()),
+                                    "observacoes": (observacoes or None),
+                                }
+                            )
+                        st.success("✅ Compra cadastrada com sucesso!")
+                        st.session_state.show_form_compra = False
+                        st.rerun()  # <— substitui experimental_rerun
+                    except Exception as e:
+                        st.error(f"❌ Erro ao salvar compra: {e}")
+
 def get_fornecedores():
     query = "SELECT empresa_nome FROM fornecedores ORDER BY empresa_nome"
     df = pd.read_sql(query, engine)
@@ -2987,6 +3058,18 @@ def get_compras(fornecedor, insumo, data_inicio, data_fim, entrega_inicio, entre
 
     return pd.read_sql(text(query), engine, params=params)
 
+# === Helpers COM ID (fora de get_compras) ===
+def get_fornecedores_df():
+    query = "SELECT id, empresa_nome FROM fornecedores ORDER BY empresa_nome"
+    return pd.read_sql(query, engine)
+
+def get_insumos_df_full():
+    query = """
+        SELECT id, descricao, categoria, classificacao, cores, medida, unidade_medida
+        FROM insumos
+        ORDER BY descricao
+    """
+    return pd.read_sql(query, engine)
 
 def mostrar_gerenciar_cadastros():
     import streamlit as st
