@@ -569,7 +569,6 @@ def mostrar_dashboard():
         st.stop()
 
     
-    # Estilo customizado (CSS)
     st.markdown("""
         <style>
             .kpi-title {
@@ -577,6 +576,16 @@ def mostrar_dashboard():
                 font-weight: 600;
                 color: #000000;
                 margin-bottom: 4px;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-wrap: nowrap;
+            }
+            .kpi-pct {
+                font-size: 70%;
+                color: #666;
+                font-weight: normal;
+                white-space: nowrap;
             }
             .kpi-value {
                 font-size: 20px;
@@ -596,16 +605,17 @@ def mostrar_dashboard():
         </style>
     """, unsafe_allow_html=True)
     
-    # Função para renderizar KPI card em coluna
-    def kpi_card(col, title, value):
+    def kpi_card(col, title, value, pct_text=None):
+        # pct_text é só "12.7%" ou "-3.4%" (sem <span>)
+        pct_html = f"<span class='kpi-pct'>({pct_text})</span>" if pct_text else ""
         col.markdown(f"""
             <div class="kpi-card">
-                <div class="kpi-title">{title}</div>
+                <div class="kpi-title">{title} {pct_html}</div>
                 <div class="kpi-value">{value}</div>
             </div>
         """, unsafe_allow_html=True)
     
-    # Cálculos (ajustado)
+    # === Cálculos ===
     total_vendas        = len(df)
     total_valor         = df["total_amount"].sum()
     total_itens         = (df["quantity_sku"] * df["quantity"]).sum()
@@ -615,31 +625,32 @@ def mostrar_dashboard():
     taxa_mktplace       = -df["ml_fee"].fillna(0).sum()
     cmv                 = -((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
     margem_operacional  = total_valor + frete + taxa_mktplace + cmv
+    
     # Custo de FLEX (fallback se a coluna não vier do banco)
     if "shipment_flex_cost" not in df.columns:
         df["shipment_flex_cost"] = (
             df["shipment_logistic_type"].fillna("").str.lower().eq("self_service").astype(float) * 12.97
         )
     flex = -df["shipment_flex_cost"].fillna(0).sum()
-    colunas_chk = ["level1", "level2", "custo_unitario", "quantity_sku"]
     
-    # Filtra linhas onde seller_sku NÃO é nulo e pelo menos uma coluna está nula
+    colunas_chk = ["level1", "level2", "custo_unitario", "quantity_sku"]
     df_faltantes = df_full[
         df_full["seller_sku"].notnull() & df_full[colunas_chk].isnull().any(axis=1)
     ]
     sku_incompleto = df_faltantes["seller_sku"].nunique()
-
-    pct = lambda val: f"<span style='font-size: 70%; color: #666; display: inline-block; margin-left: 6px;'>({val / total_valor * 100:.1f}%)</span>" if total_valor else "<span style='font-size: 70%'>(0%)</span>"
-
-    # Bloco 1: Indicadores Financeiros
+    
+    # >>> Percentual para o título (agora único)
+    pct_val = lambda v: f"{(v / total_valor * 100):.1f}%" if total_valor else "0%"
+    
+    # === KPIs ===
     st.markdown("### 💼 Indicadores Financeiros")
     row1 = st.columns(6)
-    kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
-    kpi_card(row1[1], "🚚 Frete", f"{format_currency(frete)} {pct(frete)}")
-    kpi_card(row1[2], "🚀 Custo FLEX", format_currency(flex))
-    kpi_card(row1[3], "📉 Taxa Mkpl", f"{format_currency(taxa_mktplace)} {pct(taxa_mktplace)}")
-    kpi_card(row1[4], "📦 CMV", f"{format_currency(cmv)} {pct(cmv)}")
-    kpi_card(row1[5], "💵 Margem Oper.", f"{format_currency(margem_operacional)} {pct(margem_operacional)}")
+    kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))  # sem %
+    kpi_card(row1[1], "🚚 Frete",        format_currency(frete),            pct_val(frete))
+    kpi_card(row1[2], "🚀 Custo FLEX",   format_currency(flex))             # sem %
+    kpi_card(row1[3], "📉 Taxa Mkpl",    format_currency(taxa_mktplace),    pct_val(taxa_mktplace))
+    kpi_card(row1[4], "📦 CMV",          format_currency(cmv),              pct_val(cmv))
+    kpi_card(row1[5], "💵 Margem Oper.", format_currency(margem_operacional), pct_val(margem_operacional))
 
     
     # Bloco 2: Indicadores de Vendas
@@ -658,8 +669,7 @@ def mostrar_dashboard():
     st.markdown("### 💵 Total Vendido por Período")
     
     # 🔘 Seletor de período + agrupamento + métrica lado a lado
-    colsel1, colsel2, colsel3 = st.columns([1.2, 1.2, 1.6])
-
+    colsel1, colsel2, colsel3 = st.columns([1.2, 1.6, 1.6])
     
     with colsel1:
         st.markdown("**📆 Período**")
@@ -672,13 +682,14 @@ def mostrar_dashboard():
     
     with colsel2:
         st.markdown("**👥 Agrupamento**")
+        # ➕ Adiciona "Por Modo de Envio"
         modo_agregacao = st.radio(
             label="",
-            options=["Por Conta", "Total Geral"],
+            options=["Por Conta", "Por Modo de Envio", "Total Geral"],
             horizontal=True,
             key="modo_agregacao"
         )
-
+    
     with colsel3:
         st.markdown("**📏 Métrica da Barra**")
         metrica_barra = st.radio(
@@ -687,13 +698,43 @@ def mostrar_dashboard():
             horizontal=True,
             key="metrica_barra"
         )
-
-
     
+    # =================== Preparação de dados ===================
     df_plot = df.copy()
     
-    # Define bucket de datas
+    # === Novo filtro / mapeamento: Tipo de Envio ===
+    def mapear_tipo(valor):
+        match valor:
+            case 'fulfillment': return 'FULL'
+            case 'self_service': return 'FLEX'
+            case 'drop_off': return 'Correios'
+            case 'xd_drop_off': return 'Agência'
+            case 'cross_docking': return 'Coleta'
+            case 'me2': return 'Envio Padrão'
+            case _: return 'outros'
+    
+    # Detecta qual coluna de origem existe para o tipo de envio
+    col_tipo_envio_origem = None
+    for cand in ["shipping_type", "logistics_type", "shipping_mode"]:
+        if cand in df_plot.columns:
+            col_tipo_envio_origem = cand
+            break
+    
+    if col_tipo_envio_origem is not None:
+        df_plot["tipo_envio"] = df_plot[col_tipo_envio_origem].apply(mapear_tipo)
+    else:
+        # Se não houver coluna, ainda assim criamos para não quebrar a UI
+        df_plot["tipo_envio"] = "outros"
+    
+    # =================== Bucket de datas ===================
+    # Correção de Quinzena (1ª/2ª metade do mês)
+    def label_quinzena(dt: "pd.Timestamp") -> str:
+        d = pd.to_datetime(dt)
+        metade = "1ª" if d.day <= 15 else "2ª"
+        return f"{d.year}-{d.month:02d} ({metade} quinzena)"
+    
     if de == ate:
+        # Dia único => por hora
         df_plot["date_bucket"] = df_plot["date_adjusted"].dt.floor("h")
         periodo_label = "Hora"
     else:
@@ -701,63 +742,70 @@ def mostrar_dashboard():
             df_plot["date_bucket"] = df_plot["date_adjusted"].dt.date
             periodo_label = "Dia"
         elif tipo_visualizacao == "Semanal":
+            # Início da semana (seg) por padrão
             df_plot["date_bucket"] = df_plot["date_adjusted"].dt.to_period("W").apply(lambda p: p.start_time.date())
             periodo_label = "Semana"
         elif tipo_visualizacao == "Quinzenal":
-            df_plot["quinzena"] = df_plot["date_adjusted"].apply(
-                lambda d: f"{d.year}-Q{(d.month-1)*2//30 + 1}-{1 if d.day <= 15 else 2}"
-            )
-            df_plot["date_bucket"] = df_plot["quinzena"]
+            df_plot["date_bucket"] = df_plot["date_adjusted"].apply(label_quinzena)
             periodo_label = "Quinzena"
-        else:
+        else:  # Mensal
             df_plot["date_bucket"] = df_plot["date_adjusted"].dt.to_period("M").astype(str)
             periodo_label = "Mês"
     
-    # Agrupamento e definição de cores
+    # =================== Agregações ===================
+    # Define colunas de cor / agrupamento por modo selecionado
+    group_col = None
     if modo_agregacao == "Por Conta":
+        group_col = "nickname"
+    elif modo_agregacao == "Por Modo de Envio":
+        group_col = "tipo_envio"
+    # Para "Total Geral", permanece None
+    
+    # Série principal (linha)
+    if group_col:
         vendas_por_data = (
-            df_plot.groupby(["date_bucket", "nickname"])["total_amount"]
+            df_plot.groupby(["date_bucket", group_col])["total_amount"]
             .sum()
             .reset_index(name="Valor Total")
         )
-        color_dim = "nickname"
-    
-        total_por_conta = (
-            df_plot.groupby("nickname")["total_amount"]
-            .sum()
-            .reset_index(name="total")
-            .sort_values("total", ascending=False)
-        )
-    
-        color_palette = px.colors.sequential.Agsunset
-        nicknames = total_por_conta["nickname"].tolist()
-        color_map = {nick: color_palette[i % len(color_palette)] for i, nick in enumerate(nicknames)}
-    
     else:
         vendas_por_data = (
             df_plot.groupby("date_bucket")["total_amount"]
             .sum()
             .reset_index(name="Valor Total")
         )
-        color_dim = None
-        color_map = None  # Não será usado
-        total_por_conta = None
     
-    # 🔢 Gráfico(s)
-    if modo_agregacao == "Por Conta":
+    # Ordenação de cores por total no período (quando houver agrupamento)
+    color_dim = group_col if group_col else None
+    color_map = None
+    total_por_grupo = None
+    
+    if group_col:
+        total_por_grupo = (
+            df_plot.groupby(group_col)["total_amount"]
+            .sum()
+            .reset_index(name="total")
+            .sort_values("total", ascending=False)
+        )
+        color_palette = px.colors.sequential.Agsunset
+        grupos_ordenados = total_por_grupo[group_col].tolist()
+        color_map = {g: color_palette[i % len(color_palette)] for i, g in enumerate(grupos_ordenados)}
+    
+    # Layout de colunas para os gráficos
+    if group_col:
         col1, col2 = st.columns([4, 1])
     else:
         col1 = st.container()
         col2 = None
     
-    # 📈 Gráfico de Linha
+    # =================== Gráfico de Linha ===================
     with col1:
         fig = px.line(
             vendas_por_data,
             x="date_bucket",
             y="Valor Total",
             color=color_dim,
-            labels={"date_bucket": periodo_label, "Valor Total": "Valor Total", "nickname": "Conta"},
+            labels={"date_bucket": periodo_label, "Valor Total": "Valor Total", "nickname": "Conta", "tipo_envio": "Modo de Envio"},
             color_discrete_map=color_map,
         )
         fig.update_traces(mode="lines+markers", marker=dict(size=5))
@@ -767,33 +815,32 @@ def mostrar_dashboard():
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    # 📊 Gráfico de barra proporcional (somente se Por Conta)
-    if modo_agregacao == "Por Conta" and not total_por_conta.empty:
-
+    # =================== Gráfico de Barra Proporcional (barra lateral) ===================
+    if group_col and total_por_grupo is not None and not total_por_grupo.empty:
     
         if metrica_barra == "Faturamento":
             base = (
-                df_plot.groupby("nickname")["total_amount"]
+                df_plot.groupby(group_col)["total_amount"]
                 .sum()
                 .reset_index(name="valor")
             )
         elif metrica_barra == "Qtd. Vendas":
             base = (
-                df_plot.groupby("nickname")
+                df_plot.groupby(group_col)
                 .size()
                 .reset_index(name="valor")
             )
         else:  # Qtd. Unidades
+            # quantity_total = quantity_sku * quantity
             base = (
-                df_plot.groupby("nickname")
-                .apply(lambda x: (x["quantity_sku"] * x["quantity"]).sum())
+                df_plot.groupby(group_col)
+                .apply(lambda x: (x.get("quantity_sku", 1) * x.get("quantity", 1)).sum())
                 .reset_index(name="valor")
             )
     
         base = base.sort_values("valor", ascending=False)
         base["percentual"] = base["valor"] / base["valor"].sum()
     
-        # 🏷️ Texto das barras
         def formatar_valor(v):
             if metrica_barra == "Faturamento":
                 return f"R$ {v:,.0f}".replace(",", "v").replace(".", ",").replace("v", ".")
@@ -805,15 +852,16 @@ def mostrar_dashboard():
         base["texto"] = base.apply(
             lambda row: f"{row['percentual']:.0%} ({formatar_valor(row['valor'])})", axis=1
         )
-        base["grupo"] = "Contas"
+        base["grupo"] = "Grupos"
     
         fig_bar = px.bar(
             base,
             x="grupo",
             y="percentual",
-            color="nickname",
+            color=group_col,
             text="texto",
             color_discrete_map=color_map,
+            labels={group_col: "Grupo"}
         )
     
         fig_bar.update_layout(
