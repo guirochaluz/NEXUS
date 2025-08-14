@@ -704,18 +704,21 @@ def mostrar_dashboard():
     
     # === Novo filtro / mapeamento: Tipo de Envio ===
     def mapear_tipo(valor):
+        if valor is None:
+            return "outros"
+        valor = str(valor).strip().lower()  # normaliza p/ bater nos cases
         match valor:
-            case 'fulfillment': return 'FULL'
-            case 'self_service': return 'FLEX'
-            case 'drop_off': return 'Correios'
-            case 'xd_drop_off': return 'Agência'
-            case 'cross_docking': return 'Coleta'
-            case 'me2': return 'Envio Padrão'
-            case _: return 'outros'
+            case 'fulfillment':    return 'FULL'
+            case 'self_service':   return 'FLEX'
+            case 'drop_off':       return 'Correios'
+            case 'xd_drop_off':    return 'Agência'
+            case 'cross_docking':  return 'Coleta'
+            case 'me2':            return 'Envio Padrão'
+            case _:                return 'outros'
     
     # Detecta qual coluna de origem existe para o tipo de envio
     col_tipo_envio_origem = None
-    for cand in ["shipping_type", "logistics_type", "shipping_mode"]:
+    for cand in ["shipment_logistic_type", "shipping_type", "logistics_type", "shipping_mode"]:
         if cand in df_plot.columns:
             col_tipo_envio_origem = cand
             break
@@ -725,6 +728,7 @@ def mostrar_dashboard():
     else:
         # Se não houver coluna, ainda assim criamos para não quebrar a UI
         df_plot["tipo_envio"] = "outros"
+
     
     # =================== Bucket de datas ===================
     # Correção de Quinzena (1ª/2ª metade do mês)
