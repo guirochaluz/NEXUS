@@ -665,89 +665,77 @@ def mostrar_dashboard():
     
     import plotly.express as px
 
-    # =================== Gráfico de Linha + Barra de Proporção ===================
-    # === Título
+    # Título
     st.markdown("### 💵 Total Vendido por Período")
     
-    # === CSS para estilizar os radios como botões/pills
+    # CSS robusto para Streamlit Radio em modo "pill"
     st.markdown("""
-        <style>
-            /* Container de cada grupo */
-            .pill-group {
-                background-color: rgba(255,255,255,0.03);
-                border-radius: 10px;
-                padding: 10px;
-            }
-            /* Label do grupo */
-            .pill-label {
-                font-weight: 600;
-                font-size: 15px;
-                margin-bottom: 6px;
-                display: block;
-            }
-            /* Radio horizontal */
-            div[data-baseweb="radio"] {
-                display: flex !important;
-                gap: 8px !important;
-                flex-wrap: wrap;
-            }
-            /* Botões/pills */
-            div[data-baseweb="radio"] label {
-                background: rgba(255,255,255,0.08);
-                padding: 6px 14px;
-                border-radius: 999px;
-                cursor: pointer;
-                font-size: 13px;
-                font-weight: 500;
-                color: #fff;
-                border: 1px solid rgba(255,255,255,0.1);
-                transition: all 0.15s ease-in-out;
-            }
-            /* Hover */
-            div[data-baseweb="radio"] label:hover {
-                background: rgba(255,255,255,0.15);
-            }
-            /* Ativo */
-            div[data-baseweb="radio"] input:checked + div {
-                background: #27ae60 !important;
-                color: white !important;
-                border: 1px solid #27ae60 !important;
-            }
-        </style>
+    <style>
+    .pill-scope { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px 12px; }
+    .pill-scope .pill-label { font-weight: 600; font-size: 15px; margin-bottom: 8px; display: block; }
+    
+    /* Linha horizontal de opções */
+    .pill-scope [role="radiogroup"]{
+        display: flex !important;
+        gap: 10px !important;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+    
+    /* Cada opção como "pill" */
+    .pill-scope [role="radiogroup"] > label{
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(255,255,255,0.08);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .15s ease;
+        min-width: 120px;                /* garante leitura */
+        justify-content: center;
+    }
+    
+    /* Hover/Focus */
+    .pill-scope [role="radiogroup"] > label:hover{ background: rgba(255,255,255,0.16); }
+    .pill-scope [role="radiogroup"] > label:focus-within{ outline: 2px solid #27ae60; outline-offset: 2px; }
+    
+    /* Esconde o círculo do radio, preservando acessibilidade */
+    .pill-scope [role="radiogroup"] > label input[type="radio"]{
+        position: absolute; inset: 0; opacity: 0; pointer-events: none;
+    }
+    
+    /* Estado ativo: quando o input dentro do label está checked */
+    .pill-scope [role="radiogroup"] > label:has(input:checked){
+        background: #27ae60 !important;
+        border-color: #27ae60 !important;
+        color: #fff !important;
+        box-shadow: 0 0 0 2px rgba(39,174,96,.25) inset;
+    }
+    </style>
     """, unsafe_allow_html=True)
     
-    # === Seletores lado a lado
     colsel1, colsel2, colsel3 = st.columns([1.2, 1.6, 1.6])
     
     with colsel1:
-        st.markdown('<div class="pill-group"><span class="pill-label">📆 Período</span>', unsafe_allow_html=True)
-        tipo_visualizacao = st.radio(
-            label="",
-            options=["Diário", "Semanal", "Quinzenal", "Mensal"],
-            horizontal=True,
-            key="periodo"
-        )
+        st.markdown('<div class="pill-scope"><span class="pill-label">📆 Período</span>', unsafe_allow_html=True)
+        tipo_visualizacao = st.radio("", ["Diário", "Semanal", "Quinzenal", "Mensal"], horizontal=True, key="periodo")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with colsel2:
-        st.markdown('<div class="pill-group"><span class="pill-label">👥 Agrupamento</span>', unsafe_allow_html=True)
-        modo_agregacao = st.radio(
-            label="",
-            options=["Por Conta", "Por Modo de Envio", "Total Geral"],
-            horizontal=True,
-            key="modo_agregacao"
-        )
+        st.markdown('<div class="pill-scope"><span class="pill-label">👥 Agrupamento</span>', unsafe_allow_html=True)
+        modo_agregacao = st.radio("", ["Por Conta", "Por Modo de Envio", "Total Geral"], horizontal=True, key="modo_agregacao")
         st.markdown('</div>', unsafe_allow_html=True)
     
     with colsel3:
-        st.markdown('<div class="pill-group"><span class="pill-label">📏 Métrica da Barra</span>', unsafe_allow_html=True)
-        metrica_barra = st.radio(
-            label="",
-            options=["Faturamento", "Qtd. Vendas", "Qtd. Unidades"],
-            horizontal=True,
-            key="metrica_barra"
-        )
+        st.markdown('<div class="pill-scope"><span class="pill-label">📏 Métrica da Barra</span>', unsafe_allow_html=True)
+        metrica_barra = st.radio("", ["Faturamento", "Qtd. Vendas", "Qtd. Unidades"], horizontal=True, key="metrica_barra")
         st.markdown('</div>', unsafe_allow_html=True)
+
 
     
     # =================== Preparação de dados ===================
