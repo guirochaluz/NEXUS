@@ -579,7 +579,7 @@ def mostrar_dashboard():
                 margin-bottom: 4px;
             }
             .kpi-value {
-                font-size: 22px;
+                font-size: 20px;
                 font-weight: bold;
                 color: #000000;
                 line-height: 1.2;
