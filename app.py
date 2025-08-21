@@ -2345,9 +2345,126 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     with k2:
         st.metric(label="Quantidade Total", value=f"{total_quantidade:,}")
     
-    # em seguida exibe a tabela
+    # === 📋 Tabela de Expedição por Venda (com botões/links de etiqueta) ===
+    import streamlit as st
+    import pandas as pd
+    
+    # 1) Token (produção: use st.secrets)
+    ACCESS_TOKEN = st.secrets.get("ML_ACCESS_TOKEN", "")
+    if not ACCESS_TOKEN:
+        st.warning("⚠️ ML_ACCESS_TOKEN não encontrado em st.secrets. Configure-o para habilitar os downloads de etiqueta.")
+    
+    # 2) Garantir que temos shipment_id e status no df_filtrado
+    possiveis_ids = [c for c in ["shipment_id", "shipping_id"] if c in df_filtrado.columns]
+    if not possiveis_ids:
+        st.error("Coluna 'shipment_id' (ou 'shipping_id') não encontrada no DataFrame para gerar etiquetas.")
+        st.stop()
+    
+    if "shipment_status" not in df_filtrado.columns:
+        st.error("Coluna 'shipment_status' não encontrada no DataFrame.")
+        st.stop()
+    
+    # 3) Preparar colunas auxiliares
+    df_aux = df_filtrado.copy()
+    # normalizar nome do id
+    if "shipment_id" in df_aux.columns:
+        df_aux["__sid__"] = df_aux["shipment_id"]
+    else:
+        df_aux["__sid__"] = df_aux["shipping_id"]
+    
+    df_aux["__status__"] = df_aux["shipment_status"].astype(str).str.lower()
+    
+    # 4) Construir URLs de etiqueta (PDF e ZPL) condicionadas ao status
+    STATUS_OK = {"ready_to_ship", "printed"}
+    
+    def _label_links(row):
+        sid = row["__sid__"]
+        stt = row["__status__"]
+        if pd.isna(sid) or str(sid).strip() == "" or stt not in STATUS_OK or not ACCESS_TOKEN:
+            return "—", "—"
+        base = "https://api.mercadolibre.com/shipment_labels"
+        pdf = f"{base}?shipment_ids={sid}&response_type=pdf&access_token={ACCESS_TOKEN}"
+        zpl = f"{base}?shipment_ids={sid}&response_type=zpl2&access_token={ACCESS_TOKEN}"
+        return pdf, zpl
+    
+    pdf_urls, zpl_urls = [], []
+    for _, r in df_aux.iterrows():
+        p, z = _label_links(r)
+        pdf_urls.append(p)
+        zpl_urls.append(z)
+    
+    # 5) Montar tabela final para exibição
+    df_aux["Data Limite do Envio"] = df_aux["data_limite"].apply(
+        lambda d: d.strftime("%d/%m/%Y") if pd.notna(d) else "—"
+    )
+    
+    tabela = df_aux[[
+        "order_id",
+        "shipment_receiver_name",
+        "nickname",
+        "Tipo de Envio",
+        "quantidade",
+        "level1",
+        "Data Limite do Envio",
+        "__sid__",
+        "shipment_status"
+    ]].rename(columns={
+        "order_id": "ID VENDA",
+        "shipment_receiver_name": "NOME CLIENTE",
+        "nickname": "CONTA",
+        "Tipo de Envio": "TIPO DE ENVIO",
+        "quantidade": "QUANTIDADE",
+        "level1": "PRODUTO [HIERARQUIA 1]",
+        "Data Limite do Envio": "DATA DE ENVIO",
+        "__sid__": "SHIPMENT ID",
+        "shipment_status": "STATUS ENVIO"
+    })
+    
+    # Adicionar colunas de ação (links)
+    tabela["Etiqueta PDF"] = pdf_urls
+    tabela["Etiqueta Térmica (ZPL)"] = zpl_urls
+    
+    # Ordenar (mantém seu critério anterior)
+    tabela = tabela.sort_values(by="QUANTIDADE", ascending=False)
+    
     st.markdown("### 📋 Tabela de Expedição por Venda")
-    st.dataframe(tabela, use_container_width=True, height=500)
+    
+    # 6) Exibir com links clicáveis (st.data_editor + LinkColumn)
+    # Obs.: visual são "links"; caso queira aparência de "botão", pode estilizar via st.markdown por linha.
+    st.data_editor(
+        tabela,
+        hide_index=True,
+        use_container_width=True,
+        column_config={
+            "Etiqueta PDF": st.column_config.LinkColumn(
+                "Etiqueta PDF",
+                help="Baixar etiqueta em PDF (A4)",
+                display_text="Baixar PDF"
+            ),
+            "Etiqueta Térmica (ZPL)": st.column_config.LinkColumn(
+                "Etiqueta Térmica (ZPL)",
+                help="Baixar etiqueta em ZPL2 (impressoras térmicas)",
+                display_text="Baixar (ZPL)"
+            ),
+            "STATUS ENVIO": st.column_config.TextColumn(
+                "STATUS ENVIO",
+                help="Status do shipment. Links habilitados quando ready_to_ship/printed."
+            ),
+            "SHIPMENT ID": st.column_config.TextColumn(
+                "SHIPMENT ID",
+                help="Identificador do envio no Mercado Envios."
+            ),
+            "DATA DE ENVIO": st.column_config.TextColumn("DATA DE ENVIO"),
+            "PRODUTO [HIERARQUIA 1]": st.column_config.TextColumn("PRODUTO [HIERARQUIA 1]"),
+            "TIPO DE ENVIO": st.column_config.TextColumn("TIPO DE ENVIO"),
+            "NOME CLIENTE": st.column_config.TextColumn("NOME CLIENTE"),
+            "CONTA": st.column_config.TextColumn("CONTA"),
+            "ID VENDA": st.column_config.TextColumn("ID VENDA"),
+            "QUANTIDADE": st.column_config.NumberColumn("QUANTIDADE"),
+        },
+        height=500
+    )
+
 
     df_grouped = df_filtrado.groupby("level1", as_index=False).agg({"quantidade": "sum"})
     df_grouped = df_grouped.rename(columns={"level1": "Hierarquia 1", "quantidade": "Quantidade"})
@@ -2530,13 +2647,11 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
         # --- Preparar resumos para o PDF ---
         def _prep_summary(df, label):
-            df = df.copy()
-            cols = df.columns.tolist()
-            return df.rename(columns={
-                cols[0]: label,
-                "Quantidade_Unidades": "Quantidade",
-                "Quantidade_de_Vendas": "Quantidade de Vendas"
-            })
+            d = df.copy()
+            # Padroniza só o nome da 1ª coluna (rótulo). Mantém "Unidade" e "Vendas".
+            first_col = d.columns[0]
+            d = d.rename(columns={first_col: label})
+            return d
     
         df_h1_pdf   = _prep_summary(df_h1,   "Hierarquia 1")
         df_h2_pdf   = _prep_summary(df_h2,   "Hierarquia 2")
