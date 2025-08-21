@@ -2396,6 +2396,49 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             return tok
         tok = _refresh_token(ml_user_id)
         return tok
+
+    # === Enriquecer df_filtrado com shipping_id quando não existir ===
+    # Requer: get_access_token_for_user(int ml_user_id)
+    
+    STATUS_OK = {"ready_to_ship", "printed"}
+    
+    def _fetch_shipping_id(order_id: str, uid: int) -> int | None:
+        """Busca o shipping.id da ordem via API do ML."""
+        token = get_access_token_for_user(uid)
+        if not token:
+            return None
+        url = f"https://api.mercadolibre.com/orders/{order_id}?access_token={token}"
+        try:
+            r = requests.get(url, timeout=15)
+            if not r.ok:
+                return None
+            data = r.json() or {}
+            ship = data.get("shipping") or {}
+            return ship.get("id")
+        except Exception:
+            return None
+    
+    # Se não há shipment_id nem shipping_id, tenta construir shipping_id por ordem
+    if ("shipment_id" not in df_filtrado.columns) and ("shipping_id" not in df_filtrado.columns):
+        # checagens básicas
+        if "order_id" not in df_filtrado.columns:
+            st.error("Coluna 'order_id' não encontrada para derivar shipping_id.")
+            st.stop()
+        if "ml_user_id" not in df_filtrado.columns:
+            st.error("Coluna 'ml_user_id' não encontrada para derivar shipping_id.")
+            st.stop()
+        if "shipment_status" not in df_filtrado.columns:
+            st.error("Coluna 'shipment_status' não encontrada para derivar shipping_id.")
+            st.stop()
+    
+        st.info("🔎 Derivando 'shipping_id' a partir das ordens (apenas onde fizer sentido)…")
+        df_filtrado = df_filtrado.copy()
+        df_filtrado["shipping_id"] = df_filtrado.apply(
+            lambda row: _fetch_shipping_id(str(row["order_id"]), int(row["ml_user_id"]))
+            if str(row.get("shipment_status", "")).lower() in STATUS_OK else None,
+            axis=1
+        )
+
     
     # 1) Garantir que temos shipment_id, status e ml_user_id no df
     possiveis_ids = [c for c in ["shipment_id", "shipping_id"] if c in df_filtrado.columns]
@@ -2422,8 +2465,6 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     df_aux["__status__"] = df_aux["shipment_status"].astype(str).str.lower()
     
-    # 3) Construir URLs de etiqueta (PDF e ZPL) condicionadas ao status e token por usuário
-    STATUS_OK = {"ready_to_ship", "printed"}
     
     def _label_links(row):
         sid = row["__sid__"]
