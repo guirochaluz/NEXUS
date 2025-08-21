@@ -2345,16 +2345,59 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     with k2:
         st.metric(label="Quantidade Total", value=f"{total_quantidade:,}")
     
-    # === 📋 Tabela de Expedição por Venda (com botões/links de etiqueta) ===
-    import streamlit as st
-    import pandas as pd
+    # === 📋 Tabela de Expedição por Venda (com botões/links de etiqueta) — tokens por usuário ===
+    import os
+    import requests
+    from sqlalchemy import text
+    from db import SessionLocal
     
-    # 1) Token (produção: use st.secrets)
-    ACCESS_TOKEN = st.secrets.get("ML_ACCESS_TOKEN", "")
-    if not ACCESS_TOKEN:
-        st.warning("⚠️ ML_ACCESS_TOKEN não encontrado em st.secrets. Configure-o para habilitar os downloads de etiqueta.")
+    # Helpers de token por usuário (lendo de user_tokens)
+    BACKEND_URL = os.getenv("BACKEND_URL")
     
-    # 2) Garantir que temos shipment_id e status no df_filtrado
+    @st.cache_data(ttl=300, show_spinner=False)
+    def _get_token_db(ml_user_id: int) -> str | None:
+        """Busca o access_token atual do user_tokens."""
+        db = SessionLocal()
+        try:
+            tok = db.execute(
+                text("SELECT access_token FROM user_tokens WHERE ml_user_id = :uid"),
+                {"uid": ml_user_id}
+            ).scalar()
+            return tok
+        finally:
+            db.close()
+    
+    def _refresh_token(ml_user_id: int) -> str | None:
+        """Tenta renovar o token via backend e retorna o novo token do banco."""
+        if not BACKEND_URL:
+            return None
+        try:
+            r = requests.post(f"{BACKEND_URL}/auth/refresh", json={"user_id": ml_user_id}, timeout=20)
+            r.raise_for_status()
+        except Exception as e:
+            st.warning(f"⚠️ Falha ao renovar token do usuário {ml_user_id}: {e}")
+            return None
+        db = SessionLocal()
+        try:
+            tok = db.execute(
+                text("SELECT access_token FROM user_tokens WHERE ml_user_id = :uid"),
+                {"uid": ml_user_id}
+            ).scalar()
+            # invalida o cache para leituras futuras
+            _get_token_db.clear()
+            return tok
+        finally:
+            db.close()
+    
+    def get_access_token_for_user(ml_user_id: int) -> str | None:
+        """Retorna um token válido (tenta DB; se não houver, tenta refresh)."""
+        tok = _get_token_db(ml_user_id)
+        if tok:
+            return tok
+        tok = _refresh_token(ml_user_id)
+        return tok
+    
+    # 1) Garantir que temos shipment_id, status e ml_user_id no df
     possiveis_ids = [c for c in ["shipment_id", "shipping_id"] if c in df_filtrado.columns]
     if not possiveis_ids:
         st.error("Coluna 'shipment_id' (ou 'shipping_id') não encontrada no DataFrame para gerar etiquetas.")
@@ -2364,8 +2407,13 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         st.error("Coluna 'shipment_status' não encontrada no DataFrame.")
         st.stop()
     
-    # 3) Preparar colunas auxiliares
+    if "ml_user_id" not in df_filtrado.columns:
+        st.error("Coluna 'ml_user_id' não encontrada no DataFrame. Necessária para buscar o access_token correto.")
+        st.stop()
+    
+    # 2) Preparar colunas auxiliares
     df_aux = df_filtrado.copy()
+    
     # normalizar nome do id
     if "shipment_id" in df_aux.columns:
         df_aux["__sid__"] = df_aux["shipment_id"]
@@ -2374,17 +2422,24 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     df_aux["__status__"] = df_aux["shipment_status"].astype(str).str.lower()
     
-    # 4) Construir URLs de etiqueta (PDF e ZPL) condicionadas ao status
+    # 3) Construir URLs de etiqueta (PDF e ZPL) condicionadas ao status e token por usuário
     STATUS_OK = {"ready_to_ship", "printed"}
     
     def _label_links(row):
         sid = row["__sid__"]
         stt = row["__status__"]
-        if pd.isna(sid) or str(sid).strip() == "" or stt not in STATUS_OK or not ACCESS_TOKEN:
+        uid = row["ml_user_id"]
+    
+        if pd.isna(sid) or str(sid).strip() == "" or stt not in STATUS_OK:
             return "—", "—"
+    
+        token = get_access_token_for_user(int(uid))
+        if not token:
+            return "—", "—"
+    
         base = "https://api.mercadolibre.com/shipment_labels"
-        pdf = f"{base}?shipment_ids={sid}&response_type=pdf&access_token={ACCESS_TOKEN}"
-        zpl = f"{base}?shipment_ids={sid}&response_type=zpl2&access_token={ACCESS_TOKEN}"
+        pdf = f"{base}?shipment_ids={sid}&response_type=pdf&access_token={token}"
+        zpl = f"{base}?shipment_ids={sid}&response_type=zpl2&access_token={token}"
         return pdf, zpl
     
     pdf_urls, zpl_urls = [], []
@@ -2393,7 +2448,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         pdf_urls.append(p)
         zpl_urls.append(z)
     
-    # 5) Montar tabela final para exibição
+    # 4) Montar tabela final para exibição
     df_aux["Data Limite do Envio"] = df_aux["data_limite"].apply(
         lambda d: d.strftime("%d/%m/%Y") if pd.notna(d) else "—"
     )
@@ -2429,8 +2484,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     st.markdown("### 📋 Tabela de Expedição por Venda")
     
-    # 6) Exibir com links clicáveis (st.data_editor + LinkColumn)
-    # Obs.: visual são "links"; caso queira aparência de "botão", pode estilizar via st.markdown por linha.
+    # 5) Exibir com links clicáveis (st.data_editor + LinkColumn)
     st.data_editor(
         tabela,
         hide_index=True,
@@ -2448,7 +2502,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             ),
             "STATUS ENVIO": st.column_config.TextColumn(
                 "STATUS ENVIO",
-                help="Status do shipment. Links habilitados quando ready_to_ship/printed."
+                help="Links habilitados quando ready_to_ship/printed."
             ),
             "SHIPMENT ID": st.column_config.TextColumn(
                 "SHIPMENT ID",
@@ -2464,6 +2518,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
         },
         height=500
     )
+
 
 
     df_grouped = df_filtrado.groupby("level1", as_index=False).agg({"quantidade": "sum"})
