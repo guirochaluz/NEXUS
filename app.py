@@ -2479,9 +2479,17 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
             return "—", "—"
     
         base = "https://api.mercadolibre.com/shipment_labels"
+        
+        # Garantir que shipment_id seja inteiro e sem ".0"
+        sid = str(sid).split('.')[0]  # Remove qualquer parte decimal (".0")
+        
+        # Gerar as URLs corretamente para PDF e ZPL
         pdf = f"{base}?shipment_ids={sid}&response_type=pdf&access_token={token}"
         zpl = f"{base}?shipment_ids={sid}&response_type=zpl2&access_token={token}"
+        
         return pdf, zpl
+
+
     
     pdf_urls, zpl_urls = [], []
     for _, r in df_aux.iterrows():
