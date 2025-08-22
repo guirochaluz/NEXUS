@@ -2527,6 +2527,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     
     # 5) Exibir com links clicáveis (st.data_editor + LinkColumn)
     tabela["ID VENDA"] = tabela["ID VENDA"].astype(str)  # Converte para string
+    tabela["SHIPMENT ID"] = tabela["SHIPMENT ID"].astype(str)
     st.data_editor(
         tabela,
         hide_index=True,
