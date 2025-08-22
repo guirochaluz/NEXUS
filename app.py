@@ -2526,6 +2526,7 @@ def mostrar_expedicao_logistica(df: pd.DataFrame):
     st.markdown("### 📋 Tabela de Expedição por Venda")
     
     # 5) Exibir com links clicáveis (st.data_editor + LinkColumn)
+    tabela["ID VENDA"] = tabela["ID VENDA"].astype(str)  # Converte para string
     st.data_editor(
         tabela,
         hide_index=True,
