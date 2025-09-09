@@ -1530,8 +1530,54 @@ def mostrar_gestao_sku():
 
     st.header("📦 Gestão de SKU")
 
-    if st.button("🔄 Recarregar Dados"):
-        st.session_state["atualizar_gestao_sku"] = True
+    # === Ações rápidas ===
+    col_a, col_b = st.columns([1, 1])
+    
+    with col_a:
+        if st.button("🔄 Recarregar Dados"):
+            st.session_state["atualizar_gestao_sku"] = True
+            # (opcional) st.rerun()  # descomente se quiser recarregar imediatamente
+    
+    with col_b:
+        if st.button("🧮 Reconciliar SKU"):
+            try:
+                with st.spinner("Atualizando vendas com os dados históricos corretos..."):
+                    with engine.begin() as conn:
+                        # Aplica a versão vigente do SKU NA DATA DA VENDA e conta linhas afetadas
+                        total_atualizadas = conn.execute(text("""
+                            WITH updated AS (
+                                UPDATE sales s
+                                SET
+                                    level1         = k.level1,
+                                    level2         = k.level2,
+                                    custo_unitario = k.custo_unitario,
+                                    quantity_sku   = k.quantity
+                                FROM (
+                                    SELECT s.id AS sale_id, k.*
+                                    FROM sales s
+                                    JOIN LATERAL (
+                                        SELECT *
+                                        FROM sku k
+                                        WHERE k.sku = s.seller_sku
+                                          AND k.date_created <= s.date_adjusted
+                                        ORDER BY k.date_created DESC
+                                        LIMIT 1
+                                    ) k ON TRUE
+                                    WHERE s.seller_sku IS NOT NULL
+                                ) k
+                                WHERE s.id = k.sale_id
+                                RETURNING s.id
+                            )
+                            SELECT COUNT(*) FROM updated;
+                        """)).scalar()
+    
+                st.success(f"✅ Conciliação concluída! Vendas atualizadas: {total_atualizadas}")
+                st.session_state["atualizar_gestao_sku"] = True
+                st.rerun()
+    
+            except Exception as e:
+                st.error(f"❌ Erro ao reconciliar vendas: {e}")
+
 
     # === Carregamento dos dados (todas as versões + últimas por SKU) ===
     if st.session_state.get("atualizar_gestao_sku", False) \
