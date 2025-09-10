@@ -11,15 +11,17 @@ logging.getLogger("streamlit").setLevel(logging.ERROR)
 
 
 from dotenv import load_dotenv
+from streamlit_cookies_manager import EncryptedCookieManager
 import locale
 
 # 1) Carrega .env antes de tudo
 load_dotenv()
-COOKIE_SECRET = os.getenv("COOKIE_SECRET")
-BACKEND_URL    = os.getenv("BACKEND_URL")
-FRONTEND_URL   = os.getenv("FRONTEND_URL")
-DB_URL         = os.getenv("DB_URL")
-ML_CLIENT_ID   = os.getenv("ML_CLIENT_ID")
+COOKIE_SECRET = os.getenv("COOKIE_SECRET") or "nexussecret"
+BACKEND_URL    = os.getenv("BACKEND_URL")  or ""
+FRONTEND_URL   = os.getenv("FRONTEND_URL") or ""
+DB_URL         = os.getenv("DB_URL")       or ""
+ML_CLIENT_ID   = os.getenv("ML_CLIENT_ID") or ""
+
 
 # 2) Agora sim importe o Streamlit e configure a página _antes_ de qualquer outra chamada st.*
 import streamlit as st
@@ -30,9 +32,63 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# 6) Gerenciador de cookies e autenticação
+cookies = EncryptedCookieManager(prefix="nexus/", password=COOKIE_SECRET)
+if not cookies.ready():
+    st.stop()
+
+# === LOGIN DO APP (simples) ===
+import hmac, time
+
+# Usuário e senha fixos (troque por algo seu)
+APP_LOGIN_USER = "admin"
+APP_LOGIN_PASS = "admin123"
+
+def _valid(user: str, pwd: str) -> bool:
+    return (hmac.compare_digest(user.strip(), APP_LOGIN_USER)
+            and hmac.compare_digest(pwd, APP_LOGIN_PASS))
+
+# Se já autenticado via cookie, carrega no estado
+if cookies.get("app_auth") == "1":
+    st.session_state["app_authenticated"] = True
+    st.session_state["app_user"] = cookies.get("app_user", APP_LOGIN_USER)
+
+# Gate: só entra se autenticado
+if not st.session_state.get("app_authenticated", False):
+    st.title("🔐 Entrar no NEXUS Group")
+    with st.form("login_form"):
+        user = st.text_input("Usuário")
+        pwd  = st.text_input("Senha", type="password")
+        lembrar = st.checkbox("Lembrar de mim", value=True)
+        ok = st.form_submit_button("Entrar")
+
+    if ok:
+        if _valid(user, pwd):
+            st.session_state["app_authenticated"] = True
+            st.session_state["app_user"] = user.strip() or APP_LOGIN_USER
+            cookies["app_auth"] = "1"
+            cookies["app_user"] = st.session_state["app_user"]
+            cookies.save(max_age=7*24*3600 if lembrar else None)
+            st.rerun()
+        else:
+            st.error("Usuário ou senha inválidos.")
+    st.stop()
+
+# Header do usuário logado + botão de sair
+with st.sidebar:
+    st.markdown(f"**👤 {st.session_state.get('app_user','admin')}**")
+    if st.button("Sair"):
+        st.session_state["app_authenticated"] = False
+        cookies["app_auth"] = "0"
+        cookies["app_user"] = ""
+        cookies.save(max_age=0)
+        st.rerun()
+
+
+
+
 # 3) Depois de set_page_config, importe tudo o mais que precisar
 from sales import sync_all_accounts, get_full_sales, revisar_banco_de_dados, get_incremental_sales, traduzir_status
-from streamlit_cookies_manager import EncryptedCookieManager
 import pandas as pd
 import plotly.express as px
 import requests
@@ -47,12 +103,8 @@ from textblob import TextBlob
 import io
 from datetime import datetime, timedelta
 from utils import engine, DATA_INICIO, buscar_ml_fee
-import time
 from reconcile import reconciliar_vendas
 from dateutil.relativedelta import relativedelta
-
-
-
 
 
 
@@ -67,26 +119,6 @@ def format_currency(valor: float) -> str:
     # ...
     ...
 
-# 5) Validações iniciais de ambiente
-if not COOKIE_SECRET:
-    st.error("⚠️ Defina COOKIE_SECRET no seu .env")
-    st.stop()
-
-if not all([BACKEND_URL, FRONTEND_URL, DB_URL, ML_CLIENT_ID]):
-    st.error("❌ Defina BACKEND_URL, FRONTEND_URL, DB_URL e ML_CLIENT_ID em seu .env")
-    st.stop()
-
-# 6) Gerenciador de cookies e autenticação
-cookies = EncryptedCookieManager(prefix="nexus/", password=COOKIE_SECRET)
-if not cookies.ready():
-    st.stop()
-
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
-if cookies.get("access_token"):
-    st.session_state["authenticated"] = True
-    st.session_state["access_token"] = cookies["access_token"]
 
 # ----------------- CSS Customizado -----------------
 st.markdown("""
@@ -133,7 +165,7 @@ st.markdown("""
 # ----------------- OAuth Callback -----------------
 def ml_callback():
     """Trata o callback OAuth — envia o code ao backend, salva tokens e redireciona."""
-    code = st.query_params.get("code", [None])[0]
+    code = st.query_params.get("code")
     if not code:
         st.error("⚠️ Código de autorização não encontrado.")
         return
@@ -143,7 +175,7 @@ def ml_callback():
         data = resp.json()                   # {"user_id": "...", ...}
         salvar_tokens_no_banco(data)
         st.cache_data.clear()             # limpa cache para puxar vendas novas
-        st.experimental_set_query_params(account=data["user_id"])
+        st.query_params = {"account": data["user_id"]}
         st.session_state["conta"] = data["user_id"]
         st.success("✅ Conta ML autenticada com sucesso!")
         st.rerun()
@@ -365,7 +397,6 @@ def format_currency(value):
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def mostrar_dashboard():
-    import time
 
     # --- sincroniza as vendas automaticamente apenas 1x ao carregar ---
     if "vendas_sincronizadas" not in st.session_state:
@@ -1036,7 +1067,6 @@ def mostrar_dashboard():
     
     st.plotly_chart(fig_hora, use_container_width=True)
 
-import time
 from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
@@ -1321,7 +1351,7 @@ def mostrar_anuncios():
     )
 
 def mostrar_relatorios():
-    import time
+
     import pytz
     from sales import traduzir_status
 
