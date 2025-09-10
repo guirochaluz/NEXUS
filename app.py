@@ -81,7 +81,7 @@ with st.sidebar:
         st.session_state["app_authenticated"] = False
         cookies["app_auth"] = "0"
         cookies["app_user"] = ""
-        cookies.save(max_age=0)
+        cookies.save()
         st.rerun()
 
 
