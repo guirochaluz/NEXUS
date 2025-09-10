@@ -41,8 +41,8 @@ if not cookies.ready():
 import hmac, time
 
 # Usuário e senha fixos (troque por algo seu)
-APP_LOGIN_USER = "admin"
-APP_LOGIN_PASS = "admin123"
+APP_LOGIN_USER = "NEXUSADMIN"
+APP_LOGIN_PASS = "Nexu$2025"
 
 def _valid(user: str, pwd: str) -> bool:
     return (hmac.compare_digest(user.strip(), APP_LOGIN_USER)
@@ -68,7 +68,7 @@ if not st.session_state.get("app_authenticated", False):
             st.session_state["app_user"] = user.strip() or APP_LOGIN_USER
             cookies["app_auth"] = "1"
             cookies["app_user"] = st.session_state["app_user"]
-            cookies.save(max_age=7*24*3600 if lembrar else None)
+            cookies.save()
             st.rerun()
         else:
             st.error("Usuário ou senha inválidos.")
