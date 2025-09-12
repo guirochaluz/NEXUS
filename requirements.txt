@@ -2,7 +2,7 @@ fastapi==0.110.0
 uvicorn==0.29.0
 requests==2.31.0
 python-dotenv==1.0.1
-psycopg[binary]==3.2.1
+psycopg[binary]>=3.2.2,<3.3
 sqlalchemy>=2.0.36,<2.1
 python-dateutil==2.9.0.post0
 streamlit>=1.24.1
@@ -22,5 +22,6 @@ reportlab==4.0.9
 matplotlib==3.8.4
 seaborn==0.13.2
 kaleido>=0.2.1
+
 
 
