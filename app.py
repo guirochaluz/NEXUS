@@ -572,35 +572,57 @@ def mostrar_dashboard():
     
     # --- Filtros Avançados com checkbox dentro de Expander ---
     with st.expander("🔍 Filtros Avançados", expanded=False):
-        # Hierarquia 1
-        level1_opcoes = ["Todos"] + sorted(df["level1"].dropna().unique().tolist())
+    
+        # ==================== Hierarquia 1 ====================
         st.markdown("**📂 Hierarquia 1**")
+        level1_opcoes = sorted(df["level1"].dropna().unique().tolist())
+    
+        # Botão toggle todos
+        if st.button("Selecionar/Deselecionar Todos (Hierarquia 1)", key="toggle_l1"):
+            marcar = not all(st.session_state.get(f"level1_{op}", True) for op in level1_opcoes)
+            for op in level1_opcoes:
+                st.session_state[f"level1_{op}"] = marcar
+    
         col_l1 = st.columns(4)
         level1_selecionados = []
         for i, op in enumerate(level1_opcoes):
-            if col_l1[i % 4].checkbox(op, key=f"level1_{op}"):
+            key = f"level1_{op}"
+            if key not in st.session_state:
+                st.session_state[key] = True  # ✅ começa tickado
+            if col_l1[i % 4].checkbox(op, key=key):
                 level1_selecionados.append(op)
     
-        # Só aplica filtro se não tiver "Todos"
-        if level1_selecionados and "Todos" not in level1_selecionados:
+        if level1_selecionados:  # aplica filtro apenas se algo estiver marcado
             df = df[df["level1"].isin(level1_selecionados)]
     
-        # Hierarquia 2 (já com filtro de level1 aplicado se houver)
-        level2_opcoes = ["Todos"] + sorted(df["level2"].dropna().unique().tolist())
+    
+        # ==================== Hierarquia 2 ====================
         st.markdown("**📁 Hierarquia 2**")
+        level2_opcoes = sorted(df["level2"].dropna().unique().tolist())
+    
+        if st.button("Selecionar/Deselecionar Todos (Hierarquia 2)", key="toggle_l2"):
+            marcar = not all(st.session_state.get(f"level2_{op}", True) for op in level2_opcoes)
+            for op in level2_opcoes:
+                st.session_state[f"level2_{op}"] = marcar
+    
         col_l2 = st.columns(4)
         level2_selecionados = []
         for i, op in enumerate(level2_opcoes):
-            if col_l2[i % 4].checkbox(op, key=f"level2_{op}"):
+            key = f"level2_{op}"
+            if key not in st.session_state:
+                st.session_state[key] = True
+            if col_l2[i % 4].checkbox(op, key=key):
                 level2_selecionados.append(op)
     
-        if level2_selecionados and "Todos" not in level2_selecionados:
+        if level2_selecionados:
             df = df[df["level2"].isin(level2_selecionados)]
+    
     
     # Verifica se há dados após os filtros
     if df.empty:
         st.warning("Nenhuma venda encontrada para os filtros selecionados.")
         st.stop()
+
 
 
     
@@ -1524,27 +1546,56 @@ def mostrar_relatorios():
 
     # --- Filtros Avançados: Hierarquia 1 e 2 ---
     with st.expander("🔍 Filtros Avançados", expanded=False):
-        # Hierarquia 1
-        l1_opts = ["Todos"] + sorted(df["level1"].dropna().unique().tolist())
+    
+        # ==================== Hierarquia 1 ====================
         st.markdown("**📂 Hierarquia 1**")
+        l1_opts = sorted(df["level1"].dropna().unique().tolist())
+    
+        if st.button("Selecionar/Deselecionar Todos (Hierarquia 1)", key="toggle_rel_l1"):
+            marcar = not all(st.session_state.get(f"rel_l1_{op}", True) for op in l1_opts)
+            for op in l1_opts:
+                st.session_state[f"rel_l1_{op}"] = marcar
+    
         cols1 = st.columns(4)
-        sel1 = [op for i, op in enumerate(l1_opts) if cols1[i % 4].checkbox(op, key=f"rel_l1_{op}")]
-        
-        if sel1 and "Todos" not in sel1:
+        sel1 = []
+        for i, op in enumerate(l1_opts):
+            key = f"rel_l1_{op}"
+            if key not in st.session_state:
+                st.session_state[key] = True  # ✅ vem marcado
+            if cols1[i % 4].checkbox(op, key=key):
+                sel1.append(op)
+    
+        if sel1:
             df = df[df["level1"].isin(sel1)]
     
-        # Hierarquia 2 (já respeita filtro de level1, se houver)
-        l2_opts = ["Todos"] + sorted(df["level2"].dropna().unique().tolist())
+    
+        # ==================== Hierarquia 2 ====================
         st.markdown("**📁 Hierarquia 2**")
+        l2_opts = sorted(df["level2"].dropna().unique().tolist())
+    
+        if st.button("Selecionar/Deselecionar Todos (Hierarquia 2)", key="toggle_rel_l2"):
+            marcar = not all(st.session_state.get(f"rel_l2_{op}", True) for op in l2_opts)
+            for op in l2_opts:
+                st.session_state[f"rel_l2_{op}"] = marcar
+    
         cols2 = st.columns(4)
-        sel2 = [op for i, op in enumerate(l2_opts) if cols2[i % 4].checkbox(op, key=f"rel_l2_{op}")]
-        
-        if sel2 and "Todos" not in sel2:
+        sel2 = []
+        for i, op in enumerate(l2_opts):
+            key = f"rel_l2_{op}"
+            if key not in st.session_state:
+                st.session_state[key] = True
+            if cols2[i % 4].checkbox(op, key=key):
+                sel2.append(op)
+    
+        if sel2:
             df = df[df["level2"].isin(sel2)]
     
+    
+    # Verifica se há dados após os filtros
     if df.empty:
         st.warning("Nenhuma venda após filtros.")
         return
+
     
     # --- Ordena por timestamp completo ---
     df = df.sort_values("date_adjusted", ascending=False).copy()
