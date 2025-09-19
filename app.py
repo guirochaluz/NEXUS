@@ -3204,6 +3204,124 @@ def mostrar_painel_metas():
     )
     st.plotly_chart(fig_linhas, use_container_width=True)
 
+    # ======== BOTÃO DE CONFIGURAÇÃO ========
+    if "show_config" not in st.session_state:
+        st.session_state.show_config = False
+
+    if st.button("⚙️ Configurações", key="config_btn"):
+        st.session_state.show_config = not st.session_state.show_config
+
+    if st.session_state.show_config:
+        st.markdown("---")
+        st.subheader("⚙️ Configurações")
+
+        # ======= Cadastro de Pessoas =======
+        st.markdown("#### 👤 Cadastro de Pessoas")
+        with st.form("form_pessoas", clear_on_submit=True):
+            nome_pessoa = st.text_input("Nome da Pessoa")
+            submitted_pessoa = st.form_submit_button("➕ Adicionar Pessoa")
+            if submitted_pessoa and nome_pessoa.strip():
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("INSERT INTO pessoas (nome) VALUES (:nome)"),
+                        {"nome": nome_pessoa.strip()}
+                    )
+                st.success("✅ Pessoa adicionada com sucesso!")
+                st.rerun()
+
+        # ======= Definir Meta Mensal =======
+        st.markdown("#### 🎯 Definir Meta Mensal por Pessoa")
+        if not pessoas_df.empty:
+            pessoa_meta = st.selectbox("Pessoa", pessoas_df["nome"].tolist())
+            pessoa_id = int(pessoas_df.loc[pessoas_df["nome"] == pessoa_meta, "id"].iloc[0])
+
+            col1, col2 = st.columns(2)
+            with col1:
+                mes_meta = st.selectbox(
+                    "Mês",
+                    options=list(range(1, 13)),
+                    format_func=lambda x: datetime(1900, x, 1).strftime("%B").capitalize(),
+                    index=hoje.month - 1
+                )
+            with col2:
+                ano_meta = st.selectbox(
+                    "Ano",
+                    options=list(range(hoje.year - 5, hoje.year + 6)),
+                    index=5
+                )
+            ano_mes_meta = f"{ano_meta}-{mes_meta:02d}"
+
+            # Meta já cadastrada (se existir)
+            with engine.connect() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT meta_unidades
+                        FROM meta_mensal_pessoas
+                        WHERE pessoa_id = :pessoa_id AND ano_mes = :ano_mes
+                    """),
+                    {"pessoa_id": pessoa_id, "ano_mes": ano_mes_meta}
+                ).fetchone()
+                meta_existente = result[0] if result else 0
+
+            nova_meta = st.number_input(
+                f"Definir Meta para {pessoa_meta} em {ano_mes_meta} (unidades)",
+                min_value=0,
+                value=meta_existente,
+                step=100
+            )
+            if st.button("💾 Salvar Meta"):
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("""
+                            INSERT INTO meta_mensal_pessoas (pessoa_id, ano_mes, meta_unidades)
+                            VALUES (:pessoa_id, :ano_mes, :meta)
+                            ON CONFLICT (pessoa_id, ano_mes) DO UPDATE
+                            SET meta_unidades = EXCLUDED.meta_unidades
+                        """),
+                        {"pessoa_id": pessoa_id, "ano_mes": ano_mes_meta, "meta": nova_meta}
+                    )
+                st.success(f"✅ Meta de {pessoa_meta} atualizada para {ano_mes_meta}!")
+                st.rerun()
+
+        # ======= Registrar Produção =======
+        st.markdown("#### 🏭 Registrar Produção Diária")
+        if not pessoas_df.empty:
+            pessoa_prod = st.selectbox("Pessoa", pessoas_df["nome"].tolist(), key="pessoa_prod")
+            pessoa_id_prod = int(pessoas_df.loc[pessoas_df["nome"] == pessoa_prod, "id"].iloc[0])
+
+            data_producao = st.date_input("📅 Data da Produção", hoje)
+            producao_val = st.number_input(
+                f"Produção de {pessoa_prod} em {data_producao.strftime('%d/%m/%Y')} (unidades)",
+                min_value=0,
+                step=10
+            )
+            if st.button("➕ Registrar Produção"):
+                with engine.begin() as conn:
+                    conn.execute(
+                        text("""
+                            INSERT INTO producao_diaria_pessoas (pessoa_id, data, quantidade)
+                            VALUES (:pessoa_id, :data, :qtd)
+                            ON CONFLICT (pessoa_id, data) DO UPDATE
+                            SET quantidade = EXCLUDED.quantidade
+                        """),
+                        {"pessoa_id": pessoa_id_prod, "data": data_producao.strftime("%Y-%m-%d"), "qtd": producao_val}
+                    )
+                st.success(f"✅ Produção registrada para {pessoa_prod} em {data_producao.strftime('%d/%m/%Y')}!")
+                st.rerun()
+
+        # ======= Histórico Produção =======
+        st.markdown("### 📊 Histórico de Produção")
+        if not df_producao.empty:
+            st.dataframe(df_producao.rename(
+                columns={"nome": "Pessoa", "data": "Data", "quantidade": "Unidades"}
+            ), use_container_width=True)
+        else:
+            st.info("Nenhuma produção registrada ainda.")
+
+        if st.button("🔙 Voltar ao Painel"):
+            st.session_state.show_config = False
+            st.rerun()
+
 
 import streamlit as st
 from sqlalchemy import text
