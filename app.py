@@ -2998,24 +2998,21 @@ def mostrar_painel_metas():
     import streamlit as st
     from sqlalchemy import text
     import plotly.graph_objects as go
+    import plotly.express as px
 
     # ======== Data atual ========
     hoje = datetime.now()
     ano_mes_atual = hoje.strftime("%Y-%m")
 
-    if st.button("⚙️ Configurações", key="config_btn"):
-        st.session_state.show_config = True
-        st.rerun()
-
     # ======== Carregar Pessoas ========
     with engine.connect() as conn:
         pessoas_df = pd.read_sql("SELECT * FROM pessoas ORDER BY nome", conn)
 
-    # ======== Carregar Metas Mensais (todas as pessoas) ========
+    # ======== Carregar Metas ========
     with engine.connect() as conn:
         df_metas = pd.read_sql(
             text("""
-                SELECT p.nome, m.meta_unidades
+                SELECT p.id, p.nome, m.meta_unidades
                 FROM meta_mensal_pessoas m
                 JOIN pessoas p ON p.id = m.pessoa_id
                 WHERE m.ano_mes = :ano_mes
@@ -3024,96 +3021,59 @@ def mostrar_painel_metas():
             params={"ano_mes": ano_mes_atual}
         )
 
-    meta_total = df_metas["meta_unidades"].sum() if not df_metas.empty else 0
-
-    # ======== Carregar Produção do Mês (todas as pessoas) ========
+    # ======== Carregar Produção ========
     with engine.connect() as conn:
         df_producao = pd.read_sql(
             text("""
-                SELECT p.nome, d.data, d.quantidade
+                SELECT p.id, p.nome, d.data, d.quantidade
                 FROM producao_diaria_pessoas d
                 JOIN pessoas p ON p.id = d.pessoa_id
-                WHERE TO_CHAR(d.data, 'YYYY-MM') = :ano_mes
                 ORDER BY d.data
             """),
-            conn,
-            params={"ano_mes": ano_mes_atual}
+            conn
         )
+    df_producao["data"] = pd.to_datetime(df_producao["data"])
 
-    producao_total = df_producao["quantidade"].sum() if not df_producao.empty else 0
-    percentual_atingido = (producao_total / meta_total) * 100 if meta_total else 0
+    # ======== FILTROS ========
+    st.markdown("### 🔍 Filtros")
+    col1, col2 = st.columns(2)
+    data_min = df_producao["data"].min().date() if not df_producao.empty else hoje.date()
+    data_max = df_producao["data"].max().date() if not df_producao.empty else hoje.date()
 
-    # ======== Definir cores dinâmicas ========
-    cor_percentual = (
-        "#2ecc71" if percentual_atingido >= 80 else
-        "#f1c40f" if percentual_atingido >= 50 else
-        "#e74c3c"
+    with col1:
+        de = st.date_input("De", value=data_min, min_value=data_min, max_value=data_max)
+    with col2:
+        ate = st.date_input("Até", value=data_max, min_value=data_min, max_value=data_max)
+
+    pessoas_sel = st.multiselect(
+        "👤 Pessoas",
+        pessoas_df["nome"].tolist(),
+        default=pessoas_df["nome"].tolist()
     )
 
-    # ======== Estilo customizado ========
-    st.markdown(f"""
-        <style>
-            body {{
-                background-color: #0e1117;
-                color: #fff;
-            }}
-            .container {{
-                display: flex;
-                justify-content: space-evenly;
-                align-items: flex-start;
-                margin-top: -30px;
-                margin-bottom: 50px;
-            }}
-            .title {{
-                font-size: 1.6rem;
-                text-align: center;
-                margin-bottom: 6px;
-                color: #d1d1d1;
-            }}
-            .card {{
-                background-color: #1f2630;
-                border-radius: 16px;
-                padding: 16px;
-                text-align: center;
-                width: 25%;
-                box-shadow: 0 0 12px rgba(0,0,0,0.3);
-            }}
-            .card-number {{
-                font-size: 2.8rem;
-                font-weight: bold;
-                color: #ffffff;
-                white-space: nowrap;
-            }}
-        </style>
-    """, unsafe_allow_html=True)
+    # Aplica filtros
+    df_producao = df_producao[
+        (df_producao["data"].dt.date >= de) &
+        (df_producao["data"].dt.date <= ate) &
+        (df_producao["nome"].isin(pessoas_sel))
+    ]
+    df_metas = df_metas[df_metas["nome"].isin(pessoas_sel)]
 
-    # ======== Blocos principais ========
-    st.markdown(f"""
-        <div class="container">
-            <div class="card">
-                <div class="title">🎯 Meta do Mês</div>
-                <div class="card-number">{meta_total:,}</div>
-            </div>
-            <div class="card">
-                <div class="title">🏭 Produção Atual</div>
-                <div class="card-number">{producao_total:,}</div>
-            </div>
-            <div class="card">
-                <div class="title">📊 % Atingido</div>
-                <div class="card-number" style="color:{cor_percentual};">{percentual_atingido:.1f}%</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    # ======== KPI GERAL ========
+    meta_total = df_metas["meta_unidades"].sum() if not df_metas.empty else 0
+    producao_total = df_producao["quantidade"].sum() if not df_producao.empty else 0
+    percentual_atingido = (producao_total / meta_total * 100) if meta_total else 0
 
-    # ======== Velocímetro (Gauge) ========
-    fig_gauge = go.Figure(go.Indicator(
+    # ======== GAUGE TOTAL ========
+    st.markdown("## 🎯 Progresso Geral")
+    fig_total = go.Figure(go.Indicator(
         mode="gauge+number",
         value=percentual_atingido,
-        number={'suffix': "%", 'font': {'size': 40}},
-        title={'text': "Progresso Mensal (%)", 'font': {'size': 22}},
+        number={'suffix': "%", 'font': {'size': 36}},
+        title={'text': f"Total Produção ({producao_total}/{meta_total})", 'font': {'size': 20}},
         gauge={
             'axis': {'range': [0, 100]},
-            'bar': {'color': cor_percentual, 'thickness': 0.3},
+            'bar': {'color': "#2ecc71"},
             'steps': [
                 {'range': [0, 50], 'color': "#e74c3c"},
                 {'range': [50, 80], 'color': "#f1c40f"},
@@ -3126,158 +3086,72 @@ def mostrar_painel_metas():
             }
         }
     ))
-    fig_gauge.update_layout(margin=dict(t=40, b=40, l=30, r=30))
-    st.plotly_chart(fig_gauge, use_container_width=True)
+    st.plotly_chart(fig_total, use_container_width=True)
 
-    # ======== Barra de Progresso ========
-    st.markdown(f"""
-        <div style="width: 85%; height: 25px; background-color: #333; border-radius: 12px; margin: 50px auto 30px auto;">
-            <div style="
-                width: {min(percentual_atingido, 100)}%;
-                height: 100%;
-                background-color: {cor_percentual};
-                border-radius: 12px;
-                transition: width 0.5s ease-in-out;">
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+    # ======== GAUGE POR PESSOA ========
+    st.markdown("## 👤 Progresso Individual")
+    colunas = st.columns(3)
+    for i, pessoa in enumerate(df_metas["nome"].unique()):
+        meta = df_metas.loc[df_metas["nome"] == pessoa, "meta_unidades"].sum()
+        prod = df_producao.loc[df_producao["nome"] == pessoa, "quantidade"].sum()
+        perc = (prod / meta * 100) if meta else 0
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=perc,
+            number={'suffix': "%", 'font': {'size': 24}},
+            title={'text': f"{pessoa} ({prod}/{meta})", 'font': {'size': 16}},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "#3498db"},
+                'steps': [
+                    {'range': [0, 50], 'color': "#e74c3c"},
+                    {'range': [50, 80], 'color': "#f1c40f"},
+                    {'range': [80, 100], 'color': "#2ecc71"}
+                ],
+            }
+        ))
+        colunas[i % 3].plotly_chart(fig, use_container_width=True)
 
-    import plotly.express as px
-    
-    if not df_producao.empty:
-        fig_linhas = px.line(
-            df_producao,
-            x="data",
-            y="quantidade",
-            color="nome",
-            markers=True,
-            title="📈 Produção Diária por Pessoa"
-        )
-        fig_linhas.update_layout(
-            xaxis_title="Data",
-            yaxis_title="Unidades Produzidas",
-            legend_title="Pessoa"
-        )
-        st.plotly_chart(fig_linhas, use_container_width=True)
+    # ======== GRÁFICOS DE PRODUÇÃO ========
+    st.markdown("## 📊 Produção Detalhada")
 
+    tipo_grafico = st.radio(
+        "Visualização",
+        ["TOTAL DIA", "ACUMULADO DIÁRIO - CRESCENTE", "MENSAL", "ACUMULADO MENSAL - CRESCENTE"],
+        horizontal=True
+    )
 
+    df_plot = df_producao.copy()
 
-    # ======== Botão de Configuração ========
-    if "show_config" not in st.session_state:
-        st.session_state.show_config = False
+    if tipo_grafico == "ACUMULADO DIÁRIO - CRESCENTE":
+        df_plot = df_plot.groupby(["nome", "data"], as_index=False)["quantidade"].sum()
+        df_plot["quantidade"] = df_plot.groupby("nome")["quantidade"].cumsum()
 
-    if st.session_state.show_config:
-        st.markdown("---")
-        st.subheader("⚙️ Configurações")
+    elif tipo_grafico == "MENSAL":
+        df_plot["ano_mes"] = df_plot["data"].dt.to_period("M").astype(str)
+        df_plot = df_plot.groupby(["nome", "ano_mes"], as_index=False)["quantidade"].sum()
+        df_plot.rename(columns={"ano_mes": "data"}, inplace=True)
 
-        # ======= Cadastro de Pessoas =======
-        st.markdown("#### 👤 Cadastro de Pessoas")
-        with st.form("form_pessoas", clear_on_submit=True):
-            nome_pessoa = st.text_input("Nome da Pessoa")
-            submitted_pessoa = st.form_submit_button("➕ Adicionar Pessoa")
-            if submitted_pessoa and nome_pessoa.strip():
-                with engine.begin() as conn:
-                    conn.execute(
-                        text("INSERT INTO pessoas (nome) VALUES (:nome)"),
-                        {"nome": nome_pessoa.strip()}
-                    )
-                st.success("✅ Pessoa adicionada com sucesso!")
-                st.rerun()
+    elif tipo_grafico == "ACUMULADO MENSAL - CRESCENTE":
+        df_plot["ano_mes"] = df_plot["data"].dt.to_period("M").astype(str)
+        df_plot = df_plot.groupby(["nome", "ano_mes"], as_index=False)["quantidade"].sum()
+        df_plot["quantidade"] = df_plot.groupby("nome")["quantidade"].cumsum()
+        df_plot.rename(columns={"ano_mes": "data"}, inplace=True)
 
-        # ======= Seleção de Mês/Ano e Pessoa para Meta =======
-        st.markdown("#### 🎯 Definir Meta Mensal por Pessoa")
-        if not pessoas_df.empty:
-            pessoa_meta = st.selectbox("Pessoa", pessoas_df["nome"].tolist())
-            pessoa_id = int(pessoas_df.loc[pessoas_df["nome"] == pessoa_meta, "id"].iloc[0])
-
-            col1, col2 = st.columns(2)
-            with col1:
-                mes_meta = st.selectbox(
-                    "Mês",
-                    options=list(range(1, 13)),
-                    format_func=lambda x: datetime(1900, x, 1).strftime("%B").capitalize(),
-                    index=hoje.month - 1
-                )
-            with col2:
-                ano_meta = st.selectbox(
-                    "Ano",
-                    options=list(range(hoje.year - 5, hoje.year + 6)),
-                    index=5
-                )
-            ano_mes_meta = f"{ano_meta}-{mes_meta:02d}"
-
-            # Meta já cadastrada (se existir)
-            with engine.connect() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT meta_unidades
-                        FROM meta_mensal_pessoas
-                        WHERE pessoa_id = :pessoa_id AND ano_mes = :ano_mes
-                    """),
-                    {"pessoa_id": pessoa_id, "ano_mes": ano_mes_meta}
-                ).fetchone()
-                meta_existente = result[0] if result else 0
-
-            nova_meta = st.number_input(
-                f"Definir Meta para {pessoa_meta} em {ano_mes_meta} (unidades)",
-                min_value=0,
-                value=meta_existente,
-                step=100
-            )
-            if st.button("💾 Salvar Meta"):
-                with engine.begin() as conn:
-                    conn.execute(
-                        text("""
-                            INSERT INTO meta_mensal_pessoas (pessoa_id, ano_mes, meta_unidades)
-                            VALUES (:pessoa_id, :ano_mes, :meta)
-                            ON CONFLICT (pessoa_id, ano_mes) DO UPDATE
-                            SET meta_unidades = EXCLUDED.meta_unidades
-                        """),
-                        {"pessoa_id": pessoa_id, "ano_mes": ano_mes_meta, "meta": nova_meta}
-                    )
-                st.success(f"✅ Meta de {pessoa_meta} atualizada para {ano_mes_meta}!")
-                st.rerun()
-
-        # ======= Registro de Produção Diária por Pessoa =======
-        st.markdown("#### 🏭 Registrar Produção Diária por Pessoa")
-        if not pessoas_df.empty:
-            pessoa_prod = st.selectbox("Pessoa", pessoas_df["nome"].tolist(), key="pessoa_prod")
-            pessoa_id_prod = int(pessoas_df.loc[pessoas_df["nome"] == pessoa_prod, "id"].iloc[0])
-
-            data_producao = st.date_input("📅 Data da Produção", hoje)
-            producao_val = st.number_input(
-                f"Produção de {pessoa_prod} em {data_producao.strftime('%d/%m/%Y')} (unidades)",
-                min_value=0,
-                step=10
-            )
-            if st.button("➕ Registrar Produção"):
-                with engine.begin() as conn:
-                    conn.execute(
-                        text("""
-                            INSERT INTO producao_diaria_pessoas (pessoa_id, data, quantidade)
-                            VALUES (:pessoa_id, :data, :qtd)
-                            ON CONFLICT (pessoa_id, data) DO UPDATE
-                            SET quantidade = EXCLUDED.quantidade
-                        """),
-                        {"pessoa_id": pessoa_id_prod, "data": data_producao.strftime("%Y-%m-%d"), "qtd": producao_val}
-                    )
-                st.success(f"✅ Produção registrada para {pessoa_prod} em {data_producao.strftime('%d/%m/%Y')}!")
-                st.rerun()
-
-
-
-        # ======= Histórico Produção =======
-        st.markdown("### 📊 Histórico de Produção")
-        if not df_producao.empty:
-            st.dataframe(df_producao.rename(
-                columns={"nome": "Pessoa", "data": "Data", "quantidade": "Unidades"}
-            ), use_container_width=True)
-        else:
-            st.info("Nenhuma produção registrada ainda.")
-
-        if st.button("🔙 Voltar ao Painel"):
-            st.session_state.show_config = False
-            st.rerun()
+    fig_linhas = px.line(
+        df_plot,
+        x="data",
+        y="quantidade",
+        color="nome",
+        markers=True,
+        title=f"📈 Produção ({tipo_grafico})"
+    )
+    fig_linhas.update_layout(
+        xaxis_title="Data",
+        yaxis_title="Unidades Produzidas",
+        legend_title="Pessoa"
+    )
+    st.plotly_chart(fig_linhas, use_container_width=True)
 
 
 import streamlit as st
