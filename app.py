@@ -1589,6 +1589,8 @@ def mostrar_relatorios():
     kpi_card(row2[3], "🎯 Tkt Médio p/ Unid.", format_currency(ticket_unidade))
     kpi_card(row2[4], "❌ SKU Incompleto", str(sku_incompleto))
 
+    st.markdown("<br><br>", unsafe_allow_html=True)
+
     # ===================== TABELA =====================
     df["Data"]                   = df["date_adjusted"].dt.strftime("%d/%m/%Y %H:%M:%S")
     df["ID DA VENDA"]            = df["order_id"]
