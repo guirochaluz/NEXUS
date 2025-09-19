@@ -3054,6 +3054,26 @@ def mostrar_painel_metas():
         </div>
     """, unsafe_allow_html=True)
 
+    import plotly.express as px
+    
+    if not df_producao.empty:
+        fig_linhas = px.line(
+            df_producao,
+            x="data",
+            y="quantidade",
+            color="nome",
+            markers=True,
+            title="📈 Produção Diária por Pessoa"
+        )
+        fig_linhas.update_layout(
+            xaxis_title="Data",
+            yaxis_title="Unidades Produzidas",
+            legend_title="Pessoa"
+        )
+        st.plotly_chart(fig_linhas, use_container_width=True)
+
+
+
     # ======== Botão de Configuração ========
     if "show_config" not in st.session_state:
         st.session_state.show_config = False
@@ -3155,6 +3175,8 @@ def mostrar_painel_metas():
                     )
                 st.success(f"✅ Produção registrada para {pessoa_prod} em {data_producao.strftime('%d/%m/%Y')}!")
                 st.rerun()
+
+
 
         # ======= Histórico Produção =======
         st.markdown("### 📊 Histórico de Produção")
