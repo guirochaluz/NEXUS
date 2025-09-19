@@ -1361,6 +1361,38 @@ def mostrar_relatorios():
         .block-container { padding-top: 0rem; }
         .stSelectbox > div, .stDateInput > div { padding-top: 0; padding-bottom: 0; }
         .stMultiSelect { max-height: 40px; overflow-y: auto; }
+        /* === Estilo dos KPI Cards === */
+        .kpi-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #000000;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: nowrap;
+        }
+        .kpi-pct {
+            font-size: 70%;
+            color: #666;
+            font-weight: normal;
+            white-space: nowrap;
+        }
+        .kpi-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #000000;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+        .kpi-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            border-left: 5px solid #27ae60;
+        }
         </style>
     """, unsafe_allow_html=True)
 
@@ -1381,6 +1413,7 @@ def mostrar_relatorios():
     if df_full.empty:
         st.warning("Nenhum dado encontrado.")
         return
+
     df_full["status"] = df_full["status"].map(traduzir_status)
     df_full["date_adjusted"] = pd.to_datetime(df_full["date_adjusted"])
 
@@ -1485,8 +1518,6 @@ def mostrar_relatorios():
     if preco_sel != "Todos":
         df = df[df["Categoria de Preço"] == preco_sel]
 
-
-
     # --- Filtros Avançados: Hierarquia 1 e 2 ---
     with st.expander("🔍 Filtros Avançados", expanded=False):
         # Hierarquia 1
@@ -1511,7 +1542,54 @@ def mostrar_relatorios():
     # --- Ordena por timestamp completo ---
     df = df.sort_values("date_adjusted", ascending=False).copy()
 
-    # --- Monta colunas finais ---
+    # ===================== KPIs =====================
+    def kpi_card(col, title, value, pct_text=None):
+        pct_html = f"<span class='kpi-pct'>({pct_text})</span>" if pct_text else ""
+        col.markdown(f"""
+            <div class="kpi-card">
+                <div class="kpi-title">{title} {pct_html}</div>
+                <div class="kpi-value">{value}</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    total_vendas        = len(df)
+    total_valor         = df["total_amount"].sum()
+    total_itens         = (df["quantity_sku"] * df["quantity"]).sum()
+    ticket_venda        = total_valor / total_vendas if total_vendas else 0
+    ticket_unidade      = total_valor / total_itens if total_itens else 0
+    frete               = df["frete_adjust"].fillna(0).sum()
+    taxa_mktplace       = -df["ml_fee"].fillna(0).sum()
+    cmv                 = -((df["quantity_sku"] * df["quantity"]) * df["custo_unitario"].fillna(0)).sum()
+    margem_operacional  = total_valor + frete + taxa_mktplace + cmv
+    flex                = -df["shipment_flex_cost"].fillna(0).sum()
+
+    df_faltantes = df_full[
+        df_full["seller_sku"].notnull() &
+        df_full[["level1", "level2", "custo_unitario", "quantity_sku"]].isnull().any(axis=1)
+    ]
+    sku_incompleto = df_faltantes["seller_sku"].nunique()
+
+    pct_val = lambda v: f"{(v / total_valor * 100):.1f}%" if total_valor else "0%"
+
+    # === KPIs ===
+    st.markdown("### 💼 Indicadores Financeiros")
+    row1 = st.columns(6)
+    kpi_card(row1[0], "💰 Faturamento", format_currency(total_valor))
+    kpi_card(row1[1], "🚚 Frete",        format_currency(frete),            pct_val(frete))
+    kpi_card(row1[2], "🚀 Custo FLEX",   format_currency(flex))
+    kpi_card(row1[3], "📉 Taxa Mkpl",    format_currency(taxa_mktplace),    pct_val(taxa_mktplace))
+    kpi_card(row1[4], "📦 CMV",          format_currency(cmv),              pct_val(cmv))
+    kpi_card(row1[5], "💵 Margem Oper.", format_currency(margem_operacional), pct_val(margem_operacional))
+
+    st.markdown("### 📊 Indicadores de Vendas")
+    row2 = st.columns(5)
+    kpi_card(row2[0], "🧾 Vendas Realizadas", str(total_vendas))
+    kpi_card(row2[1], "📦 Unidades Vendidas", str(int(total_itens)))
+    kpi_card(row2[2], "🎯 Tkt Médio p/ Venda", format_currency(ticket_venda))
+    kpi_card(row2[3], "🎯 Tkt Médio p/ Unid.", format_currency(ticket_unidade))
+    kpi_card(row2[4], "❌ SKU Incompleto", str(sku_incompleto))
+
+    # ===================== TABELA =====================
     df["Data"]                   = df["date_adjusted"].dt.strftime("%d/%m/%Y %H:%M:%S")
     df["ID DA VENDA"]            = df["order_id"]
     df["CONTA"]                  = df["nickname"]
@@ -1521,10 +1599,10 @@ def mostrar_relatorios():
     df["HIERARQUIA 2"]           = df["level2"]
     df["QUANTIDADE"]             = df["quantity_sku"] * df["quantity"]
     df["VALOR DA VENDA"]         = df["total_amount"]
-    df["TAXA DA PLATAFORMA"] = df["ml_fee"].fillna(0) * -1
-    df["CUSTO DE FRETE"]     = df["frete_adjust"].fillna(0) 
-    df["CUSTO DE FLEX"]      = df["shipment_flex_cost"].fillna(0) * -1
-    df["CMV"]                = (
+    df["TAXA DA PLATAFORMA"]     = df["ml_fee"].fillna(0) * -1
+    df["CUSTO DE FRETE"]         = df["frete_adjust"].fillna(0) 
+    df["CUSTO DE FLEX"]          = df["shipment_flex_cost"].fillna(0) * -1
+    df["CMV"]                    = (
         df["quantity_sku"].fillna(0)
         * df["quantity"].fillna(0)
         * df["custo_unitario"].fillna(0)
@@ -1533,7 +1611,7 @@ def mostrar_relatorios():
         df["VALOR DA VENDA"]
         + df["TAXA DA PLATAFORMA"]
         + df["CUSTO DE FRETE"]
-        + df["CUSTO DE FLEX"]      # subtrai o FLEX
+        + df["CUSTO DE FLEX"]
         + df["CMV"]
     )
 
