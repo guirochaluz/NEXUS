@@ -1,4 +1,4 @@
-# sales_reconcile.py – rotina de reconciliação (ajustada)
+# reconcile.py – rotina de reconciliação (ajustada)
 from __future__ import annotations
 
 import time
