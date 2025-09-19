@@ -3215,7 +3215,44 @@ def mostrar_supply_chain():
             st.info("📭 Nenhuma compra encontrada com os filtros aplicados.")
         else:
             st.markdown("### 📄 Registro de Compras")
-            st.dataframe(compras, use_container_width=True)
+            
+            # Garantir que o ID esteja presente
+            df_exibicao = compras.copy()
+            
+            # Criar coluna de seleção
+            df_exibicao.insert(0, "Selecionar", False)
+            
+            # Editor de tabela com checkbox
+            edited_df = st.data_editor(
+                df_exibicao,
+                use_container_width=True,
+                hide_index=True,
+                num_rows="fixed",
+                key="editor_compras"
+            )
+            
+            # Identificar IDs selecionados
+            ids_selecionados = compras.loc[
+                edited_df["Selecionar"] == True, "id"
+            ].tolist()
+            
+            # Botão de exclusão
+            if ids_selecionados:
+                st.warning(f"{len(ids_selecionados)} compra(s) selecionada(s) para exclusão.")
+                if st.button("🗑️ Excluir Selecionados", type="primary"):
+                    try:
+                        with engine.begin() as conn:
+                            conn.execute(
+                                text("DELETE FROM compras_insumos WHERE id = ANY(:ids)"),
+                                {"ids": ids_selecionados}
+                            )
+                        st.success("✅ Compras excluídas com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao excluir compras: {e}")
+            else:
+                st.info("Selecione uma ou mais compras para excluir.")
+
     except Exception as e:
         st.error(f"❌ Erro ao carregar compras: {e}")
 
