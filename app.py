@@ -3168,13 +3168,13 @@ def mostrar_painel_metas():
 
     tipo_grafico = st.radio(
         "Visualização",
-        ["TOTAL DIA", "ACUMULADO DIÁRIO - CRESCENTE", "MENSAL", "ACUMULADO MENSAL - CRESCENTE"],
+        ["TOTAL DIA", "ACUMULADO DIÁRIO", "MENSAL", "ACUMULADO MENSAL"],
         horizontal=True
     )
 
     df_plot = df_producao.copy()
 
-    if tipo_grafico == "ACUMULADO DIÁRIO - CRESCENTE":
+    if tipo_grafico == "ACUMULADO DIÁRIO":
         df_plot = df_plot.groupby(["nome", "data"], as_index=False)["quantidade"].sum()
         df_plot["quantidade"] = df_plot.groupby("nome")["quantidade"].cumsum()
 
@@ -3183,7 +3183,7 @@ def mostrar_painel_metas():
         df_plot = df_plot.groupby(["nome", "ano_mes"], as_index=False)["quantidade"].sum()
         df_plot.rename(columns={"ano_mes": "data"}, inplace=True)
 
-    elif tipo_grafico == "ACUMULADO MENSAL - CRESCENTE":
+    elif tipo_grafico == "ACUMULADO MENSAL":
         df_plot["ano_mes"] = df_plot["data"].dt.to_period("M").astype(str)
         df_plot = df_plot.groupby(["nome", "ano_mes"], as_index=False)["quantidade"].sum()
         df_plot["quantidade"] = df_plot.groupby("nome")["quantidade"].cumsum()
