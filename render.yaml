@@ -8,7 +8,7 @@ services:
     startCommand: "./start.sh"
     envVars:
       - key: DB_URL
-        value: "postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com/contazoom?sslmode=require"
+        value: 'postgresql://admin:pR6aFnyZm6nc1wlCheGVXvjJ5VZrLZQ6@dpg-d0d26gjuibrs73dra1tg-a.oregon-postgres.render.com/contazoom?sslmode=require'
       - key: ML_CLIENT_ID
         value: "3597957782423859"
       - key: ML_CLIENT_SECRET

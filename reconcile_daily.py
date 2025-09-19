@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 import logging
 from db import SessionLocal
 from models import UserToken
-from sales_reconcile import reconciliar_vendas  # importa a função que te enviei
+from reconcile import reconciliar_vendas  # importa a função que te enviei
 
 logging.basicConfig(
     level=logging.INFO,
