@@ -254,7 +254,7 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
 
         payment_info = (order.get("payments") or [{}])[0]
         payment_id = payment_info.get("id")
-        marketplace_fee = payment_info.get("marketplace_fee")
+        marketplace_fee = order.get("sale_fee"),
 
         # 📦 Shipment enrichment
         shipment_id = ship.get("id")
