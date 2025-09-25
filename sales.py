@@ -254,12 +254,15 @@ def _order_to_sale(order: dict, ml_user_id: str, access_token: str, db: Optional
 
         payment_info = (order.get("payments") or [{}])[0]
         payment_id = payment_info.get("id")
-        # captura sale_fee dos itens da ordem
+        # captura sale_fee dos itens da ordem (ajustado pela quantidade)
         order_items = order.get("order_items") or []
         marketplace_fee = next(
-            (oi.get("sale_fee") for oi in order_items if oi.get("sale_fee") is not None),
+            (oi.get("sale_fee") * oi.get("quantity", 1)
+             for oi in order_items
+             if oi.get("sale_fee") is not None),
             None
         )
+
 
         # 📦 Shipment enrichment
         shipment_id = ship.get("id")
