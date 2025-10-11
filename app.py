@@ -511,10 +511,14 @@ def mostrar_dashboard():
     custom = (filtro_rapido == "Período Personalizado")
     
     with col2:
-        de = st.date_input("De", value=de, min_value=data_min, max_value=data_max, disabled=not custom, key="de_q")
+        de_widget = st.date_input("De", value=de, min_value=data_min, max_value=data_max, disabled=not custom, key="de_q")
     
     with col3:
-        ate = st.date_input("Até", value=ate, min_value=data_min, max_value=data_max, disabled=not custom, key="ate_q")
+        ate_widget = st.date_input("Até", value=ate, min_value=data_min, max_value=data_max, disabled=not custom, key="ate_q")
+
+    if custom:
+        de, ate = de_widget, ate_widget
+
     
     with col4:
         status_options = df_full["status"].dropna().unique().tolist()
